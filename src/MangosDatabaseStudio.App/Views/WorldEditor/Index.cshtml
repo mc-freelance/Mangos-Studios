@@ -1,0 +1,115 @@
+@* Present the WorldEditor workspace and its available actions. *@
+
+@model WorldIndexViewModel
+@{
+    ViewData["Title"] = "World Editor";
+    ViewData["Section"] = Model.Database + " / " + Model.CatalogName;
+    ViewData["PageClass"] = "world-editor-page";
+    ViewData["ContentClass"] = "world-editor-content";
+}
+
+<div class="world-editor-home" data-world-catalog>
+    <aside class="world-catalog-rail">
+        <div class="world-catalog-brand">
+            <span class="world-catalog-mark"><i class="bi bi-globe2"></i></span>
+            <div>
+                <span class="eyebrow">Connected world</span>
+                <h2>@Model.Database</h2>
+                <p>@Model.CatalogName @Model.CatalogVersion · @Model.TableCount tables</p>
+            </div>
+        </div>
+
+        <label class="world-catalog-search">
+            <i class="bi bi-search"></i>
+            <input type="search" placeholder="Find a module or table..." autocomplete="off" data-world-table-filter />
+            <kbd>/</kbd>
+        </label>
+
+        <nav class="world-module-nav" aria-label="World editor modules">
+            @foreach (var category in Model.Categories)
+            {
+                <a href="#module-@category.Id" data-category-link="@category.Id">
+                    <i class="bi @category.Icon"></i>
+                    <span>@category.Name</span>
+                    <small>@category.Tables.Count</small>
+                </a>
+            }
+        </nav>
+
+        <div class="world-catalog-footer">
+            <i class="bi bi-info-circle"></i>
+            <p>Tables are grouped by gameplay area. Use Database Administration for raw access.</p>
+        </div>
+    </aside>
+
+    <main class="world-catalog-main">
+        <section class="world-editor-hero">
+            <div>
+                <span class="eyebrow">MaNGOS world data</span>
+                <h2>Choose what you want to edit</h2>
+                <p>Choose a module, then browse or edit its records.</p>
+            </div>
+            <div class="world-editor-actions">
+                @if (Model.CanBrowseDatabaseStructure)
+                {
+                    <a class="btn btn-outline-secondary" asp-controller="DatabaseAdmin" asp-action="Tables" asp-route-database="@Model.Database">
+                        <i class="bi bi-table"></i>
+                        Raw table list
+                    </a>
+                }
+            </div>
+        </section>
+
+        <aside class="world-advanced-notice" role="note" aria-label="Advanced raw data notice">
+            <span class="world-advanced-notice-icon"><i class="bi bi-exclamation-triangle-fill"></i></span>
+            <div>
+                <strong>Advanced users only — raw world data</strong>
+                <p>Changes here update raw world data. Back up the database before editing.</p>
+            </div>
+        </aside>
+
+        <div class="world-module-list">
+            @foreach (var category in Model.Categories)
+            {
+                <section class="world-module-section" id="module-@category.Id" data-world-category="@category.Id">
+                    <header class="world-module-header">
+                        <span class="world-module-icon"><i class="bi @category.Icon"></i></span>
+                        <div>
+                            <h3>@category.Name</h3>
+                            <p>@category.Tables.Count table@(category.Tables.Count == 1 ? string.Empty : "s")</p>
+                        </div>
+                        <button class="world-section-toggle" type="button" data-collapse-section aria-label="Collapse @category.Name">
+                            <i class="bi bi-chevron-up"></i>
+                        </button>
+                    </header>
+
+                    <div class="world-table-grid" data-section-content>
+                        @foreach (string table in category.Tables)
+                        {
+                            string displayName = WorldEditorPresentation.Humanize(table);
+                            <a class="world-table-card"
+                               asp-action="Browse"
+                               asp-route-database="@Model.Database"
+                               asp-route-table="@table"
+                               data-world-table
+                               data-search-text="@displayName @table @category.Name">
+                                <span class="world-table-card-icon"><i class="bi bi-table"></i></span>
+                                <span class="world-table-card-copy">
+                                    <strong>@displayName</strong>
+                                    <code>@table</code>
+                                </span>
+                                <i class="bi bi-chevron-right"></i>
+                            </a>
+                        }
+                    </div>
+                </section>
+            }
+        </div>
+
+        <div class="world-catalog-empty" data-world-empty hidden>
+            <i class="bi bi-search"></i>
+            <h3>No tables matched</h3>
+            <p>Search by table or module name.</p>
+        </div>
+    </main>
+</div>

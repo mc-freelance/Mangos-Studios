@@ -1,0 +1,209 @@
+@* Present the Export workspace and its available actions. *@
+
+@model SqlExportViewModel
+@{
+    ViewData["Title"] = "Export SQL";
+    ViewData["Section"] = "Database Administration";
+    bool canExport = User.HasPermission(AppPermissions.SqlExportExecute);
+    HashSet<string> selectedTables = new HashSet<string>(Model.SelectedTables, StringComparer.OrdinalIgnoreCase);
+}
+
+@if (!canExport)
+{
+    <div class="alert alert-info studio-inline-alert">
+        <i class="bi bi-info-circle-fill"></i>
+        <div>
+            <strong>Read-only access</strong>
+            <span>You can review export options, but this role cannot create SQL downloads.</span>
+        </div>
+    </div>
+}
+
+<div class="import-layout export-layout">
+    <section class="panel export-workbench">
+        <div class="section-heading">
+            <div>
+                <span class="eyebrow">Export source</span>
+                <h2>Choose database content</h2>
+                <p>Select the database, tables, SQL content, and output format.</p>
+            </div>
+            <i class="bi bi-database-down"></i>
+        </div>
+
+        <form asp-action="Index" method="get" class="export-database-picker">
+            <div>
+                <label for="export-database" class="form-label">Database</label>
+                <select id="export-database" name="database" class="form-select">
+                    @foreach (DatabaseMetadata database in Model.Databases)
+                    {
+                        <option value="@database.Name" selected="@(string.Equals(database.Name, Model.Database, StringComparison.OrdinalIgnoreCase) ? "selected" : null)">@database.Name</option>
+                    }
+                </select>
+            </div>
+            <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-arrow-repeat"></i> Load tables</button>
+        </form>
+
+        @if (canExport)
+        {
+            <form asp-action="Create"
+                  method="post"
+                  class="export-form"
+                  data-processing-form
+                  data-processing-title="Creating SQL export"
+                  data-processing-message="Selected database objects are being written to a temporary export file."
+                  data-processing-label="Creating export..."
+                  data-processing-download-token="@Model.DownloadToken"
+                  data-processing-download-cookie="MdsExportDownload">
+                <input asp-for="Database" type="hidden" />
+                <input asp-for="DownloadToken" type="hidden" />
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+                <div class="export-option-grid">
+                    <div class="form-group">
+                        <label asp-for="Content" class="form-label">SQL content</label>
+                        <select asp-for="Content" class="form-select">
+                            <option value="@SqlExportContent.StructureAndData">Structure and data</option>
+                            <option value="@SqlExportContent.StructureOnly">Structure only</option>
+                            <option value="@SqlExportContent.DataOnly">Data only</option>
+                        </select>
+                        <div class="form-text">Choose whether the file recreates tables, restores records, or includes both.</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Output format</label>
+                        <label class="export-format-option">
+                            <input asp-for="CompressOutput" type="checkbox" />
+                            <span><strong>Compress as .sql.gz</strong><small>Reduces download size and remains compatible with the import workflow.</small></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="export-switch-grid">
+                    <label class="export-switch-option">
+                        <input asp-for="IncludeDropStatements" type="checkbox" />
+                        <span><strong>DROP statements</strong><small>Replace existing tables during restore.</small></span>
+                    </label>
+                    <label class="export-switch-option">
+                        <input asp-for="IncludeTriggers" type="checkbox" />
+                        <span><strong>Triggers</strong><small>Include triggers attached to selected tables.</small></span>
+                    </label>
+                    <label class="export-switch-option">
+                        <input asp-for="IncludeRoutines" type="checkbox" />
+                        <span><strong>Routines</strong><small>Include stored procedures and functions.</small></span>
+                    </label>
+                    <label class="export-switch-option">
+                        <input asp-for="IncludeEvents" type="checkbox" />
+                        <span><strong>Events</strong><small>Include scheduled database events.</small></span>
+                    </label>
+                    <label class="export-switch-option export-switch-wide">
+                        <input asp-for="UseSingleTransaction" type="checkbox" />
+                        <span><strong>Consistent transaction</strong><small>Read transactional tables from one consistent snapshot without locking them.</small></span>
+                    </label>
+                </div>
+
+                <section class="export-table-selector" data-export-table-selector>
+                    <div class="export-table-selector-heading">
+                        <div>
+                            <span class="eyebrow">Table selection</span>
+                            <h3>Tables to export</h3>
+                            <p>
+                                <strong data-export-selected-count>@selectedTables.Count</strong> of @Model.Tables.Count selected</p>
+                        </div>
+                        <div class="export-table-actions">
+                            <button class="btn btn-sm btn-outline-primary" type="button" data-export-select-all><i class="bi bi-check2-square"></i> Select all</button>
+                            <button class="btn btn-sm btn-outline-secondary" type="button" data-export-clear><i class="bi bi-square"></i> Clear</button>
+                        </div>
+                    </div>
+                    <div class="export-table-filter">
+                        <i class="bi bi-search"></i>
+                        <input class="form-control" type="search" placeholder="Filter tables" data-export-table-filter autocomplete="off" />
+                    </div>
+                    <span asp-validation-for="SelectedTables" class="text-danger small"></span>
+
+                    @if (Model.Tables.Count == 0)
+                    {
+                        <div class="empty-state compact">
+                            <i class="bi bi-table"></i>
+                            <h2>No tables found</h2>
+                            <p>The selected database has no visible base tables.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="export-table-list">
+                            @foreach (TableMetadata table in Model.Tables)
+                            {
+                                bool isSelected = selectedTables.Contains(table.Name);
+                                <label class="export-table-option" data-export-table data-export-table-name="@table.Name.ToLowerInvariant()">
+                                    <input type="checkbox" name="SelectedTables" value="@table.Name" checked="@(isSelected ? "checked" : null)" />
+                                    <span class="export-table-check"><i class="bi bi-check2"></i></span>
+                                    <span class="export-table-copy">
+                                        <strong>@table.Name</strong>
+                                        <small>@table.ApproximateRows.ToString("N0") rows · @FormatBytes(table.DataLength + table.IndexLength)</small>
+                                    </span>
+                                </label>
+                            }
+                        </div>
+                    }
+                </section>
+
+                <div class="export-submit-bar">
+                    <div>
+                        <strong>Ready to create the export</strong>
+                        <span>The generated file is removed from temporary storage after the download completes.</span>
+                    </div>
+                    <button
+                        class="btn btn-primary btn-lg export-submit-button"
+                        type="submit"
+                        data-processing-submit
+                        data-export-submit
+                        disabled="@(Model.Tables.Count == 0 ? "disabled" : null)">
+                        <i class="bi bi-download"></i> <span>Create SQL export</span>
+                    </button>
+                </div>
+            </form>
+        }
+        else
+        {
+            <div class="empty-state compact">
+                <i class="bi bi-shield-lock"></i>
+                <h2>Export permission required</h2>
+                <p>An administrator can grant <code>@AppPermissions.SqlExportExecute</code> to this role.</p>
+            </div>
+        }
+    </section>
+
+    <aside class="panel safety-panel export-summary-panel">
+        <i class="bi bi-file-earmark-code"></i>
+        <h2>Export behavior</h2>
+        <ol>
+            <li>Validate the database and selected tables</li>
+            <li>Create a private temporary SQL file</li>
+            <li>Add the MaNGOS Database Studio header</li>
+            <li>Compress the file when requested</li>
+            <li>Save the generated download through Database Studio</li>
+            <li>Remove the temporary export</li>
+        </ol>
+        <div class="alert alert-warning studio-inline-alert mt-4 mb-0">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <div>
+                <strong>Protect exported files</strong>
+                <span>Database dumps can contain account, configuration, and world data. Store them securely.</span>
+            </div>
+        </div>
+    </aside>
+</div>
+
+@section Scripts {
+    <script src="~/js/sql-export.js" asp-append-version="true"></script>
+}
+
+@functions
+{
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes >= 1073741824) return (bytes / 1073741824d).ToString("0.##") + " GB";
+        if (bytes >= 1048576) return (bytes / 1048576d).ToString("0.##") + " MB";
+        if (bytes >= 1024) return (bytes / 1024d).ToString("0.##") + " KB";
+        return bytes.ToString("N0") + " B";
+    }
+}

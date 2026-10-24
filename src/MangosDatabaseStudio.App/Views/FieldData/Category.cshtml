@@ -1,0 +1,57 @@
+@* Present the FieldData Category workflow within the shared studio layout. *@
+
+@model FieldDataCategoryEditViewModel
+@{
+    ViewData["Title"] = Model.IsCreate ? "Add Field Data Category" : "Edit Field Data Category";
+    ViewData["Section"] = "System / Field Data / Categories";
+}
+<div class="page-actions">
+    <div>
+        <p class="page-lead">Categories group related database field definitions without changing how values are stored.</p>
+    </div>
+    <a class="btn btn-outline-secondary" asp-action="Index"><i class="bi bi-arrow-left"></i> Field data</a>
+</div>
+
+<form method="post" asp-action="SaveCategory" class="panel field-data-editor-form">
+    <input asp-for="Id" type="hidden" />
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+    <div class="section-heading">
+        <div>
+            <span class="eyebrow">Catalog category</span>
+            <h2>@(Model.IsCreate ? "New category" : Model.Name)</h2>
+        </div>
+        <i class="bi bi-collection"></i>
+    </div>
+    <div class="form-grid field-data-category-form-grid">
+        <div class="field-data-category-name">
+            <label class="form-label" asp-for="Name">Name</label>
+            <input class="form-control" asp-for="Name" /><span asp-validation-for="Name" class="text-danger"></span>
+        </div>
+        <div class="field-data-category-key">
+            <label class="form-label" asp-for="Key">Stable key</label>
+            <input class="form-control" asp-for="Key" placeholder="world.creature-template" /><span asp-validation-for="Key" class="text-danger"></span>
+            <div class="form-text">Used internally; lowercase dotted names work best.</div>
+        </div>
+        <div class="field-data-category-icon-field">
+            <label class="form-label" asp-for="Icon">Bootstrap icon class</label>
+            <input class="form-control" asp-for="Icon" placeholder="bi-collection" /><span asp-validation-for="Icon" class="text-danger"></span>
+        </div>
+        <div class="field-data-category-order">
+            <label class="form-label" asp-for="SortOrder">Sort order</label>
+            <input class="form-control" asp-for="SortOrder" type="number" />
+        </div>
+        <div class="field-data-form-wide">
+            <label class="form-label" asp-for="Description">Description</label>
+            <textarea class="form-control" asp-for="Description" rows="3"></textarea>
+            <span asp-validation-for="Description" class="text-danger"></span>
+        </div>
+        <label class="field-data-setting-card field-data-form-wide">
+            <span class="field-data-setting-copy"><strong>Category enabled</strong><small>Disabled categories remain stored but their field definitions are ignored by the World Editor.</small></span>
+            <span class="form-check form-switch field-data-setting-switch"><input class="form-check-input" asp-for="IsEnabled" /></span>
+        </label>
+    </div>
+    <div class="form-actions sticky-actions">
+        <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i> @(Model.IsCreate ? "Add category" : "Save category")</button>
+    </div>
+</form>

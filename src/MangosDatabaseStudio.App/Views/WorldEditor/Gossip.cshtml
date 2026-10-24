@@ -1,0 +1,486 @@
+@* Present the WorldEditor Gossip workflow within the shared studio layout. *@
+
+@using MangosDatabaseStudio.Domain.World
+@model GossipViewerViewModel
+@{
+    ViewData["Title"] = "Gossip Sources";
+    ViewData["Section"] = Model.Database + " / " + Model.CatalogName;
+    ViewData["PageClass"] = "world-editor-page";
+    ViewData["ContentClass"] = "world-editor-content world-record-editor-content";
+
+    int[] pageSizes = new[] { 10, 20, 50, 100, 200 };
+    long totalCount = Model.Sources.TotalCount;
+    int directoryPage = Model.Sources.Page;
+    int directoryTotalPages = Model.Sources.TotalPages;
+    int directoryPageSize = Model.Sources.PageSize;
+    int firstPage = Math.Max(1, directoryPage - 2);
+    int lastPage = Math.Min(directoryTotalPages, directoryPage + 2);
+    string directoryUrl = Url.Action("Gossip", new
+    {
+        database = Model.Database,
+        search = Model.Search,
+        sourceFilter = Model.SourceFilter,
+        show = true,
+        page = directoryPage,
+        pageSize = directoryPageSize
+    }) ?? string.Empty;
+    string creatureLookupUrl = Url.Action("GossipCreatureOptions", "WorldEditor") ?? string.Empty;
+}
+
+<div class="world-record-editor viewer-page gossip-sources-viewer">
+    <header class="record-editor-commandbar">
+        <div class="record-command-identity">
+            <a class="record-back-button" asp-action="Index" asp-route-database="@Model.Database" aria-label="Back to World Editor"><i class="bi bi-arrow-left"></i></a>
+            <span class="record-command-icon"><i class="bi bi-diagram-2"></i></span>
+            <div>
+                <span class="eyebrow">Structured world data viewer</span>
+                <h2>Gossip Sources</h2>
+                <p>Trace creatures and GameObjects to the gossip menu IDs assigned to their templates.</p>
+            </div>
+        </div>
+        <div class="record-command-actions">
+            <span class="record-change-badge"><i class="bi @(Model.CanAddCreatureSources ? "bi-pencil-square" : "bi-binoculars")"></i> @(Model.CanAddCreatureSources ? "Gossip source editor" : "Gossip source tracing")</span>
+            @if (Model.IsAvailable && Model.CanAddCreatureSources)
+            {
+                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#gossipAddNpcSourceModal"><i class="bi bi-plus-lg"></i> Add NPC source</button>
+            }
+        </div>
+    </header>
+
+    <div class="viewer-flow">
+        <section class="panel viewer-search-panel" aria-labelledby="gossipDirectoryHeading">
+            <header class="panel-header viewer-search-heading">
+                <div>
+                    <span class="eyebrow">Gossip source directory</span>
+                    <h2 id="gossipDirectoryHeading">Find a creature or GameObject gossip source</h2>
+                    <p>Search template names, entries, or menu IDs without loading the Gossip Menus directory.</p>
+                </div>
+                <span class="viewer-catalog-badge"><i class="bi bi-database-check"></i> @Model.CatalogName @Model.CatalogVersion</span>
+            </header>
+
+            @if (!Model.IsAvailable)
+            {
+                <div class="alert alert-warning studio-inline-alert mb-0">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <div>
+                        <strong>Gossip Sources unavailable</strong>
+                        <span>The connected world database does not expose supported creature or GameObject source tables.</span>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <form method="get" asp-action="Gossip" class="viewer-search-form">
+                    <input type="hidden" name="database" value="@Model.Database" />
+                    <input type="hidden" name="show" value="true" />
+                    <input type="hidden" name="pageSize" value="@directoryPageSize" />
+                    <label class="viewer-search-field" for="gossipSearch">
+                        <span>Source name, entry, or menu ID</span>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input id="gossipSearch" type="search" name="search" class="form-control" value="@Model.Search" placeholder="Example: Innkeeper or 68" autocomplete="off" />
+                            <select name="sourceFilter" class="form-select gossip-source-filter" aria-label="Gossip source filter">
+                                @if (Model.SourceFilter == GossipSourceFilters.All)
+                                {
+                                    <option value="all" selected>All sources</option>
+                                }
+                                else
+                                {
+                                    <option value="all">All sources</option>
+                                }
+                                @if (Model.SourceFilter == GossipSourceFilters.Creatures)
+                                {
+                                    <option value="creatures" selected>Creatures</option>
+                                }
+                                else
+                                {
+                                    <option value="creatures">Creatures</option>
+                                }
+                                @if (Model.SourceFilter == GossipSourceFilters.GameObjects)
+                                {
+                                    <option value="gameobjects" selected>GameObjects</option>
+                                }
+                                else
+                                {
+                                    <option value="gameobjects">GameObjects</option>
+                                }
+                            </select>
+                        </div>
+                        <small>Creature links come from the template gossip-menu field; supported questgiver and goober GameObjects are traced from their menu data fields.</small>
+                    </label>
+
+                    <div class="viewer-context-card">
+                        <span class="viewer-context-icon"><i class="bi bi-person-bounding-box"></i></span>
+                        <div>
+                            <small>Source tables</small>
+                            <strong>@((Model.HasCreatureSources ? 1 : 0) + (Model.HasGameObjectSources ? 1 : 0)) detected</strong>
+                            <span>@(Model.HasCreatureSources && Model.HasGameObjectSources ? "Creature and GameObject sources are available." : Model.HasCreatureSources ? "Creature sources are available." : "GameObject sources are available.")</span>
+                        </div>
+                    </div>
+                    <div class="viewer-context-card">
+                        <span class="viewer-context-icon"><i class="bi bi-list-nested"></i></span>
+                        <div>
+                            <small>Menu definitions</small>
+                            <strong>@((Model.HasGossipMenuTable ? 1 : 0) + (Model.HasGossipOptionTable ? 1 : 0)) detected</strong>
+                            <span>@(Model.HasGossipMenuTable || Model.HasGossipOptionTable ? "Existing sources can open directly in Gossip Menus." : "Source links can be inspected, but menu definitions are unavailable.")</span>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary viewer-search-button"><i class="bi bi-search"></i> Search sources</button>
+                </form>
+            }
+        </section>
+
+        @if (Model.IsAvailable && Model.HasSearched)
+        {
+            <section class="viewer-summary-grid" aria-label="Gossip sources summary">
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-diagram-2"></i></span>
+                    <div>
+                        <small>Matching sources</small>
+                        <strong>@totalCount.ToString("N0")</strong>
+                        <p>@(string.IsNullOrWhiteSpace(Model.Search) ? GossipSourceFilters.GetLabel(Model.SourceFilter) : "Search applied")</p>
+                    </div>
+                </article>
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-file-earmark-text"></i></span>
+                    <div>
+                        <small>Directory page</small>
+                        <strong>@directoryPage / @Math.Max(directoryTotalPages, 1)</strong>
+                        <p>@directoryPageSize rows per page</p>
+                    </div>
+                </article>
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-funnel"></i></span>
+                    <div>
+                        <small>Source scope</small>
+                        <strong>@GossipSourceFilters.GetLabel(Model.SourceFilter)</strong>
+                        <p>Creature and GameObject template links</p>
+                    </div>
+                </article>
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-list-nested"></i></span>
+                    <div>
+                        <small>Menu access</small>
+                        <strong>@(Model.HasGossipMenuTable || Model.HasGossipOptionTable ? "Available" : "Unavailable")</strong>
+                        <p>@Model.CatalogName @Model.CatalogVersion</p>
+                    </div>
+                </article>
+            </section>
+        }
+
+        <main class="viewer-detail-stack">
+            @if (!Model.IsAvailable)
+            {
+                <section class="panel viewer-empty-state is-warning">
+                    <span><i class="bi bi-database-exclamation"></i></span>
+                    <h3>Gossip source tables were not found</h3>
+                    <p>The viewer needs a supported creature_template or gameobject_template source schema.</p>
+                </section>
+            }
+            else if (!Model.HasSearched)
+            {
+                <section class="panel viewer-empty-state">
+                    <span><i class="bi bi-diagram-2"></i></span>
+                    <h3>Trace gossip sources without opening raw tables</h3>
+                    <p>Search creature and GameObject templates to see which menu ID each source uses.</p>
+                </section>
+            }
+            else if (totalCount == 0)
+            {
+                <section class="panel viewer-empty-state">
+                    <span><i class="bi bi-search"></i></span>
+                    <h3>No matching gossip sources</h3>
+                    <p>Try another source name, entry, menu ID, or source filter.</p>
+                </section>
+            }
+            else
+            {
+                <section class="panel viewer-panel-flush viewer-results-panel">
+                    <header class="viewer-results-header">
+                        <div>
+                            <span class="eyebrow">Gossip source results</span>
+                            <h3>Choose a source</h3>
+                            <p>Each source shows the menu ID assigned to that creature or GameObject template.</p>
+                        </div>
+                        <div class="viewer-results-count">
+                            <strong>@totalCount.ToString("N0")</strong>
+                            <span>source@(totalCount == 1 ? string.Empty : "s")</span>
+                        </div>
+                    </header>
+                    <form method="get" asp-action="Gossip" class="world-filter-bar viewer-results-toolbar">
+                        <input type="hidden" name="database" value="@Model.Database" />
+                        <input type="hidden" name="search" value="@Model.Search" />
+                        <input type="hidden" name="sourceFilter" value="@Model.SourceFilter" />
+                        <input type="hidden" name="show" value="true" />
+                        <span class="world-filter-hint">Page @directoryPage of @Math.Max(directoryTotalPages, 1)</span>
+                        <label class="world-filter-select">
+                            <span>Rows per page</span>
+                            <select name="pageSize" class="form-select" onchange="this.form.submit()">
+                                @foreach (int size in pageSizes)
+                                {
+                                    if (directoryPageSize == size)
+                                    {
+                                        <option value="@size" selected>@size</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@size">@size</option>
+                                    }
+                                }
+                            </select>
+                        </label>
+                    </form>
+                    <div class="world-record-table-wrap viewer-results-table-wrap">
+                        <table class="table studio-table viewer-results-table viewer-directory-table mb-0" aria-label="Gossip source results">
+                            <colgroup><col class="viewer-directory-col" style="--viewer-col-width:39%" /><col class="viewer-directory-col" style="--viewer-col-width:19%" /><col class="viewer-directory-col" style="--viewer-col-width:12%" /><col class="viewer-directory-col" style="--viewer-col-width:22%" /><col class="viewer-directory-col" style="--viewer-col-width:8%" /></colgroup>
+                            <thead>
+                                <tr>
+                                    <th>Source</th>
+                                    <th>Type</th>
+                                    <th class="viewer-directory-center">Menu</th>
+                                    <th class="viewer-directory-center">Definition</th>
+                                    <th class="actions-column viewer-action-column viewer-directory-center">Open</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            @foreach (GossipSourceSummary source in Model.Sources.Items)
+                            {
+                                <tr>
+                                    <td class="viewer-directory-name-cell">
+                                        <div class="viewer-directory-identity">
+                                            <span class="viewer-directory-icon"><i class="bi @(source.EntityType == "Creature" ? "bi-person-walking" : "bi-box")"></i></span>
+                                            <span><strong>@(string.IsNullOrWhiteSpace(source.EntityName) ? source.EntityType + " " + source.EntityEntry : source.EntityName)</strong><small>Entry @source.EntityEntry</small></span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <strong>@source.EntityType</strong>
+                                        <small class="gossip-cell-note">@source.LinkKind</small>
+                                    </td>
+                                    <td class="gossip-number-cell viewer-directory-center">@source.MenuId</td>
+                                    <td class="viewer-directory-center">
+                                        <span class="viewer-status-badge @(source.MenuExists ? "success" : "warning")">@(source.MenuExists ? source.TextRowCount + " text · " + source.OptionCount + " options" : "Missing definition")</span>
+                                    </td>
+                                    <td class="actions-column viewer-action-column viewer-directory-center">
+                                        @if (source.MenuExists)
+                                        {
+                                            <a
+                                                class="icon-button"
+                                                asp-action="Menus"
+                                                asp-route-database="@Model.Database"
+                                                asp-route-show="true"
+                                                asp-route-entry="@source.MenuId"
+                                                asp-route-returnUrl="@directoryUrl"
+                                                title="Open menu @source.MenuId"
+                                                aria-label="Open menu @source.MenuId"><i class="bi bi-chevron-right"></i></a>
+                                        }
+                                        else if (Model.CanAddMenuRows)
+                                        {
+                                            <button
+                                                type="button"
+                                                class="icon-button"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#gossipAddTextModal"
+                                                data-gossip-new-menu
+                                                data-entry="@source.MenuId"
+                                                title="Create menu @source.MenuId"
+                                                aria-label="Create menu @source.MenuId"><i class="bi bi-plus-lg"></i></button>
+                                        }
+                                        else
+                                        {
+                                            <span class="icon-button disabled" title="Menu definition is missing" aria-label="Menu definition is missing"><i class="bi bi-dash-lg"></i></span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (directoryTotalPages > 1)
+                    {
+                        <nav class="pagination-shell world-pagination viewer-results-pagination" aria-label="Gossip source pages">
+                            <div class="pagination-status">
+                                <strong>Page @directoryPage</strong>
+                                <span>of @directoryTotalPages · @totalCount.ToString("N0") sources</span>
+                            </div>
+                            <ul class="pagination mb-0">
+                                <li class="page-item pagination-direction @(directoryPage == 1 ? "disabled" : string.Empty)">
+                                    <a
+                                        class="page-link"
+                                        asp-action="Gossip"
+                                        asp-route-database="@Model.Database"
+                                        asp-route-search="@Model.Search"
+                                        asp-route-sourceFilter="@Model.SourceFilter"
+                                        asp-route-show="true"
+                                        asp-route-page="@(directoryPage - 1)"
+                                        asp-route-pageSize="@directoryPageSize"><i class="bi bi-chevron-left"></i><span>Previous</span></a>
+                                </li>
+                                @for (int pageNumber = firstPage; pageNumber <= lastPage; pageNumber++)
+                                {
+                                    <li class="page-item @(pageNumber == directoryPage ? "active" : string.Empty)">
+                                        <a
+                                            class="page-link"
+                                            asp-action="Gossip"
+                                            asp-route-database="@Model.Database"
+                                            asp-route-search="@Model.Search"
+                                            asp-route-sourceFilter="@Model.SourceFilter"
+                                            asp-route-show="true"
+                                            asp-route-page="@pageNumber"
+                                            asp-route-pageSize="@directoryPageSize">@pageNumber</a>
+                                    </li>
+                                }
+                                <li class="page-item pagination-direction @(directoryPage == directoryTotalPages ? "disabled" : string.Empty)">
+                                    <a
+                                        class="page-link"
+                                        asp-action="Gossip"
+                                        asp-route-database="@Model.Database"
+                                        asp-route-search="@Model.Search"
+                                        asp-route-sourceFilter="@Model.SourceFilter"
+                                        asp-route-show="true"
+                                        asp-route-page="@(directoryPage + 1)"
+                                        asp-route-pageSize="@directoryPageSize"><span>Next</span><i class="bi bi-chevron-right"></i></a>
+                                </li>
+                            </ul>
+                        </nav>
+                    }
+                </section>
+            }
+        </main>
+    </div>
+</div>
+
+@if (Model.IsAvailable && Model.CanAddCreatureSources)
+{
+    <div class="modal fade viewer-editor-modal" id="gossipAddNpcSourceModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" asp-action="GossipAddCreatureSource" data-gossip-add-npc-source-form>
+            <div class="modal-header">
+                <div>
+                    <span class="eyebrow">Gossip Sources</span>
+                    <h5 class="modal-title">Add NPC gossip source</h5>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body viewer-editor-form-grid">
+                <input type="hidden" name="Database" value="@Model.Database" />
+                <input type="hidden" name="Search" value="@Model.Search" />
+                <input type="hidden" name="SourceFilter" value="@Model.SourceFilter" />
+                <input type="hidden" name="ReturnUrl" value="@directoryUrl" />
+                <input type="hidden" name="Page" value="@directoryPage" />
+                <input type="hidden" name="PageSize" value="@directoryPageSize" />
+                <label class="viewer-editor-wide">
+                    <span>NPC without Gossip flag</span>
+                    <div class="npc-vendor-item-picker"
+                         data-world-lookup-picker
+                         data-world-lookup-url="@creatureLookupUrl"
+                         data-world-lookup-database="@Model.Database"
+                         data-world-lookup-singular="NPC"
+                         data-world-lookup-plural="NPCs"
+                         data-world-lookup-placeholder="Select an NPC..."
+                         data-world-lookup-search-placeholder="Search NPC name or entry"
+                         data-world-lookup-required="true">
+                        <input type="hidden" name="CreatureEntry" data-world-lookup-value />
+                        <button
+                            type="button"
+                            class="form-select npc-vendor-item-picker-toggle is-placeholder"
+                            data-world-lookup-toggle
+                            aria-haspopup="listbox"
+                            aria-expanded="false"><span data-world-lookup-label>Select an NPC...</span></button>
+                    </div>
+                </label>
+                <label class="viewer-editor-wide">
+                    <span>Gossip menu ID</span>
+                    <input type="number" min="1" class="form-control" name="MenuId" required data-gossip-source-menu-id />
+                </label>
+                <div class="viewer-editor-help viewer-editor-wide">
+                    <i class="bi bi-info-circle"></i>
+                    <span>Only creature_template rows without the Gossip NPC flag are listed. Adding the source preserves the NPC's other flags and links it to the selected menu ID.</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add NPC source</button>
+            </div>
+        </form>
+        </div>
+        </div>
+    </div>
+}
+
+@if (Model.IsAvailable && Model.CanAddMenuRows)
+{
+    <div class="modal fade viewer-editor-modal" id="gossipAddTextModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" asp-action="GossipAddMenuRow">
+            <div class="modal-header">
+                <div>
+                    <span class="eyebrow">Missing menu definition</span>
+                    <h5 class="modal-title">Create menu text row</h5>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="Database" value="@Model.Database" />
+                <input type="hidden" name="Search" value="@Model.Search" />
+                <input type="hidden" name="ReturnUrl" value="@directoryUrl" />
+                <input type="hidden" name="Entry" value="0" />
+                <input type="hidden" name="Page" value="@directoryPage" />
+                <input type="hidden" name="PageSize" value="@directoryPageSize" />
+                <input type="hidden" name="TextPage" value="1" />
+                <input type="hidden" name="TextPageSize" value="@directoryPageSize" />
+                <input type="hidden" name="OptionPage" value="1" />
+                <input type="hidden" name="OptionPageSize" value="@directoryPageSize" />
+                <div class="viewer-editor-form-grid">
+                    <label class="form-label">
+                        <span>Menu ID</span>
+                        <input type="number" min="0" class="form-control" name="NewEntry" required data-gossip-add-entry />
+                    </label>
+                    <label class="form-label">
+                        <span>NPC text ID</span>
+                        <input type="number" min="0" class="form-control" name="Row.TextId" required />
+                    </label>
+                    @if (Model.EditorCapabilities.HasMenuScriptId)
+                    {
+                        <label class="form-label">
+                            <span>Script ID</span>
+                            <input type="number" min="0" class="form-control" name="Row.ScriptId" />
+                        </label>
+                    }
+                    @if (Model.EditorCapabilities.HasMenuConditionId)
+                    {
+                        <label class="form-label">
+                            <span>Condition ID</span>
+                            <input type="number" min="0" class="form-control" name="Row.ConditionId" />
+                        </label>
+                    }
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Create menu</button>
+            </div>
+        </form>
+        </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <script src="~/js/world-lookup-picker.js" asp-append-version="true"></script>
+    <script src="~/js/gossip-sources-viewer.js" asp-append-version="true"></script>
+    <script>
+(() => {
+        const form = document.querySelector('[data-gossip-add-npc-source-form]');
+        const picker = form?.querySelector('[data-world-lookup-picker]');
+        const menuId = form?.querySelector('[data-gossip-source-menu-id]');
+        picker?.addEventListener('worldlookupchange', event => {
+            const existingMenuId = Number(event.detail?.item?.menuId || 0);
+            if (menuId && existingMenuId > 0 && !String(menuId.value || '').trim())
+            {
+                menuId.value = String(existingMenuId);
+            }
+        });
+    })();
+</script>
+}

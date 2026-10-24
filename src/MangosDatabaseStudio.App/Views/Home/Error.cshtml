@@ -1,0 +1,16 @@
+@* Present the Home Error workflow within the shared studio layout. *@
+
+@model MangosDatabaseStudio.App.Controllers.ErrorViewModel
+@{
+    ViewData["Title"] = "Application Error";
+    ViewData["Section"] = "System";
+}
+<div class="empty-state danger">
+    <i class="bi bi-exclamation-octagon"></i>
+    <h2>The request could not be completed</h2>
+    <p>Review the server log for the underlying exception.</p>
+    @if (Model.ShowRequestId)
+    {
+        <code>Request ID: @Model.RequestId</code>
+    }
+</div>

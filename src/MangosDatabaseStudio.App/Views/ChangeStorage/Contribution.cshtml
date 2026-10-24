@@ -1,0 +1,137 @@
+@* Present the ChangeStorage Contribution workflow within the shared studio layout. *@
+
+@model ChangeStorageContributionViewModel
+@using System.Text.Json
+@{
+    ViewData["Title"] = "Contribution SQL";
+    ViewData["Section"] = "Database Administration";
+    ViewData["ContentClass"] = "change-storage-page change-storage-contribution-page";
+}
+
+<div class="change-storage-header change-contribution-header">
+    <div>
+        <a class="btn btn-outline-secondary btn-sm change-contribution-back"
+           asp-action="Index"
+           asp-route-database="@Model.ReturnDatabase"
+           asp-route-status="@Model.ReturnStatus"
+           asp-route-source="@Model.ReturnSource"
+           asp-route-search="@Model.ReturnSearch"
+           asp-route-page="@Model.ReturnPage"
+           asp-route-pageSize="@Model.ReturnPageSize">
+            <i class="bi bi-arrow-left"></i> Back to Change Storage
+        </a>
+        <p class="page-lead mb-1">Review the selected approved changes, complete the MaNGOS version metadata, and generate the contribution SQL file.</p>
+        <p class="form-text mb-0">
+            <i class="bi bi-shield-check"></i> This page only contains approved reusable SQL from one database.</p>
+    </div>
+    <div class="change-storage-context">
+        <span>Contribution source</span>
+        <strong>@Model.ConnectionName · @Model.Database</strong>
+    </div>
+</div>
+
+<section class="panel change-storage-contribution-panel" data-change-contribution-builder>
+    <div class="section-heading">
+        <div>
+            <span class="eyebrow">MaNGOS contribution</span>
+            <h2>Build contribution SQL</h2>
+            <p>@Model.Changes.Count approved @(Model.Changes.Count == 1 ? "change" : "changes") selected from <strong>@Model.Database</strong>. Uncheck any row you do not want in this contribution.</p>
+        </div>
+        <i class="bi bi-file-earmark-code"></i>
+    </div>
+
+    <div class="change-storage-contribution-layout change-contribution-layout">
+        <div class="change-storage-contribution-settings">
+            <div class="change-storage-approved-list change-contribution-approved-list">
+                <div class="change-storage-approved-list-header">
+                    <div>
+                        <strong>Selected changes</strong>
+                        <span>@Model.Changes.Count approved reusable SQL @(Model.Changes.Count == 1 ? "change" : "changes")</span>
+                    </div>
+                    <label>
+                        <input type="checkbox" data-contrib-select-all checked /> Include all</label>
+                </div>
+                @foreach (StoredDatabaseChange change in Model.Changes)
+                {
+                    <label class="change-storage-approved-item change-contribution-approved-item">
+                        <input type="checkbox" value="@change.Id" data-contrib-select checked />
+                        <span>
+                            <span class="change-contribution-item-heading">
+                                <strong>@change.Summary</strong>
+                                <em class="change-storage-operation @change.Operation.ToLowerInvariant()">@change.Operation</em>
+                            </span>
+                            <small>@(string.IsNullOrWhiteSpace(change.ObjectName) ? "Database operation" : change.ObjectName) · @change.Source · @change.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</small>
+                        </span>
+                        <script type="application/json" data-contrib-sql>@Html.Raw(JsonSerializer.Serialize(change.SqlText))</script>
+                    </label>
+                }
+            </div>
+
+            <div class="change-storage-version-grid">
+                <fieldset>
+                    <legend>Expected values</legend>
+                    <label>
+                        <span>Version</span>
+                        <input class="form-control" maxlength="64" data-contrib-field="oldVersion" />
+                    </label>
+                    <label>
+                        <span>Structure</span>
+                        <input class="form-control" maxlength="64" data-contrib-field="oldStructure" />
+                    </label>
+                    <label>
+                        <span>Content</span>
+                        <input class="form-control" maxlength="64" data-contrib-field="oldContent" />
+                    </label>
+                </fieldset>
+                <fieldset>
+                    <legend>New values</legend>
+                    <label>
+                        <span>Version</span>
+                        <input class="form-control" maxlength="64" data-contrib-field="newVersion" />
+                    </label>
+                    <label>
+                        <span>Structure</span>
+                        <input class="form-control" maxlength="64" data-contrib-field="newStructure" />
+                    </label>
+                    <label>
+                        <span>Content</span>
+                        <input class="form-control" maxlength="64" data-contrib-field="newContent" />
+                    </label>
+                </fieldset>
+            </div>
+
+            <div class="change-storage-contribution-text">
+                <label>
+                    <span>Description <small><b data-contrib-count="description">0</b>/30</small></span>
+                    <input class="form-control" maxlength="30" data-contrib-field="description" />
+                </label>
+                <label>
+                    <span>Comment <small><b data-contrib-count="comment">0</b>/150</small></span>
+                    <textarea class="form-control" rows="2" maxlength="150" data-contrib-field="comment"></textarea>
+                </label>
+            </div>
+        </div>
+
+        <div class="query-workbench change-storage-contribution-output">
+            <header class="query-workbench-header">
+                <div>
+                    <span class="eyebrow">Generated query</span>
+                    <h3>Contribution SQL</h3>
+                </div>
+                <div class="change-contribution-output-actions">
+                    <button class="btn btn-outline-light btn-sm" type="button" data-copy-contribution disabled><i class="bi bi-copy"></i> Copy SQL</button>
+                    <button class="btn btn-primary btn-sm" type="button" data-download-contribution disabled><i class="bi bi-download"></i> Download .sql</button>
+                </div>
+            </header>
+            <pre class="query-workbench-code" data-contribution-output>-- Complete the version metadata to generate the MaNGOS contribution script.</pre>
+            <footer class="query-workbench-footer">
+                <span data-contribution-state>Waiting for contribution metadata.</span>
+                <span>@Model.Database</span>
+            </footer>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script src="~/js/change-storage.js" asp-append-version="true"></script>
+}

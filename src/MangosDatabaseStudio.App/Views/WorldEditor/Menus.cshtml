@@ -1,0 +1,1241 @@
+@* Present the WorldEditor Menus workflow within the shared studio layout. *@
+
+@using System.Globalization
+@using MangosDatabaseStudio.Domain.World
+@model GossipViewerViewModel
+@{
+    ViewData["Title"] = "Gossip Menus";
+    ViewData["Section"] = Model.Database + " / " + Model.CatalogName;
+    ViewData["PageClass"] = "world-editor-page";
+    ViewData["ContentClass"] = "world-editor-content world-record-editor-content";
+
+    int[] pageSizes = new[] { 10, 20, 50, 100, 200 };
+    bool canManage = Model.CanAddMenuRows || Model.CanEditMenuRows || Model.CanDeleteMenuRows || Model.CanAddOptions || Model.CanEditOptions || Model.CanDeleteOptions || Model.CanAddCreatureSources;
+    long totalCount = Model.Menus.TotalCount;
+    int directoryPage = Model.Menus.Page;
+    int directoryTotalPages = Model.Menus.TotalPages;
+    int directoryPageSize = Model.Menus.PageSize;
+    int firstPage = Math.Max(1, directoryPage - 2);
+    int lastPage = Math.Min(directoryTotalPages, directoryPage + 2);
+    int textFirstPage = Model.SelectedMenu == null ? 1 : Math.Max(1, Model.SelectedMenu.TextRows.Page - 2);
+    int textLastPage = Model.SelectedMenu == null ? 1 : Math.Min(Model.SelectedMenu.TextRows.TotalPages, Model.SelectedMenu.TextRows.Page + 2);
+    int optionFirstPage = Model.SelectedMenu == null ? 1 : Math.Max(1, Model.SelectedMenu.Options.Page - 2);
+    int optionLastPage = Model.SelectedMenu == null ? 1 : Math.Min(Model.SelectedMenu.Options.TotalPages, Model.SelectedMenu.Options.Page + 2);
+    string directoryUrl = Url.Action("Menus", new { database = Model.Database, search = Model.Search, show = true, page = directoryPage, pageSize = directoryPageSize }) ?? string.Empty;
+    string returnUrl = string.IsNullOrWhiteSpace(Model.ReturnUrl) ? directoryUrl : Model.ReturnUrl;
+    string creatureLookupUrl = Url.Action("GossipCreatureOptions", "WorldEditor") ?? string.Empty;
+    string currentPageUrl = Context.Request.Path.ToString() + Context.Request.QueryString.ToString();
+}
+
+<div class="world-record-editor viewer-page gossip-menus-viewer" data-gossip-menu-viewer>
+    <header class="record-editor-commandbar">
+        <div class="record-command-identity">
+            <a class="record-back-button" asp-action="Index" asp-route-database="@Model.Database" aria-label="Back to World Editor"><i class="bi bi-arrow-left"></i></a>
+            <span class="record-command-icon"><i class="bi bi-list-nested"></i></span>
+            <div>
+                <span class="eyebrow">Structured world data viewer</span>
+                <h2>Gossip Menus</h2>
+                <p>Inspect and edit gossip menu definitions, NPC text links, options, and menu relationships.</p>
+            </div>
+        </div>
+        <div class="record-command-actions">
+            <span class="record-change-badge"><i class="bi @(canManage ? "bi-pencil-square" : "bi-shield-check")"></i> @(canManage ? "Gossip menu editor" : "Read-only")</span>
+            @if (Model.IsAvailable && Model.CanAddMenuRows)
+            {
+                <button
+                    type="button"
+                    class="btn btn-primary btn-sm"
+                    data-bs-toggle="modal"
+                    data-bs-target="#gossipAddTextModal"
+                    data-gossip-new-menu><i class="bi bi-plus-lg"></i> Add menu</button>
+            }
+        </div>
+    </header>
+
+    <div class="viewer-flow">
+        <section class="panel viewer-search-panel" aria-labelledby="menuDirectoryHeading">
+            <header class="panel-header viewer-search-heading">
+                <div>
+                    <span class="eyebrow">Gossip menu directory</span>
+                    <h2 id="menuDirectoryHeading">Find a gossip menu</h2>
+                    <p>Browse gossip menu definitions and options directly. Creature and GameObject tracing lives in Gossip Sources.</p>
+                </div>
+                <span class="viewer-catalog-badge"><i class="bi bi-database-check"></i> @Model.CatalogName @Model.CatalogVersion</span>
+            </header>
+
+            @if (!Model.IsAvailable)
+            {
+                <div class="alert alert-warning studio-inline-alert mb-0">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <div>
+                        <strong>Gossip Menus unavailable</strong>
+                        <span>The connected world database does not expose gossip_menu or gossip_menu_option.</span>
+                    </div>
+                </div>
+            }
+            else
+            {
+
+                <form method="get" asp-action="Menus" class="viewer-search-form">
+                    <input type="hidden" name="database" value="@Model.Database" />
+                    <input type="hidden" name="show" value="true" />
+                    <input type="hidden" name="pageSize" value="@directoryPageSize" />
+                    <label class="viewer-search-field" for="gossipSearch">
+                        <span>Menu ID or option text</span>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input id="gossipSearch" type="search" name="search" class="form-control" value="@Model.Search" placeholder="Example: 68 or greetings" autocomplete="off" />
+                        </div>
+                        <small>Menu search covers menu IDs and option text. Source-name lookup is handled by Gossip Sources.</small>
+                    </label>
+
+                    <div class="viewer-context-card">
+                        <span class="viewer-context-icon"><i class="bi bi-table"></i></span>
+                        <div>
+                            <small>Definition tables</small>
+                            <strong>@((Model.HasGossipMenuTable ? 1 : 0) + (Model.HasGossipOptionTable ? 1 : 0)) detected</strong>
+                            <span>@(Model.HasNpcTextTable ? "NPC text previews are available." : "npc_text is not available for text previews.")</span>
+                        </div>
+                    </div>
+                    <div class="viewer-context-card">
+                        <span class="viewer-context-icon"><i class="bi @(canManage ? "bi-pencil-square" : "bi-shield-check")"></i></span>
+                        <div>
+                            <small>Workspace access</small>
+                            <strong>@(canManage ? "Editing enabled" : "Read-only viewer")</strong>
+                            <span>@(canManage ? "Menu text and option rows follow your World Editor permissions." : "Menu relationships can be inspected without changing world records.")</span>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary viewer-search-button"><i class="bi bi-search"></i> Search menus</button>
+                </form>
+            }
+        </section>
+
+        @if (Model.IsAvailable && Model.HasSearched)
+        {
+            <section class="viewer-summary-grid" aria-label="Gossip menus summary">
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-list-nested"></i></span>
+                    <div>
+                        <small>Matching menus</small>
+                        <strong>@totalCount.ToString("N0")</strong>
+                        <p>@(string.IsNullOrWhiteSpace(Model.Search) ? "All menu definitions" : "Search applied")</p>
+                    </div>
+                </article>
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-file-earmark-text"></i></span>
+                    <div>
+                        <small>Directory page</small>
+                        <strong>@directoryPage / @Math.Max(directoryTotalPages, 1)</strong>
+                        <p>@directoryPageSize rows per page</p>
+                    </div>
+                </article>
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-bounding-box-circles"></i></span>
+                    <div>
+                        <small>Current selection</small>
+                        @if (Model.SelectedMenu == null)
+                        {
+                            <strong>None</strong>
+                            <p>Select a menu below</p>
+                        }
+                        else
+                        {
+                            <strong>Menu @Model.SelectedMenu.Menu.Entry</strong>
+                            <p>@Model.SelectedMenu.Menu.OptionCount option@(Model.SelectedMenu.Menu.OptionCount == 1 ? string.Empty : "s")</p>
+                        }
+                    </div>
+                </article>
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi @(canManage ? "bi-check2-circle" : "bi-shield-lock")"></i></span>
+                    <div>
+                        <small>Menu access</small>
+                        <strong>@(canManage ? "Editable" : "Read-only")</strong>
+                        <p>@Model.CatalogName @Model.CatalogVersion</p>
+                    </div>
+                </article>
+            </section>
+        }
+
+        <main class="viewer-detail-stack">
+            @if (!ViewData.ModelState.IsValid)
+            {
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+            }
+
+            @if (!Model.IsAvailable)
+            {
+                <section class="panel viewer-empty-state is-warning">
+                    <span><i class="bi bi-database-exclamation"></i></span>
+                    <h3>Gossip menu definition tables were not found</h3>
+                    <p>The viewer requires gossip_menu, gossip_menu_option, or both.</p>
+                </section>
+            }
+            else if (!Model.HasSearched)
+            {
+                <section class="panel viewer-empty-state">
+                    <span><i class="bi bi-list-nested"></i></span>
+                    <h3>Browse menus without opening raw tables</h3>
+                    <p>Search menu IDs or option text to inspect one conversation menu at a time.</p>
+                </section>
+            }
+            else if (Model.SelectedMenu == null && totalCount == 0)
+            {
+                <section class="panel viewer-empty-state">
+                    <span><i class="bi bi-search"></i></span>
+                    <h3>No matching menus</h3>
+                    <p>Try another menu ID or option text.</p>
+                </section>
+            }
+            else if (Model.SelectedMenu == null)
+            {
+                <section class="panel viewer-panel-flush viewer-results-panel">
+                    <header class="viewer-results-header">
+                        <div>
+                            <span class="eyebrow">Menu results</span>
+                            <h3>Choose a gossip menu</h3>
+                            <p>Definition and relationship counts keep the menu directory compact.</p>
+                        </div>
+                        <div class="viewer-results-count">
+                            <strong>@totalCount.ToString("N0")</strong>
+                            <span>menu@(totalCount == 1 ? string.Empty : "s")</span>
+                        </div>
+                    </header>
+                    <form method="get" asp-action="Menus" class="world-filter-bar viewer-results-toolbar">
+                        <input type="hidden" name="database" value="@Model.Database" /><input type="hidden" name="search" value="@Model.Search" /><input type="hidden" name="show" value="true" />
+                        <span class="world-filter-hint">Page @directoryPage of @Math.Max(directoryTotalPages, 1)</span>
+                        <label class="world-filter-select">
+                            <span>Rows per page</span>
+                            <select name="pageSize" class="form-select" onchange="this.form.submit()">
+                                @foreach (int size in pageSizes)
+                                {
+                                    if (directoryPageSize == size)
+                                    {
+                                        <option value="@size" selected>@size</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@size">@size</option>
+                                    }
+                                }
+                            </select>
+                        </label>
+                    </form>
+                    <div class="world-record-table-wrap viewer-results-table-wrap">
+                        <table class="table studio-table viewer-results-table viewer-directory-table mb-0" aria-label="Gossip menu results">
+                                <colgroup><col class="viewer-directory-col" style="--viewer-col-width:42%" /><col class="viewer-directory-col" style="--viewer-col-width:13%" /><col class="viewer-directory-col" style="--viewer-col-width:12%" /><col class="viewer-directory-col" style="--viewer-col-width:13%" /><col class="viewer-directory-col" style="--viewer-col-width:12%" /><col class="viewer-directory-col" style="--viewer-col-width:8%" /></colgroup>
+                                <thead>
+                                    <tr>
+                                        <th>Menu</th>
+                                        <th class="viewer-directory-center">Text rows</th>
+                                        <th class="viewer-directory-center">Options</th>
+                                        <th class="viewer-directory-center">Sources</th>
+                                        <th class="viewer-directory-center">Linked from</th>
+                                        <th class="actions-column viewer-action-column viewer-directory-center">Open</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                @foreach (GossipMenuSummary menu in Model.Menus.Items)
+                                {
+                                    <tr>
+                                        <td class="viewer-directory-name-cell">
+                                            <div class="viewer-directory-identity">
+                                                <span class="viewer-directory-icon"><i class="bi bi-chat-square-text"></i></span>
+                                                <span><strong>Menu @menu.Entry</strong><small>@menu.TotalDefinitionRows definition row@(menu.TotalDefinitionRows == 1 ? string.Empty : "s")</small></span>
+                                            </div>
+                                        </td>
+                                        <td class="viewer-directory-center">@menu.TextRowCount</td>
+                                        <td class="viewer-directory-center">@menu.OptionCount</td>
+                                        <td class="viewer-directory-center">@menu.SourceCount</td>
+                                        <td class="viewer-directory-center">@menu.ParentMenuCount</td>
+                                        <td class="actions-column viewer-action-column viewer-directory-center">
+                                            <a
+                                                class="icon-button"
+                                                asp-action="Menus"
+                                                asp-route-database="@Model.Database"
+                                                asp-route-search="@Model.Search"
+                                                asp-route-show="true"
+                                                asp-route-entry="@menu.Entry"
+                                                asp-route-page="@Model.Menus.Page"
+                                                asp-route-pageSize="@Model.Menus.PageSize"
+                                                asp-route-returnUrl="@directoryUrl"
+                                                title="Open menu @menu.Entry"
+                                                aria-label="Open menu @menu.Entry"><i class="bi bi-chevron-right"></i></a>
+                                        </td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                    </div>
+                    @if (directoryTotalPages > 1)
+                    {
+                        <nav class="pagination-shell world-pagination viewer-results-pagination" aria-label="Gossip menu directory pages">
+                            <div class="pagination-status">
+                                <strong>Page @directoryPage</strong>
+                                <span>of @directoryTotalPages · @totalCount.ToString("N0") menus</span>
+                            </div>
+                            <ul class="pagination mb-0">
+                                <li class="page-item pagination-direction @(directoryPage == 1 ? "disabled" : string.Empty)">
+                                    <a
+                                        class="page-link"
+                                        asp-action="Menus"
+                                        asp-route-database="@Model.Database"
+                                        asp-route-search="@Model.Search"
+                                        asp-route-show="true"
+                                        asp-route-page="@(directoryPage - 1)"
+                                        asp-route-pageSize="@directoryPageSize"><i class="bi bi-chevron-left"></i><span>Previous</span></a>
+                                </li>
+                                @for (int pageNumber = firstPage; pageNumber <= lastPage; pageNumber++)
+                                {
+                                    <li class="page-item @(pageNumber == directoryPage ? "active" : string.Empty)">
+                                        <a
+                                            class="page-link"
+                                            asp-action="Menus"
+                                            asp-route-database="@Model.Database"
+                                            asp-route-search="@Model.Search"
+                                            asp-route-show="true"
+                                            asp-route-page="@pageNumber"
+                                            asp-route-pageSize="@directoryPageSize">@pageNumber</a>
+                                    </li>
+                                }
+                                <li class="page-item pagination-direction @(directoryPage == directoryTotalPages ? "disabled" : string.Empty)">
+                                    <a
+                                        class="page-link"
+                                        asp-action="Menus"
+                                        asp-route-database="@Model.Database"
+                                        asp-route-search="@Model.Search"
+                                        asp-route-show="true"
+                                        asp-route-page="@(directoryPage + 1)"
+                                        asp-route-pageSize="@directoryPageSize"><span>Next</span><i class="bi bi-chevron-right"></i></a>
+                                </li>
+                            </ul>
+                        </nav>
+                    }
+                </section>
+            }
+            else
+            {
+                GossipMenuDetail detail = Model.SelectedMenu;
+                <section class="panel viewer-panel-flush viewer-workbench">
+                    <header class="viewer-record-header">
+                        <span class="viewer-record-icon"><i class="bi bi-chat-square-text"></i></span>
+                        <div>
+                            <span class="eyebrow">Gossip menu</span>
+                            <h2>Menu @detail.Menu.Entry</h2>
+                            <p>@detail.Menu.TextRowCount text row@(detail.Menu.TextRowCount == 1 ? string.Empty : "s") · @detail.Menu.OptionCount option@(detail.Menu.OptionCount == 1 ? string.Empty : "s") · @detail.Menu.SourceCount source@(detail.Menu.SourceCount == 1 ? string.Empty : "s")</p>
+                        </div>
+                        <div class="viewer-record-actions">
+                            <a class="btn btn-outline-secondary btn-sm" href="@returnUrl"><i class="bi bi-arrow-left"></i> Results</a>
+                            @if (Model.CanAddOptions)
+                            {
+                                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#gossipAddOptionModal"><i class="bi bi-plus-lg"></i> Add option</button>
+                            }
+                        @if (Model.CanAddMenuRows)
+                        {
+                            <button
+                                type="button"
+                                class="btn btn-outline-secondary btn-sm"
+                                data-bs-toggle="modal"
+                                data-bs-target="#gossipAddTextModal"
+                                data-gossip-add-text
+                                data-entry="@detail.Menu.Entry"><i class="bi bi-plus-lg"></i> Add text row</button>
+                        }
+                        @if (Model.CanAddCreatureSources)
+                        {
+                            <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#gossipAddNpcSourceModal"><i class="bi bi-person-plus"></i> Add NPC source</button>
+                        }
+                            <partial name="_ViewerPendingRecordActions" />
+                        </div>
+                    </header>
+
+                    <div class="viewer-detail-metrics">
+                        <div>
+                            <small>Text rows</small>
+                            <strong>@detail.Menu.TextRowCount</strong>
+                            <span>gossip_menu</span>
+                        </div>
+                        <div>
+                            <small>Options</small>
+                            <strong>@detail.Menu.OptionCount</strong>
+                            <span>gossip_menu_option</span>
+                        </div>
+                        <button type="button"
+                                class="gossip-relationship-metric"
+                                data-bs-toggle="modal"
+                                data-bs-target="#gossipRelationshipsModal"
+                                data-gossip-relationship-tab="sources"
+                                title="View direct gossip sources"
+                                aria-label="View @detail.TotalSourceCount direct gossip source@(detail.TotalSourceCount == 1 ? string.Empty : "s")">
+                            <span class="gossip-relationship-metric-copy">
+                                <small>Used by</small>
+                                <strong>@detail.TotalSourceCount</strong>
+                                <span>View direct sources</span>
+                            </span>
+                            <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>
+                        </button>
+                        <button type="button"
+                                class="gossip-relationship-metric"
+                                data-bs-toggle="modal"
+                                data-bs-target="#gossipRelationshipsModal"
+                                data-gossip-relationship-tab="parents"
+                                title="View menus that link here"
+                                aria-label="View @detail.TotalParentMenuCount parent menu option@(detail.TotalParentMenuCount == 1 ? string.Empty : "s")">
+                            <span class="gossip-relationship-metric-copy">
+                                <small>Linked from</small>
+                                <strong>@detail.TotalParentMenuCount</strong>
+                                <span>View parent menu links</span>
+                            </span>
+                            <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>
+                        </button>
+                    </div>
+
+                    <section class="viewer-record-section">
+                        <header class="viewer-record-section-header">
+                            <div>
+                                <span class="eyebrow">Menu presentation</span>
+                                <h3>NPC text rows</h3>
+                                <p>Each row links this menu to an npc_text record and optional script/condition metadata.</p>
+                            </div>
+                            <span class="badge rounded-pill">@detail.TextRows.TotalCount.ToString("N0") text row@(detail.TextRows.TotalCount == 1 ? string.Empty : "s")</span>
+                        </header>
+                        @if (detail.TextRows.Items.Count == 0)
+                        {
+                            <div class="viewer-record-empty">
+                                <i class="bi bi-file-earmark-text"></i>
+                                <strong>No NPC text rows</strong>
+                                <p>This menu has no gossip_menu text rows.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="viewer-record-table-wrap">
+                                <table class="table studio-table viewer-record-table viewer-workbench-table gossip-text-table mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Text ID</th>
+                                            <th>Text preview</th>
+                                            @if (Model.EditorCapabilities.HasMenuScriptId)
+                                            {
+                                                <th>Script</th>
+                                            }
+                                        @if (Model.EditorCapabilities.HasMenuConditionId)
+                                        {
+                                            <th>Condition</th>
+                                        }
+                                        @if (Model.CanEditMenuRows || Model.CanDeleteMenuRows)
+                                        {
+                                            <th class="actions-column viewer-action-column">Actions</th>
+                                        }
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                            @foreach (GossipMenuTextRow row in detail.TextRows.Items)
+                            {
+                                <tr>
+                                    <td>
+                                        <strong>@row.TextId</strong>
+                                    </td>
+                                    <td>
+                                        <span class="gossip-option-text">@(row.IsTextResolved ? row.TextPreview : "NPC text not resolved")</span>
+                                    </td>
+                                    @if (Model.EditorCapabilities.HasMenuScriptId)
+                                    {
+                                        <td>@(row.ScriptId?.ToString(CultureInfo.InvariantCulture) ?? "—")</td>
+                                    }
+                                @if (Model.EditorCapabilities.HasMenuConditionId)
+                                {
+                                    <td>@(row.ConditionId?.ToString(CultureInfo.InvariantCulture) ?? "—")</td>
+                                }
+                                @if (Model.CanEditMenuRows || Model.CanDeleteMenuRows)
+                                {
+                                    <td class="actions-column viewer-action-column">
+                                        <div class="row-actions row-actions-compact">
+                                            @if (Model.CanEditMenuRows)
+                                            {
+                                                <button
+                                                    type="button"
+                                                    class="icon-button"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#gossipEditTextModal"
+                                                    data-gossip-edit-text
+                                                    data-text-id="@row.TextId"
+                                                    data-script-id="@row.ScriptId"
+                                                    data-condition-id="@row.ConditionId"
+                                                    title="Edit text row"
+                                                    aria-label="Edit text row"><i class="bi bi-pencil"></i></button>
+                                            }
+                                            @if (Model.CanDeleteMenuRows)
+                                            {
+                                                <button
+                                                    type="button"
+                                                    class="icon-button danger"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#gossipDeleteTextModal"
+                                                    data-gossip-delete-text
+                                                    data-text-id="@row.TextId"
+                                                    data-script-id="@row.ScriptId"
+                                                    data-condition-id="@row.ConditionId"
+                                                    title="Remove text row"
+                                                    aria-label="Remove text row"><i class="bi bi-trash"></i></button>
+                                            }
+                                        </div>
+                                    </td>
+                                }
+                                </tr>
+                            }
+                            </tbody>
+                            </table>
+                            </div>
+                            <footer class="viewer-record-footer">
+                                <div class="viewer-record-pagination-wrap">
+                                    <div class="pagination-status">
+                                        <strong>Page @detail.TextRows.Page</strong>
+                                        <span>of @Math.Max(detail.TextRows.TotalPages, 1) · @detail.TextRows.TotalCount.ToString("N0") text rows</span>
+                                    </div>
+                                    @if (detail.TextRows.TotalPages > 1)
+                                    {
+                                        <nav class="world-pagination viewer-record-pagination" aria-label="Gossip text pages">
+                                            <ul class="pagination mb-0">
+                                            <li class="page-item pagination-direction @(detail.TextRows.Page == 1 ? "disabled" : string.Empty)">
+                                                <a
+                                                    class="page-link"
+                                                    asp-action="Menus"
+                                                    asp-route-database="@Model.Database"
+                                                    asp-route-search="@Model.Search"
+                                                    asp-route-show="true"
+                                                    asp-route-entry="@detail.Menu.Entry"
+                                                    asp-route-page="@directoryPage"
+                                                    asp-route-pageSize="@directoryPageSize"
+                                                    asp-route-textPage="@(detail.TextRows.Page - 1)"
+                                                    asp-route-textPageSize="@detail.TextRows.PageSize"
+                                                    asp-route-optionPage="@detail.Options.Page"
+                                                    asp-route-optionPageSize="@detail.Options.PageSize"
+                                                    asp-route-returnUrl="@returnUrl"><i class="bi bi-chevron-left"></i><span>Previous</span></a>
+                                            </li>
+                                            @for (int pageNumber = textFirstPage; pageNumber <= textLastPage; pageNumber++)
+                                            {
+                                                <li class="page-item @(pageNumber == detail.TextRows.Page ? "active" : string.Empty)">
+                                                    <a
+                                                        class="page-link"
+                                                        asp-action="Menus"
+                                                        asp-route-database="@Model.Database"
+                                                        asp-route-search="@Model.Search"
+                                                        asp-route-show="true"
+                                                        asp-route-entry="@detail.Menu.Entry"
+                                                        asp-route-page="@directoryPage"
+                                                        asp-route-pageSize="@directoryPageSize"
+                                                        asp-route-textPage="@pageNumber"
+                                                        asp-route-textPageSize="@detail.TextRows.PageSize"
+                                                        asp-route-optionPage="@detail.Options.Page"
+                                                        asp-route-optionPageSize="@detail.Options.PageSize"
+                                                        asp-route-returnUrl="@returnUrl">@pageNumber</a>
+                                                </li>
+                                            }
+                                            <li class="page-item pagination-direction @(detail.TextRows.Page == detail.TextRows.TotalPages ? "disabled" : string.Empty)">
+                                                <a
+                                                    class="page-link"
+                                                    asp-action="Menus"
+                                                    asp-route-database="@Model.Database"
+                                                    asp-route-search="@Model.Search"
+                                                    asp-route-show="true"
+                                                    asp-route-entry="@detail.Menu.Entry"
+                                                    asp-route-page="@directoryPage"
+                                                    asp-route-pageSize="@directoryPageSize"
+                                                    asp-route-textPage="@(detail.TextRows.Page + 1)"
+                                                    asp-route-textPageSize="@detail.TextRows.PageSize"
+                                                    asp-route-optionPage="@detail.Options.Page"
+                                                    asp-route-optionPageSize="@detail.Options.PageSize"
+                                                    asp-route-returnUrl="@returnUrl"><span>Next</span><i class="bi bi-chevron-right"></i></a>
+                                            </li>
+                                        </ul>
+                                        </nav>
+                                    }
+                                </div>
+                                <form method="get" asp-action="Menus" class="viewer-record-page-size">
+                                    <input type="hidden" name="database" value="@Model.Database" /><input type="hidden" name="search" value="@Model.Search" /><input type="hidden" name="show" value="true" /><input type="hidden" name="entry" value="@detail.Menu.Entry" /><input type="hidden" name="page" value="@directoryPage" /><input type="hidden" name="pageSize" value="@directoryPageSize" /><input type="hidden" name="textPage" value="1" /><input type="hidden" name="optionPage" value="@detail.Options.Page" /><input type="hidden" name="optionPageSize" value="@detail.Options.PageSize" /><input type="hidden" name="returnUrl" value="@returnUrl" />
+                                    <label class="world-filter-select">
+                                        <span>Rows per page</span>
+                                        <select name="textPageSize" class="form-select" onchange="this.form.submit()">
+                                            @foreach (int size in pageSizes)
+                                            {
+                                                if (detail.TextRows.PageSize == size)
+                                                {
+                                                    <option value="@size" selected>@size</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@size">@size</option>
+                                                }
+                                            }
+                                        </select>
+                                    </label>
+                                </form>
+                            </footer>
+                        }
+                    </section>
+
+                    <section class="viewer-record-section">
+                        <header class="viewer-record-section-header">
+                            <div>
+                                <span class="eyebrow">Conversation choices</span>
+                                <h3>Menu options</h3>
+                                <p>Options can open another menu, invoke a script/POI, apply requirements, or show confirmation text depending on schema support.</p>
+                            </div>
+                            <span class="badge rounded-pill">@detail.Options.TotalCount.ToString("N0") option@(detail.Options.TotalCount == 1 ? string.Empty : "s")</span>
+                        </header>
+                        @if (detail.Options.Items.Count == 0)
+                        {
+                            <div class="viewer-record-empty">
+                                <i class="bi bi-list-nested"></i>
+                                <strong>No menu options</strong>
+                                <p>This menu has no gossip_menu_option rows.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="viewer-record-table-wrap">
+                                <table class="table studio-table viewer-record-table viewer-workbench-table gossip-option-table mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Option text</th>
+                                            <th>Behavior</th>
+                                            <th>Requirements</th>
+                                            @if (Model.CanEditOptions || Model.CanDeleteOptions)
+                                            {
+                                                <th class="actions-column viewer-action-column">Actions</th>
+                                            }
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                            @foreach (GossipMenuOptionRow option in detail.Options.Items)
+                            {
+                                <tr>
+                                    <td>
+                                        <strong>@option.Id</strong>
+                                        @if (option.OptionIcon.HasValue)
+                                        {
+                                            <small class="gossip-cell-note">Icon @option.OptionIcon</small>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span class="gossip-option-text">@(string.IsNullOrWhiteSpace(option.OptionText) ? "No option text" : option.OptionText)</span>
+                                    @if (!string.IsNullOrWhiteSpace(option.BoxText))
+                                    {
+                                        <small class="gossip-cell-note">Box: @option.BoxText</small>
+                                    }
+                                    </td>
+                                    <td>
+                                        <div class="gossip-behavior-stack">
+                                        @if (option.ActionMenuId.HasValue && option.ActionMenuId.Value != 0)
+                                        {
+                                            <span class="viewer-status-badge @(option.ActionMenuId.Value < 0 || option.ActionMenuExists ? "success" : "warning")"><i class="bi bi-diagram-2"></i> Menu @option.ActionMenuId</span>
+                                        }
+                                    @if (option.ActionPoiId.HasValue && option.ActionPoiId.Value > 0)
+                                    {
+                                        <span>POI @option.ActionPoiId</span>
+                                    }
+                                    @if (option.ActionScriptId.HasValue && option.ActionScriptId.Value > 0)
+                                    {
+                                        <span>Script @option.ActionScriptId</span>
+                                    }
+                                    @if ((!option.ActionMenuId.HasValue || option.ActionMenuId.Value == 0) && (!option.ActionPoiId.HasValue || option.ActionPoiId.Value == 0) && (!option.ActionScriptId.HasValue || option.ActionScriptId.Value == 0))
+                                    {
+                                        <span>Standard option</span>
+                                    }
+                                    </div>
+                                    </td>
+                                    <td>
+                                        <div class="gossip-behavior-stack">
+                                    @if (option.NpcOptionNpcFlag.HasValue)
+                                    {
+                                        <span>NPC flag @option.NpcOptionNpcFlag</span>
+                                    }
+                                    @if (option.ConditionId.HasValue)
+                                    {
+                                        <span>Condition @option.ConditionId</span>
+                                    }
+                                    @if (option.BoxMoney.HasValue && option.BoxMoney.Value > 0)
+                                    {
+                                        <span>Cost @option.BoxMoney</span>
+                                    }
+                                    @if (!option.NpcOptionNpcFlag.HasValue && !option.ConditionId.HasValue && (!option.BoxMoney.HasValue || option.BoxMoney.Value == 0))
+                                    {
+                                        <span>None</span>
+                                    }
+                                    </div>
+                                    </td>
+                                    @if (Model.CanEditOptions || Model.CanDeleteOptions)
+                                    {
+                                        <td class="actions-column viewer-action-column">
+                                            <div class="row-actions row-actions-compact">
+                                                @if (Model.CanEditOptions)
+                                                {
+                                                    <button
+                                                        type="button"
+                                                        class="icon-button"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#gossipEditOptionModal"
+                                                        data-gossip-edit-option
+                                                        data-id="@option.Id"
+                                                        data-icon="@option.OptionIcon"
+                                                        data-text="@option.OptionText"
+                                                        data-broadcast="@option.OptionBroadcastTextId"
+                                                        data-option-type="@option.OptionId"
+                                                        data-npc-flag="@option.NpcOptionNpcFlag"
+                                                        data-action-menu="@option.ActionMenuId"
+                                                        data-action-poi="@option.ActionPoiId"
+                                                        data-action-script="@option.ActionScriptId"
+                                                        data-box-coded="@(option.BoxCoded == true ? "true" : "false")"
+                                                        data-box-money="@option.BoxMoney"
+                                                        data-box-text="@option.BoxText"
+                                                        data-box-broadcast="@option.BoxBroadcastTextId"
+                                                        data-condition="@option.ConditionId"
+                                                        title="Edit menu option"
+                                                        aria-label="Edit menu option"><i class="bi bi-pencil"></i></button>
+                                                }
+                                                @if (Model.CanDeleteOptions)
+                                                {
+                                                    <button
+                                                        type="button"
+                                                        class="icon-button danger"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#gossipDeleteOptionModal"
+                                                        data-gossip-delete-option
+                                                        data-id="@option.Id"
+                                                        data-icon="@option.OptionIcon"
+                                                        data-text="@option.OptionText"
+                                                        data-broadcast="@option.OptionBroadcastTextId"
+                                                        data-option-type="@option.OptionId"
+                                                        data-npc-flag="@option.NpcOptionNpcFlag"
+                                                        data-action-menu="@option.ActionMenuId"
+                                                        data-action-poi="@option.ActionPoiId"
+                                                        data-action-script="@option.ActionScriptId"
+                                                        data-box-coded="@(option.BoxCoded == true ? "true" : "false")"
+                                                        data-box-money="@option.BoxMoney"
+                                                        data-box-text="@option.BoxText"
+                                                        data-box-broadcast="@option.BoxBroadcastTextId"
+                                                        data-condition="@option.ConditionId"
+                                                        title="Remove menu option"
+                                                        aria-label="Remove menu option"><i class="bi bi-trash"></i></button>
+                                                }
+                                            </div>
+                                        </td>
+                                    }
+                                    </tr>
+                            }
+                            </tbody>
+                            </table>
+                            </div>
+                            <footer class="viewer-record-footer">
+                                <div class="viewer-record-pagination-wrap">
+                                    <div class="pagination-status">
+                                        <strong>Page @detail.Options.Page</strong>
+                                        <span>of @Math.Max(detail.Options.TotalPages, 1) · @detail.Options.TotalCount.ToString("N0") options</span>
+                                    </div>
+                                    @if (detail.Options.TotalPages > 1)
+                                    {
+                                        <nav class="world-pagination viewer-record-pagination" aria-label="Gossip option pages">
+                                            <ul class="pagination mb-0">
+                                            <li class="page-item pagination-direction @(detail.Options.Page == 1 ? "disabled" : string.Empty)">
+                                                <a
+                                                    class="page-link"
+                                                    asp-action="Menus"
+                                                    asp-route-database="@Model.Database"
+                                                    asp-route-search="@Model.Search"
+                                                    asp-route-show="true"
+                                                    asp-route-entry="@detail.Menu.Entry"
+                                                    asp-route-page="@directoryPage"
+                                                    asp-route-pageSize="@directoryPageSize"
+                                                    asp-route-textPage="@detail.TextRows.Page"
+                                                    asp-route-textPageSize="@detail.TextRows.PageSize"
+                                                    asp-route-optionPage="@(detail.Options.Page - 1)"
+                                                    asp-route-optionPageSize="@detail.Options.PageSize"
+                                                    asp-route-returnUrl="@returnUrl"><i class="bi bi-chevron-left"></i><span>Previous</span></a>
+                                            </li>
+                                            @for (int pageNumber = optionFirstPage; pageNumber <= optionLastPage; pageNumber++)
+                                            {
+                                                <li class="page-item @(pageNumber == detail.Options.Page ? "active" : string.Empty)">
+                                                    <a
+                                                        class="page-link"
+                                                        asp-action="Menus"
+                                                        asp-route-database="@Model.Database"
+                                                        asp-route-search="@Model.Search"
+                                                        asp-route-show="true"
+                                                        asp-route-entry="@detail.Menu.Entry"
+                                                        asp-route-page="@directoryPage"
+                                                        asp-route-pageSize="@directoryPageSize"
+                                                        asp-route-textPage="@detail.TextRows.Page"
+                                                        asp-route-textPageSize="@detail.TextRows.PageSize"
+                                                        asp-route-optionPage="@pageNumber"
+                                                        asp-route-optionPageSize="@detail.Options.PageSize"
+                                                        asp-route-returnUrl="@returnUrl">@pageNumber</a>
+                                                </li>
+                                            }
+                                            <li class="page-item pagination-direction @(detail.Options.Page == detail.Options.TotalPages ? "disabled" : string.Empty)">
+                                                <a
+                                                    class="page-link"
+                                                    asp-action="Menus"
+                                                    asp-route-database="@Model.Database"
+                                                    asp-route-search="@Model.Search"
+                                                    asp-route-show="true"
+                                                    asp-route-entry="@detail.Menu.Entry"
+                                                    asp-route-page="@directoryPage"
+                                                    asp-route-pageSize="@directoryPageSize"
+                                                    asp-route-textPage="@detail.TextRows.Page"
+                                                    asp-route-textPageSize="@detail.TextRows.PageSize"
+                                                    asp-route-optionPage="@(detail.Options.Page + 1)"
+                                                    asp-route-optionPageSize="@detail.Options.PageSize"
+                                                    asp-route-returnUrl="@returnUrl"><span>Next</span><i class="bi bi-chevron-right"></i></a>
+                                            </li>
+                                        </ul>
+                                        </nav>
+                                    }
+                                </div>
+                                <form method="get" asp-action="Menus" class="viewer-record-page-size">
+                                    <input type="hidden" name="database" value="@Model.Database" /><input type="hidden" name="search" value="@Model.Search" /><input type="hidden" name="show" value="true" /><input type="hidden" name="entry" value="@detail.Menu.Entry" /><input type="hidden" name="page" value="@directoryPage" /><input type="hidden" name="pageSize" value="@directoryPageSize" /><input type="hidden" name="textPage" value="@detail.TextRows.Page" /><input type="hidden" name="textPageSize" value="@detail.TextRows.PageSize" /><input type="hidden" name="optionPage" value="1" /><input type="hidden" name="returnUrl" value="@returnUrl" />
+                                    <label class="world-filter-select">
+                                        <span>Rows per page</span>
+                                        <select name="optionPageSize" class="form-select" onchange="this.form.submit()">
+                                            @foreach (int size in pageSizes)
+                                            {
+                                                if (detail.Options.PageSize == size)
+                                                {
+                                                    <option value="@size" selected>@size</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@size">@size</option>
+                                                }
+                                            }
+                                        </select>
+                                    </label>
+                                </form>
+                            </footer>
+                        }
+                    </section>
+
+                </section>
+            }
+        </main>
+    </div>
+</div>
+
+@if (Model.SelectedMenu != null)
+{
+    GossipMenuDetail relationshipDetail = Model.SelectedMenu;
+    string sourceDirectoryUrl = Url.Action("Gossip", new
+    {
+        database = Model.Database,
+        search = relationshipDetail.Menu.Entry.ToString(CultureInfo.InvariantCulture),
+        sourceFilter = GossipSourceFilters.All,
+        show = true,
+        page = 1,
+        pageSize = directoryPageSize
+    }) ?? string.Empty;
+
+    <div class="modal fade viewer-editor-modal gossip-relationships-modal" id="gossipRelationshipsModal" tabindex="-1" aria-labelledby="gossipRelationshipsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <span class="eyebrow">Gossip menu @relationshipDetail.Menu.Entry</span>
+                        <h5 class="modal-title" id="gossipRelationshipsModalLabel">Sources &amp; menu links</h5>
+                        <p class="gossip-relationship-modal-subtitle">Review the world records that use this menu and the menu options that route into it.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="nav nav-pills gossip-relationship-tabs" role="tablist" aria-label="Gossip menu relationships">
+                        <button class="nav-link active"
+                                id="gossipSourcesTab"
+                                data-bs-toggle="tab"
+                                data-bs-target="#gossipSourcesPane"
+                                type="button"
+                                role="tab"
+                                aria-controls="gossipSourcesPane"
+                                aria-selected="true">
+                            <span><i class="bi bi-diagram-2"></i> Direct sources</span>
+                            <strong>@relationshipDetail.TotalSourceCount</strong>
+                        </button>
+                        <button class="nav-link"
+                                id="gossipParentsTab"
+                                data-bs-toggle="tab"
+                                data-bs-target="#gossipParentsPane"
+                                type="button"
+                                role="tab"
+                                aria-controls="gossipParentsPane"
+                                aria-selected="false">
+                            <span><i class="bi bi-arrow-return-right"></i> Linked from</span>
+                            <strong>@relationshipDetail.TotalParentMenuCount</strong>
+                        </button>
+                    </div>
+
+                    <div class="tab-content gossip-relationship-tab-content">
+                        <section class="tab-pane fade show active" id="gossipSourcesPane" role="tabpanel" aria-labelledby="gossipSourcesTab" tabindex="0">
+                            <header class="gossip-relationship-pane-header">
+                                <div>
+                                    <span class="eyebrow">Used by</span>
+                                    <h6>Creature &amp; GameObject sources</h6>
+                                    <p>Templates that directly resolve to gossip menu @relationshipDetail.Menu.Entry.</p>
+                                </div>
+                                <a class="btn btn-outline-secondary btn-sm" href="@sourceDirectoryUrl"><i class="bi bi-search"></i> Search source directory</a>
+                            </header>
+
+                            @if (relationshipDetail.Sources.Count == 0)
+                            {
+                                <div class="gossip-relationship-modal-empty">
+                                    <span><i class="bi bi-diagram-2"></i></span>
+                                    <strong>No direct sources</strong>
+                                    <p>No creature or GameObject template currently points to this menu.</p>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="gossip-relationship-list gossip-relationship-modal-list">
+                                    @foreach (GossipSourceSummary source in relationshipDetail.Sources)
+                                    {
+                                        string sourceFilter = string.Equals(source.EntityType, "Creature", StringComparison.OrdinalIgnoreCase)
+                                            ? GossipSourceFilters.Creatures
+                                            : GossipSourceFilters.GameObjects;
+                                        <a asp-action="Gossip"
+                                           asp-route-database="@Model.Database"
+                                           asp-route-search="@source.EntityEntry"
+                                           asp-route-sourceFilter="@sourceFilter"
+                                           asp-route-show="true"
+                                           asp-route-page="1"
+                                           asp-route-pageSize="@directoryPageSize"
+                                           title="Open @source.EntityType source @source.EntityEntry">
+                                            <span class="gossip-relationship-source-icon"><i class="bi @(string.Equals(source.EntityType, "Creature", StringComparison.OrdinalIgnoreCase) ? "bi-person-walking" : "bi-box")"></i></span>
+                                            <span class="gossip-relationship-source-copy">
+                                                <strong>@(string.IsNullOrWhiteSpace(source.EntityName) ? source.EntityType + " " + source.EntityEntry : source.EntityName)</strong>
+                                                <small>@source.EntityType · Entry @source.EntityEntry · @source.LinkKind</small>
+                                            </span>
+                                            <i class="bi bi-chevron-right gossip-relationship-row-open" aria-hidden="true"></i>
+                                        </a>
+                                    }
+                                </div>
+                                @if (relationshipDetail.TotalSourceCount > relationshipDetail.Sources.Count)
+                                {
+                                    <p class="gossip-relationship-modal-note">
+                                        <i class="bi bi-info-circle"></i> Showing the first @relationshipDetail.Sources.Count of @relationshipDetail.TotalSourceCount sources here. Use <strong>Search source directory</strong> to continue browsing by menu ID.</p>
+                                }
+                            }
+                        </section>
+
+                        <section class="tab-pane fade" id="gossipParentsPane" role="tabpanel" aria-labelledby="gossipParentsTab" tabindex="0">
+                            <header class="gossip-relationship-pane-header">
+                                <div>
+                                    <span class="eyebrow">Linked from</span>
+                                    <h6>Parent menu options</h6>
+                                    <p>Other gossip menu options whose action points to menu @relationshipDetail.Menu.Entry.</p>
+                                </div>
+                            </header>
+
+                            @if (relationshipDetail.ParentMenus.Count == 0)
+                            {
+                                <div class="gossip-relationship-modal-empty">
+                                    <span><i class="bi bi-arrow-return-right"></i></span>
+                                    <strong>No parent menu links</strong>
+                                    <p>No other menu option currently opens this menu.</p>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="gossip-relationship-list gossip-relationship-modal-list">
+                                    @foreach (GossipParentMenuLink parent in relationshipDetail.ParentMenus)
+                                    {
+                                        <a asp-action="Menus"
+                                           asp-route-database="@Model.Database"
+                                           asp-route-show="true"
+                                           asp-route-entry="@parent.MenuId"
+                                           asp-route-returnUrl="@currentPageUrl"
+                                           title="Open parent menu @parent.MenuId">
+                                            <span class="gossip-relationship-source-icon"><i class="bi bi-chat-square-text"></i></span>
+                                            <span class="gossip-relationship-source-copy">
+                                                <strong>Menu @parent.MenuId · option @parent.OptionId</strong>
+                                                <small>@(string.IsNullOrWhiteSpace(parent.OptionText) ? "No option text" : parent.OptionText)</small>
+                                            </span>
+                                            <i class="bi bi-chevron-right gossip-relationship-row-open" aria-hidden="true"></i>
+                                        </a>
+                                    }
+                                </div>
+                                @if (relationshipDetail.TotalParentMenuCount > relationshipDetail.ParentMenus.Count)
+                                {
+                                    <p class="gossip-relationship-modal-note">
+                                        <i class="bi bi-info-circle"></i> Showing the first @relationshipDetail.ParentMenus.Count of @relationshipDetail.TotalParentMenuCount parent links.</p>
+                                }
+                            }
+                        </section>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <span class="gossip-relationship-modal-footer-note"><i class="bi bi-lightning-charge"></i> Click any listed relationship to inspect it.</span>
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (Model.IsAvailable && Model.CanAddMenuRows)
+{
+    <div class="modal fade viewer-editor-modal" id="gossipAddTextModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" asp-action="GossipAddMenuRow">
+                    <div class="modal-header">
+                        <div>
+                            <span class="eyebrow">Gossip menu</span>
+                            <h5 class="modal-title">Add menu text row</h5>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="Database" value="@Model.Database" /><input type="hidden" name="Search" value="@Model.Search" /><input type="hidden" name="ReturnUrl" value="@returnUrl" /><input type="hidden" name="Entry" value="@(Model.SelectedMenu?.Menu.Entry ?? 0)" /><input type="hidden" name="Page" value="@directoryPage" /><input type="hidden" name="PageSize" value="@directoryPageSize" /><input type="hidden" name="TextPage" value="@(Model.SelectedMenu?.TextRows.Page ?? 1)" /><input type="hidden" name="TextPageSize" value="@(Model.SelectedMenu?.TextRows.PageSize ?? directoryPageSize)" /><input type="hidden" name="OptionPage" value="@(Model.SelectedMenu?.Options.Page ?? 1)" /><input type="hidden" name="OptionPageSize" value="@(Model.SelectedMenu?.Options.PageSize ?? directoryPageSize)" />
+                        <div class="viewer-editor-form-grid">
+                            <label class="form-label">
+                                <span>Menu ID</span>
+                                <input type="number" min="0" class="form-control" name="NewEntry" value="@(Model.SelectedMenu?.Menu.Entry ?? 0)" required data-gossip-add-entry />
+                            </label>
+                            <label class="form-label">
+                                <span>NPC text ID</span>
+                                <input type="number" min="0" class="form-control" name="Row.TextId" required />
+                            </label>
+                            @if (Model.EditorCapabilities.HasMenuScriptId)
+                            {
+                                <label class="form-label">
+                                    <span>Script ID</span>
+                                    <input type="number" min="0" class="form-control" name="Row.ScriptId" />
+                                </label>
+                            }
+                        @if (Model.EditorCapabilities.HasMenuConditionId)
+                        {
+                            <label class="form-label">
+                                <span>Condition ID</span>
+                                <input type="number" min="0" class="form-control" name="Row.ConditionId" />
+                            </label>
+                        }
+                        </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add text row</button>
+                        </div>
+                        </form>
+                        </div>
+                        </div>
+                        </div>
+}
+
+@if (Model.SelectedMenu != null && Model.CanEditMenuRows)
+{
+    <div class="modal fade viewer-editor-modal" id="gossipEditTextModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" asp-action="GossipEditMenuRow">
+                    <div class="modal-header">
+                        <div>
+                            <span class="eyebrow">Gossip menu @Model.SelectedMenu.Menu.Entry</span>
+                            <h5 class="modal-title">Edit text row</h5>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="Database" value="@Model.Database" /><input type="hidden" name="Search" value="@Model.Search" /><input type="hidden" name="ReturnUrl" value="@returnUrl" /><input type="hidden" name="Entry" value="@Model.SelectedMenu.Menu.Entry" /><input type="hidden" name="Page" value="@directoryPage" /><input type="hidden" name="PageSize" value="@directoryPageSize" /><input type="hidden" name="TextPage" value="@Model.SelectedMenu.TextRows.Page" /><input type="hidden" name="TextPageSize" value="@Model.SelectedMenu.TextRows.PageSize" /><input type="hidden" name="OptionPage" value="@Model.SelectedMenu.Options.Page" /><input type="hidden" name="OptionPageSize" value="@Model.SelectedMenu.Options.PageSize" /><input type="hidden" name="Original.TextId" data-edit-original-text /><input type="hidden" name="Original.ScriptId" data-edit-original-script /><input type="hidden" name="Original.ConditionId" data-edit-original-condition />
+                        <div class="viewer-editor-form-grid">
+                            <label class="form-label">
+                                <span>NPC text ID</span>
+                                <input type="number" min="0" class="form-control" name="Replacement.TextId" required data-edit-text />
+                            </label>
+                            @if (Model.EditorCapabilities.HasMenuScriptId)
+                            {
+                                <label class="form-label">
+                                    <span>Script ID</span>
+                                    <input type="number" min="0" class="form-control" name="Replacement.ScriptId" data-edit-script />
+                                </label>
+                            }
+                        @if (Model.EditorCapabilities.HasMenuConditionId)
+                        {
+                            <label class="form-label">
+                                <span>Condition ID</span>
+                                <input type="number" min="0" class="form-control" name="Replacement.ConditionId" data-edit-condition />
+                            </label>
+                        }
+                        </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary"><i class="bi bi-check2"></i> Save text-row changes</button>
+                        </div>
+                        </form>
+                        </div>
+                        </div>
+                        </div>
+}
+
+@if (Model.SelectedMenu != null && Model.CanDeleteMenuRows)
+{
+    <div class="modal fade viewer-editor-modal" id="gossipDeleteTextModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" asp-action="GossipDeleteMenuRow">
+                    <div class="modal-header">
+                        <div>
+                            <span class="eyebrow">Remove text row</span>
+                            <h5 class="modal-title">Remove NPC text link?</h5>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="Database" value="@Model.Database" /><input type="hidden" name="Search" value="@Model.Search" /><input type="hidden" name="ReturnUrl" value="@returnUrl" /><input type="hidden" name="Entry" value="@Model.SelectedMenu.Menu.Entry" /><input type="hidden" name="Page" value="@directoryPage" /><input type="hidden" name="PageSize" value="@directoryPageSize" /><input type="hidden" name="TextPage" value="@Model.SelectedMenu.TextRows.Page" /><input type="hidden" name="TextPageSize" value="@Model.SelectedMenu.TextRows.PageSize" /><input type="hidden" name="OptionPage" value="@Model.SelectedMenu.Options.Page" /><input type="hidden" name="OptionPageSize" value="@Model.SelectedMenu.Options.PageSize" /><input type="hidden" name="Original.TextId" data-delete-text /><input type="hidden" name="Original.ScriptId" data-delete-script /><input type="hidden" name="Original.ConditionId" data-delete-condition />
+                        <p class="mb-0">This removes text ID <strong data-delete-text-label></strong> from menu <strong>@Model.SelectedMenu.Menu.Entry</strong>. Other text rows and options are not removed.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger"><i class="bi bi-trash"></i> Remove text row</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+@if (Model.SelectedMenu != null && Model.CanAddOptions)
+{
+    <div class="modal fade viewer-editor-modal gossip-option-modal" id="gossipAddOptionModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" asp-action="GossipAddOption">
+                    <div class="modal-header">
+                        <div>
+                            <span class="eyebrow">Gossip menu @Model.SelectedMenu.Menu.Entry</span>
+                            <h5 class="modal-title">Add menu option</h5>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="Database" value="@Model.Database" /><input type="hidden" name="Search" value="@Model.Search" /><input type="hidden" name="ReturnUrl" value="@returnUrl" /><input type="hidden" name="Entry" value="@Model.SelectedMenu.Menu.Entry" /><input type="hidden" name="Page" value="@directoryPage" /><input type="hidden" name="PageSize" value="@directoryPageSize" /><input type="hidden" name="TextPage" value="@Model.SelectedMenu.TextRows.Page" /><input type="hidden" name="TextPageSize" value="@Model.SelectedMenu.TextRows.PageSize" /><input type="hidden" name="OptionPage" value="@Model.SelectedMenu.Options.Page" /><input type="hidden" name="OptionPageSize" value="@Model.SelectedMenu.Options.PageSize" />@await Html.PartialAsync("_GossipOptionFields", new GossipOptionFieldsViewModel { Prefix = "Option", Capabilities = Model.EditorCapabilities })</div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add option</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+@if (Model.SelectedMenu != null && Model.CanEditOptions)
+{
+    <div class="modal fade viewer-editor-modal gossip-option-modal" id="gossipEditOptionModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" asp-action="GossipEditOption">
+                    <div class="modal-header">
+                        <div>
+                            <span class="eyebrow">Gossip menu @Model.SelectedMenu.Menu.Entry</span>
+                            <h5 class="modal-title">Edit menu option</h5>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="Database" value="@Model.Database" /><input type="hidden" name="Search" value="@Model.Search" /><input type="hidden" name="ReturnUrl" value="@returnUrl" /><input type="hidden" name="Entry" value="@Model.SelectedMenu.Menu.Entry" /><input type="hidden" name="Page" value="@directoryPage" /><input type="hidden" name="PageSize" value="@directoryPageSize" /><input type="hidden" name="TextPage" value="@Model.SelectedMenu.TextRows.Page" /><input type="hidden" name="TextPageSize" value="@Model.SelectedMenu.TextRows.PageSize" /><input type="hidden" name="OptionPage" value="@Model.SelectedMenu.Options.Page" /><input type="hidden" name="OptionPageSize" value="@Model.SelectedMenu.Options.PageSize" />
+                        <div data-gossip-original-option></div>@await Html.PartialAsync("_GossipOptionFields", new GossipOptionFieldsViewModel { Prefix = "Replacement", Capabilities = Model.EditorCapabilities })</div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-check2"></i> Save option changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+@if (Model.SelectedMenu != null && Model.CanDeleteOptions)
+{
+    <div class="modal fade viewer-editor-modal" id="gossipDeleteOptionModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" asp-action="GossipDeleteOption">
+                    <div class="modal-header">
+                        <div>
+                            <span class="eyebrow">Remove menu option</span>
+                            <h5 class="modal-title">Remove menu option?</h5>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="Database" value="@Model.Database" /><input type="hidden" name="Search" value="@Model.Search" /><input type="hidden" name="ReturnUrl" value="@returnUrl" /><input type="hidden" name="Entry" value="@Model.SelectedMenu.Menu.Entry" /><input type="hidden" name="Page" value="@directoryPage" /><input type="hidden" name="PageSize" value="@directoryPageSize" /><input type="hidden" name="TextPage" value="@Model.SelectedMenu.TextRows.Page" /><input type="hidden" name="TextPageSize" value="@Model.SelectedMenu.TextRows.PageSize" /><input type="hidden" name="OptionPage" value="@Model.SelectedMenu.Options.Page" /><input type="hidden" name="OptionPageSize" value="@Model.SelectedMenu.Options.PageSize" />
+                        <div data-gossip-delete-original></div>
+                        <p class="mb-0">This removes option <strong data-delete-option-label></strong> from menu <strong>@Model.SelectedMenu.Menu.Entry</strong>.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger"><i class="bi bi-trash"></i> Remove option</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+@if (Model.SelectedMenu != null && Model.CanAddCreatureSources)
+{
+    <div class="modal fade viewer-editor-modal" id="gossipAddNpcSourceModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" asp-action="GossipAddCreatureSource">
+        <div class="modal-header">
+            <div>
+                <span class="eyebrow">Gossip menu @Model.SelectedMenu.Menu.Entry</span>
+                <h5 class="modal-title">Add NPC gossip source</h5>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body viewer-editor-form-grid">
+            <input type="hidden" name="Database" value="@Model.Database" />
+            <input type="hidden" name="Search" value="@Model.Search" />
+            <input type="hidden" name="ReturnUrl" value="@currentPageUrl" />
+            <input type="hidden" name="Page" value="@directoryPage" />
+            <input type="hidden" name="PageSize" value="@directoryPageSize" />
+            <input type="hidden" name="MenuId" value="@Model.SelectedMenu.Menu.Entry" />
+            <label class="viewer-editor-wide">
+                <span>NPC without Gossip flag</span>
+                <div
+                    class="npc-vendor-item-picker"
+                    data-world-lookup-picker
+                    data-world-lookup-url="@creatureLookupUrl"
+                    data-world-lookup-database="@Model.Database"
+                    data-world-lookup-singular="NPC"
+                    data-world-lookup-plural="NPCs"
+                    data-world-lookup-placeholder="Select an NPC..."
+                    data-world-lookup-search-placeholder="Search NPC name or entry"
+                    data-world-lookup-required="true">
+                    <input type="hidden" name="CreatureEntry" data-world-lookup-value />
+                    <button
+                        type="button"
+                        class="form-select npc-vendor-item-picker-toggle is-placeholder"
+                        data-world-lookup-toggle
+                        aria-haspopup="listbox"
+                        aria-expanded="false"><span data-world-lookup-label>Select an NPC...</span></button>
+                </div>
+            </label>
+            <div class="viewer-editor-help viewer-editor-wide">
+                <i class="bi bi-info-circle"></i>
+                <span>The selected NPC is linked to menu @Model.SelectedMenu.Menu.Entry. Existing NPC flags are preserved and only the Gossip flag is added.</span>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary"><i class="bi bi-person-plus"></i> Add NPC source</button>
+        </div>
+    </form>
+    </div>
+    </div>
+    </div>
+}
+
+@section Scripts {
+    <script src="~/js/world-lookup-picker.js" asp-append-version="true"></script>
+    <script src="~/js/gossip-menu-viewer.js" asp-append-version="true"></script>
+}

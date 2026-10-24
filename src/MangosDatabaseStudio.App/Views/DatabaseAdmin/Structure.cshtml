@@ -1,0 +1,301 @@
+@* Present the DatabaseAdmin Structure workflow within the shared studio layout. *@
+
+@model TableStructureViewModel
+@{
+    ViewData["Title"] = Model.Table.Name + " structure";
+    ViewData["Section"] = "Database Administration / " + Model.Table.DatabaseName;
+    string primaryKey = Model.Table.PrimaryKeyColumns.Count > 0
+        ? string.Join(", ", Model.Table.PrimaryKeyColumns.Select(column => column.Name))
+        : "None";
+}
+
+<div class="page-actions structure-page-heading">
+    <div>
+        <div class="structure-title-line">
+            <span class="eyebrow">Table structure</span>
+            <span class="schema-access-badge @(Model.CanWrite ? "write" : "read")">
+                <i class="bi @(Model.CanWrite ? "bi-pencil-square" : "bi-eye")"></i>
+                @(Model.CanWrite ? "Read / Write" : "Read only")
+            </span>
+        </div>
+        <p class="page-lead">Review column types, defaults, keys, indexes, generated values, and table-level metadata.</p>
+    </div>
+    <div class="toolbar-actions">
+        <a class="btn btn-outline-secondary" asp-action="Tables" asp-route-database="@Model.Table.DatabaseName">
+            <i class="bi bi-arrow-left"></i> Tables
+        </a>
+        @if (User.HasPermission(AppPermissions.WorldBrowse))
+        {
+            <a class="btn btn-primary" asp-controller="WorldEditor" asp-action="Browse" asp-route-database="@Model.Table.DatabaseName" asp-route-table="@Model.Table.Name">
+                <i class="bi bi-table"></i> Browse records
+            </a>
+        }
+    </div>
+</div>
+
+<div class="structure-summary-grid">
+    <article class="structure-summary-card">
+        <span><i class="bi bi-database"></i> Engine</span>
+        <strong>@Model.Table.Engine</strong>
+    </article>
+    <article class="structure-summary-card">
+        <span><i class="bi bi-type"></i> Collation</span>
+        <strong title="@Model.Table.Collation">@Model.Table.Collation</strong>
+    </article>
+    <article class="structure-summary-card">
+        <span><i class="bi bi-list-ol"></i> Approximate rows</span>
+        <strong>@Model.Table.ApproximateRows.ToString("N0")</strong>
+    </article>
+    <article class="structure-summary-card">
+        <span><i class="bi bi-key"></i> Primary key</span>
+        <strong title="@primaryKey">@primaryKey</strong>
+    </article>
+</div>
+
+@if (Model.CanWrite)
+{
+    <div class="schema-editor-notice">
+        <div class="schema-editor-notice-icon">
+            <i class="bi bi-shield-lock"></i>
+        </div>
+        <div>
+            <strong>Restricted schema editing is enabled</strong>
+            <p>Every change is validated on the server and shown as SQL before execution. Destructive changes require typed confirmation and are logged to Change Storage for audit purposes.</p>
+        </div>
+    </div>
+}
+
+<section class="panel structure-columns-panel">
+    <div class="section-heading">
+        <div>
+            <span class="eyebrow">Schema columns</span>
+            <h2>@Model.Table.Columns.Count columns</h2>
+            <p>Database names stay visible alongside type, nullability, key, and extra information.</p>
+        </div>
+        <div class="section-heading-actions">
+            @if (Model.CanAddColumns)
+            {
+                <a class="btn btn-primary btn-sm" asp-action="AddColumn" asp-route-database="@Model.Table.DatabaseName" asp-route-table="@Model.Table.Name">
+                    <i class="bi bi-plus-lg"></i> Add column
+                </a>
+            }
+            <span class="section-icon"><i class="bi bi-layout-three-columns"></i></span>
+        </div>
+    </div>
+
+    <div class="data-table-wrap structure-table-wrap">
+        <table class="studio-table responsive-table structure-table schema-editable-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Column</th>
+                    <th>Type</th>
+                    <th>Nullable</th>
+                    <th>Default</th>
+                    <th>Key</th>
+                    <th>Extra</th>
+                    <th>Comment</th>
+                    @if (Model.CanModifyColumns || Model.CanDropColumns)
+                    {
+                        <th class="schema-actions-column">Actions</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var column in Model.Table.Columns)
+            {
+                <tr>
+                    <td data-label="#">
+                        <span class="structure-ordinal">@column.OrdinalPosition</span>
+                    </td>
+                    <td data-label="Column">
+                        <div class="structure-column-name">
+                            <strong>@column.Name</strong>
+                            @if (column.IsPrimaryKey)
+                            {
+                                <span class="structure-badge key"><i class="bi bi-key-fill"></i> Primary</span>
+                            }
+                        </div>
+                    </td>
+                    <td data-label="Type">
+                        <code>@column.ColumnType</code>
+                    </td>
+                    <td data-label="Nullable">
+                        <span class="structure-badge @(column.IsNullable ? "nullable" : "required")">@(column.IsNullable ? "Nullable" : "Required")</span>
+                    </td>
+                    <td data-label="Default">
+                        <code>@(column.DefaultValue ?? "NULL")</code>
+                    </td>
+                    <td data-label="Key">@(column.IsPrimaryKey ? "Primary" : "—")</td>
+                    <td data-label="Extra">
+                        @if (column.IsAutoIncrement)
+                        {
+                            <span class="structure-badge generated">Auto increment</span>
+                        }
+                        else if (column.IsGenerated)
+                        {
+                            <span class="structure-badge generated">Generated</span>
+                        }
+                        else if (!string.IsNullOrWhiteSpace(column.Extra))
+                        {
+                            <code>@column.Extra</code>
+                        }
+                        else
+                        {
+                            <span class="text-muted">—</span>
+                        }
+                    </td>
+                    <td data-label="Comment" class="structure-comment">@(string.IsNullOrWhiteSpace(column.Comment) ? "—" : column.Comment)</td>
+                    @if (Model.CanModifyColumns || Model.CanDropColumns)
+                    {
+                        <td data-label="Actions" class="schema-row-actions">
+                            <div class="row-actions row-actions-compact">
+                                @if (Model.CanModifyColumns && !column.IsGenerated)
+                                {
+                                    <a
+                                        class="icon-button"
+                                        title="Edit column"
+                                        asp-action="EditColumn"
+                                        asp-route-database="@Model.Table.DatabaseName"
+                                        asp-route-table="@Model.Table.Name"
+                                        asp-route-column="@column.Name">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                }
+                                else if (Model.CanModifyColumns && column.IsGenerated)
+                                {
+                                    <button type="button" class="icon-button" title="Generated columns are read-only in the guarded schema editor" disabled>
+                                        <i class="bi bi-lock"></i>
+                                    </button>
+                                }
+                                @if (Model.CanDropColumns)
+                                {
+                                    <form method="post" asp-action="PreviewDropColumn">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="database" value="@Model.Table.DatabaseName" />
+                                        <input type="hidden" name="table" value="@Model.Table.Name" />
+                                        <input type="hidden" name="column" value="@column.Name" />
+                                        <button type="submit" class="icon-button danger" title="Drop column"><i class="bi bi-trash"></i></button>
+                                    </form>
+                                }
+                            </div>
+                        </td>
+                    }
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="panel schema-index-panel">
+    <div class="section-heading">
+        <div>
+            <span class="eyebrow">Indexes & keys</span>
+            <h2>@Model.Table.Indexes.Count indexes</h2>
+            <p>Review primary, unique, full-text, and standard indexes defined on this table.</p>
+        </div>
+        @if (Model.CanManageIndexes)
+        {
+            <a class="btn btn-outline-primary btn-sm" asp-action="AddIndex" asp-route-database="@Model.Table.DatabaseName" asp-route-table="@Model.Table.Name">
+                <i class="bi bi-plus-lg"></i> Add index
+            </a>
+        }
+    </div>
+
+    @if (Model.Table.Indexes.Count == 0)
+    {
+        <div class="empty-state compact">
+            <i class="bi bi-diagram-3"></i>
+            <h3>No indexes</h3>
+            <p>This table does not currently expose any indexes.</p>
+        </div>
+    }
+    else
+    {
+        <div class="data-table-wrap">
+            <table class="studio-table responsive-table schema-index-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Columns</th>
+                        <th>Unique</th>
+                        @if (Model.CanManageIndexes)
+                        {
+                            <th class="schema-actions-column">Actions</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var index in Model.Table.Indexes)
+                {
+                    <tr>
+                        <td data-label="Name">
+                            <strong>@index.Name</strong>
+                            @if (index.IsPrimary)
+                            {
+                                <span class="structure-badge key">Primary</span>
+                            }
+                        </td>
+                        <td data-label="Type">@index.IndexType</td>
+                        <td data-label="Columns">
+                            <div class="schema-index-columns">
+                                @foreach (string column in index.Columns)
+                                {
+                                    <code>@column</code>
+                                }
+                            </div>
+                        </td>
+                        <td data-label="Unique">
+                            <span class="structure-badge @(index.IsUnique ? "generated" : "nullable")">@(index.IsUnique ? "Yes" : "No")</span>
+                        </td>
+                        @if (Model.CanManageIndexes)
+                        {
+                            <td data-label="Actions" class="schema-row-actions">
+                                <form method="post" asp-action="PreviewDropIndex">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="database" value="@Model.Table.DatabaseName" />
+                                    <input type="hidden" name="table" value="@Model.Table.Name" />
+                                    <input type="hidden" name="indexName" value="@index.Name" />
+                                    <button class="btn btn-outline-danger btn-sm" type="submit"><i class="bi bi-trash"></i> Remove</button>
+                                </form>
+                            </td>
+                        }
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+<section class="panel schema-properties-panel">
+    <div class="section-heading">
+        <div>
+            <span class="eyebrow">Table properties</span>
+            <h2>Storage & metadata</h2>
+            <p>Table-level engine, collation, and comment settings.</p>
+        </div>
+        @if (Model.CanManageTableProperties)
+        {
+            <a class="btn btn-outline-primary btn-sm" asp-action="TableProperties" asp-route-database="@Model.Table.DatabaseName" asp-route-table="@Model.Table.Name">
+                <i class="bi bi-sliders"></i> Edit properties
+            </a>
+        }
+    </div>
+    <div class="schema-property-grid">
+        <div>
+            <span>Engine</span>
+            <strong>@Model.Table.Engine</strong>
+        </div>
+        <div>
+            <span>Collation</span>
+            <strong>@Model.Table.Collation</strong>
+        </div>
+        <div class="wide">
+            <span>Comment</span>
+            <strong>@(string.IsNullOrWhiteSpace(Model.Table.Comment) ? "No table comment" : Model.Table.Comment)</strong>
+        </div>
+    </div>
+</section>

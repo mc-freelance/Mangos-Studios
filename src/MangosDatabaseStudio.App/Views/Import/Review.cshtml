@@ -1,0 +1,120 @@
+@* Present the Import Review workflow within the shared studio layout. *@
+
+@model SqlImportReviewViewModel
+@{
+    ViewData["Title"] = "Review SQL Import";
+    ViewData["Section"] = "Database Administration / Import";
+}
+<div class="form-shell narrow">
+    <section class="panel">
+        <div class="section-heading">
+            <div>
+                <span class="eyebrow">Step 2 of 3</span>
+                <h2>Review before execution</h2>
+            </div>
+            <i class="bi bi-clipboard-check"></i>
+        </div>
+
+        @if (Model.Analysis.ContainsDestructiveStatements)
+        {
+            <div class="alert alert-warning studio-inline-alert">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <div>
+                    <strong>Destructive statements detected</strong>
+                    <span>This file may drop tables or databases, or change database privileges. Review it carefully before continuing.</span>
+                </div>
+            </div>
+        }
+
+        <dl class="review-grid">
+            <div>
+                <dt>File</dt>
+                <dd>@Model.Analysis.OriginalFileName</dd>
+            </div>
+            <div>
+                <dt>Target database</dt>
+                <dd>@Model.Database</dd>
+            </div>
+            <div>
+                <dt>Size</dt>
+                <dd>@FormatBytes(Model.Analysis.FileSize)</dd>
+            </div>
+            <div>
+                <dt>Approximate statements</dt>
+                <dd>@Model.Analysis.ApproximateStatementCount.ToString("N0")</dd>
+            </div>
+            <div class="span-2">
+                <dt>SHA-256</dt>
+                <dd>
+                    <code>@Model.Analysis.Sha256</code>
+                </dd>
+            </div>
+        </dl>
+
+        @foreach (string warning in Model.Analysis.Warnings)
+        {
+            <div class="alert alert-warning studio-inline-alert">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <div>
+                    <strong>Review warning</strong>
+                    <span>@warning</span>
+                </div>
+            </div>
+        }
+
+        @if (User.HasPermission(AppPermissions.SqlImportExecute))
+        {
+            <div class="operation-hint">
+                <i class="bi bi-hourglass-split"></i>
+                <div>
+                    <strong>The import may take several minutes.</strong>
+                    <span>A processing notice will remain visible while the native MySQL/MariaDB client executes the file. Do not close the application during this step.</span>
+                </div>
+            </div>
+
+            <form asp-action="Execute"
+                  method="post"
+                  data-processing-form
+                  data-processing-title="Executing SQL import"
+                  data-processing-message="The SQL file is being streamed into @Model.Database. Large imports can take several minutes. Keep this window open until the result page appears."
+                  data-processing-label="Executing import...">
+                <input type="hidden" name="Database" value="@Model.Database" />
+                <input type="hidden" name="Token" value="@Model.Analysis.Token" />
+                <div class="confirmation-box">
+                    <input class="form-check-input" type="checkbox" name="Confirm" value="true" id="confirmImport" required />
+                    <label for="confirmImport">I verified the target database <strong>@Model.Database</strong> and approve executing this file.</label>
+                </div>
+                <div class="form-actions">
+                    <a class="btn btn-outline-secondary" asp-action="Index" asp-route-database="@Model.Database">Cancel</a>
+                    <button class="btn btn-danger" type="submit" data-processing-submit>
+                        <i class="bi bi-play-fill"></i><span>Execute import</span>
+                    </button>
+                </div>
+            </form>
+        }
+        else
+        {
+            <div class="alert alert-info studio-inline-alert">
+                <i class="bi bi-info-circle-fill"></i>
+                <div>
+                    <strong>Import execution is restricted</strong>
+                    <span>The file was analyzed successfully, but this role cannot execute SQL imports.</span>
+                </div>
+            </div>
+            <div class="form-actions">
+                <a class="btn btn-outline-secondary" asp-action="Index" asp-route-database="@Model.Database">Back</a>
+            </div>
+        }
+    </section>
+</div>
+
+@functions
+{
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes >= 1073741824) return (bytes / 1073741824d).ToString("0.##") + " GB";
+        if (bytes >= 1048576) return (bytes / 1048576d).ToString("0.##") + " MB";
+        if (bytes >= 1024) return (bytes / 1024d).ToString("0.##") + " KB";
+        return bytes + " B";
+    }
+}

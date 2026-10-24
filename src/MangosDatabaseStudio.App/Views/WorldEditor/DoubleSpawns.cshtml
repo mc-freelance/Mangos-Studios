@@ -1,0 +1,916 @@
+@* Present the WorldEditor DoubleSpawns workflow within the shared studio layout. *@
+
+@using System.Globalization
+@using MangosDatabaseStudio.Domain.World
+@model DoubleSpawnViewModel
+@{
+    ViewData["Title"] = "Spawn Overlap Analyzer";
+    ViewData["Section"] = Model.Database + " / " + Model.CatalogName;
+    ViewData["PageClass"] = "world-editor-page";
+    ViewData["ContentClass"] = "world-editor-content world-record-editor-content";
+    int[] pageSizes = new[] { 10, 20, 50, 100, 200 };
+    int firstPage = Math.Max(1, Model.Result.Matches.Page - 2);
+    int lastPage = Math.Min(Model.Result.Matches.TotalPages, Model.Result.Matches.Page + 2);
+    long totalSpawns = Model.Result.CreatureSpawnsScanned + Model.Result.GameObjectSpawnsScanned;
+    string toleranceLabel = Model.DistanceTolerance <= 0d
+        ? "Exact coordinates"
+        : Model.DistanceTolerance.ToString("0.###", CultureInfo.InvariantCulture) + " yd";
+    string poolFilterLabel = Model.PoolFilter == DoubleSpawnPoolFilters.Pooled
+        ? "Pooled only"
+        : Model.PoolFilter == DoubleSpawnPoolFilters.NonPooled
+            ? "Non-pooled only"
+            : "All pool statuses";
+    string linkedFilterLabel = Model.LinkedGameObjectFilter == DoubleSpawnLinkedGameObjectFilters.Linked
+        ? "Linked GO pairs only"
+        : Model.LinkedGameObjectFilter == DoubleSpawnLinkedGameObjectFilters.NonLinked
+            ? "Potential duplicates only"
+            : "All link statuses";
+}
+
+<div class="world-record-editor double-spawn-viewer">
+    <header class="record-editor-commandbar">
+        <div class="record-command-identity">
+            <a class="record-back-button" asp-action="Index" asp-route-database="@Model.Database" aria-label="Back to World Editor">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <span class="record-command-icon"><i class="bi bi-intersect"></i></span>
+            <div>
+                <span class="eyebrow">World database analysis</span>
+                <h2>Spawn Overlap Analyzer</h2>
+                <p>Find and classify creature and gameobject spawn overlaps, including pooled and template-linked relationships.</p>
+            </div>
+        </div>
+        <div class="record-command-actions">
+            <span class="record-change-badge"><i class="bi bi-shield-check"></i> Read-only scan</span>
+        </div>
+    </header>
+
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+    }
+
+    <section class="panel double-spawn-filter-panel">
+        <header class="panel-header double-spawn-filter-heading">
+            <div>
+                <span class="eyebrow">Spawn comparison</span>
+                <h2>Configure overlap analysis</h2>
+                <p>Filter by creature or GameObject name, entity type, entry matching, map, distance tolerance, pool status, linked GameObject status, and game-event behavior before scanning.</p>
+            </div>
+            <span class="double-spawn-catalog-badge"><i class="bi bi-database-check"></i> @Model.CatalogName @Model.CatalogVersion</span>
+        </header>
+
+        @if (!Model.IsAvailable)
+        {
+            <div class="alert alert-warning studio-inline-alert">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <div>
+                    <strong>Spawn tables unavailable</strong>
+                    <span>The selected database does not expose either the creature or gameobject spawn table.</span>
+                </div>
+            </div>
+        }
+        else
+        {
+            <form
+                method="get"
+                asp-action="DoubleSpawns"
+                class="double-spawn-filter-form"
+                data-processing-form
+                data-processing-title="Scanning world spawns"
+                data-processing-message="Comparing creature and gameobject positions. Large world databases can take a moment."
+                data-processing-label="Scanning...">
+                <input type="hidden" name="database" value="@Model.Database" />
+                <input type="hidden" name="scan" value="true" />
+
+                <div class="double-spawn-filter-grid">
+                    <label class="double-spawn-filter-field double-spawn-name-search">
+                        <span>Name search</span>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input type="search" name="search" class="form-control" value="@Model.Search" placeholder="Creature or GameObject name" maxlength="120" autocomplete="off" />
+                        </div>
+                        <small>Match either spawn by creature or GameObject name. Leave blank for all names.</small>
+                    </label>
+
+                    <label class="double-spawn-filter-field">
+                        <span>Spawn type</span>
+                        <select name="scope" class="form-select">
+                            @if (Model.Scope == DoubleSpawnScopes.Both)
+                            {
+                                <option value="both" selected>Creatures + gameobjects</option>
+                            }
+                            else
+                            {
+                                <option value="both">Creatures + gameobjects</option>
+                            }
+                            @if (Model.Scope == DoubleSpawnScopes.Creatures)
+                            {
+                                <option value="creatures" selected>Creatures only</option>
+                            }
+                            else
+                            {
+                                <option value="creatures">Creatures only</option>
+                            }
+                            @if (Model.Scope == DoubleSpawnScopes.GameObjects)
+                            {
+                                <option value="gameobjects" selected>Gameobjects only</option>
+                            }
+                            else
+                            {
+                                <option value="gameobjects">Gameobjects only</option>
+                            }
+                        </select>
+                        <small>Scan one spawn type or both.</small>
+                    </label>
+
+                    <label class="double-spawn-filter-field">
+                        <span>Entry matching</span>
+                        <select name="matchMode" class="form-select">
+                            @if (Model.MatchMode == DoubleSpawnMatchModes.SameEntry)
+                            {
+                                <option value="same-entry" selected>Same entry only</option>
+                            }
+                            else
+                            {
+                                <option value="same-entry">Same entry only</option>
+                            }
+                            @if (Model.MatchMode == DoubleSpawnMatchModes.AnyEntry)
+                            {
+                                <option value="any-entry" selected>Any entry</option>
+                            }
+                            else
+                            {
+                                <option value="any-entry">Any entry</option>
+                            }
+                        </select>
+                        <small>Same entry is best for true duplicate-spawn checks.</small>
+                    </label>
+
+                    <label class="double-spawn-filter-field">
+                        <span>Map</span>
+                        <select name="mapId" class="form-select">
+                            @if (!Model.MapId.HasValue)
+                            {
+                                <option value="" selected>All maps</option>
+                            }
+                            else
+                            {
+                                <option value="">All maps</option>
+                            }
+                            @foreach (int availableMapId in Model.MapIds)
+                            {
+                                if (Model.MapId == availableMapId)
+                                {
+                                    <option value="@availableMapId" selected>Map @availableMapId</option>
+                                }
+                                else
+                                {
+                                    <option value="@availableMapId">Map @availableMapId</option>
+                                }
+                            }
+                        </select>
+                        <small>Numeric map IDs are discovered from the current world database.</small>
+                    </label>
+
+                    <label class="double-spawn-filter-field double-spawn-pool-filter-field">
+                        <span>Pool results</span>
+                        <select name="poolFilter" class="form-select">
+                            @if (Model.PoolFilter == DoubleSpawnPoolFilters.All)
+                            {
+                                <option value="all" selected>All pool statuses</option>
+                            }
+                            else
+                            {
+                                <option value="all">All pool statuses</option>
+                            }
+                            @if (Model.PoolFilter == DoubleSpawnPoolFilters.NonPooled)
+                            {
+                                <option value="non-pooled" selected>Non-pooled only</option>
+                            }
+                            else
+                            {
+                                <option value="non-pooled">Non-pooled only</option>
+                            }
+                            @if (Model.PoolFilter == DoubleSpawnPoolFilters.Pooled)
+                            {
+                                <option value="pooled" selected>Pooled only</option>
+                            }
+                            else
+                            {
+                                <option value="pooled">Pooled only</option>
+                            }
+                        </select>
+                        <small>Choose all, non-pooled, or pooled matches before result paging.</small>
+                    </label>
+
+                    <label class="double-spawn-filter-field double-spawn-linked-filter-field">
+                        <span>Linked GO results</span>
+                        <select name="linkedGameObjectFilter" class="form-select">
+                            @if (Model.LinkedGameObjectFilter == DoubleSpawnLinkedGameObjectFilters.All)
+                            {
+                                <option value="all" selected>All link statuses</option>
+                            }
+                            else
+                            {
+                                <option value="all">All link statuses</option>
+                            }
+                            @if (Model.LinkedGameObjectFilter == DoubleSpawnLinkedGameObjectFilters.NonLinked)
+                            {
+                                <option value="non-linked" selected>Potential duplicates only</option>
+                            }
+                            else
+                            {
+                                <option value="non-linked">Potential duplicates only</option>
+                            }
+                            @if (Model.LinkedGameObjectFilter == DoubleSpawnLinkedGameObjectFilters.Linked)
+                            {
+                                <option value="linked" selected>Linked GO pairs only</option>
+                            }
+                            else
+                            {
+                                <option value="linked">Linked GO pairs only</option>
+                            }
+                        </select>
+                        <small>Template-linked GameObjects are tracked separately from pooling. Use Any entry to catch links to a different GO entry; linked-only does not apply to creature pairs.</small>
+                    </label>
+
+                    <label class="double-spawn-filter-field">
+                        <span>3D distance tolerance</span>
+                        <div class="input-group">
+                            <input type="number" name="tolerance" class="form-control" min="0" max="100" step="0.01"
+                                   value="@Model.DistanceTolerance.ToString("0.###", CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">yd</span>
+                        </div>
+                        <small>Use 0 for exact X/Y/Z coordinates. A small value catches near-overlaps.</small>
+                    </label>
+                </div>
+
+                <div class="double-spawn-filter-footer">
+                    <div class="double-spawn-filter-footer-options">
+                        <label class="double-spawn-event-toggle">
+                            @if (Model.ExcludeEventRelated)
+                            {
+                                <input type="checkbox" name="excludeEvents" value="true" checked />
+                            }
+                            else
+                            {
+                                <input type="checkbox" name="excludeEvents" value="true" />
+                            }
+                            <input type="hidden" name="excludeEvents" value="false" />
+                            <span>
+                                <strong>Ignore game-event spawns</strong>
+                                <small>Exclude GUIDs referenced by game_event_creature or game_event_gameobject when those tables are available.</small>
+                            </span>
+                        </label>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-search"></i>
+                        Analyze spawn overlaps
+                    </button>
+                </div>
+            </form>
+
+            <div class="double-spawn-purpose-note" role="note">
+                <span class="double-spawn-purpose-note-icon"><i class="bi bi-info-circle"></i></span>
+                <div>
+                    <strong>Review matches before cleanup</strong>
+                    <p>Some overlaps may be intentional. Pool membership and template-defined linked GameObject relationships are checked independently. A linked pair explains why different GO entries can share a position, but it does not prove both static spawn rows are required by every MaNGOS core/version; review before cleanup.</p>
+                </div>
+            </div>
+        }
+    </section>
+
+    @if (Model.HasSearched)
+    {
+        @foreach (string warning in Model.Result.Warnings)
+        {
+            <div class="alert alert-warning studio-inline-alert double-spawn-warning">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <div>
+                    <strong>Scan notice</strong>
+                    <span>@warning</span>
+                </div>
+            </div>
+        }
+
+        <section class="double-spawn-summary-grid" aria-label="Spawn overlap analysis summary">
+            <article class="panel double-spawn-summary-card">
+                <span><i class="bi bi-intersect"></i></span>
+                <div>
+                    <small>Matching pairs</small>
+                    <strong>@Model.Result.Matches.TotalCount.ToString("N0")</strong>
+                    <p>@toleranceLabel</p>
+                </div>
+            </article>
+            <article class="panel double-spawn-summary-card">
+                <span><i class="bi bi-person-standing"></i></span>
+                <div>
+                    <small>Creature pairs</small>
+                    <strong>@Model.Result.CreatureMatchCount.ToString("N0")</strong>
+                    <p>@Model.Result.CreatureSpawnsScanned.ToString("N0") scanned</p>
+                </div>
+            </article>
+            <article class="panel double-spawn-summary-card">
+                <span><i class="bi bi-box-seam"></i></span>
+                <div>
+                    <small>Gameobject pairs</small>
+                    <strong>@Model.Result.GameObjectMatchCount.ToString("N0")</strong>
+                    <p>@Model.Result.GameObjectSpawnsScanned.ToString("N0") scanned</p>
+                </div>
+            </article>
+            <article class="panel double-spawn-summary-card">
+                <span><i class="bi bi-link-45deg"></i></span>
+                <div>
+                    <small>Linked GO pairs</small>
+                    <strong>@Model.Result.LinkedGameObjectMatchCount.ToString("N0")</strong>
+                    <p>gameobject_template relation</p>
+                </div>
+            </article>
+            <article class="panel double-spawn-summary-card">
+                <span><i class="bi bi-map"></i></span>
+                <div>
+                    <small>Maps scanned</small>
+                    <strong>@Model.Result.MapsScanned.ToString("N0")</strong>
+                    <p>@totalSpawns.ToString("N0") total spawns</p>
+                </div>
+            </article>
+        </section>
+
+        <section class="panel double-spawn-results-panel">
+            <header class="panel-header double-spawn-results-heading">
+                <div>
+                    <span class="eyebrow">Spawn overlap results</span>
+                    <h2>Overlapping spawn pairs</h2>
+                    <p>Pairs are compared in three dimensions. Pool membership is checked by spawn GUID/template entry, while linked GO pairs are identified from gameobject_template type/data relationships.</p>
+                </div>
+                <span class="double-spawn-result-count">
+                    @Model.Result.Matches.TotalCount.ToString("N0") pair@(Model.Result.Matches.TotalCount == 1 ? string.Empty : "s")
+                    @if (!string.IsNullOrWhiteSpace(Model.Search))
+                    {
+                        <small class="double-spawn-search-result-label" title="Name filter: @Model.Search">Name: @Model.Search</small>
+                    }
+                    @if (Model.LinkedGameObjectFilter == DoubleSpawnLinkedGameObjectFilters.All)
+                    {
+                        <small>@((Model.Result.Matches.TotalCount - Model.Result.LinkedGameObjectMatchCount).ToString("N0")) potential duplicates</small>
+                        <small>@Model.Result.LinkedGameObjectMatchCount.ToString("N0") linked GO</small>
+                    }
+                    else
+                    {
+                        <small>@linkedFilterLabel</small>
+                    }
+                    @if (Model.PoolFilter == DoubleSpawnPoolFilters.All)
+                    {
+                        <small>@Model.Result.PooledMatchCount.ToString("N0") pooled</small>
+                    }
+                    else
+                    {
+                        <small>@poolFilterLabel</small>
+                    }
+                </span>
+            </header>
+
+            @if (Model.Result.Matches.Items.Count == 0)
+            {
+                <div class="double-spawn-empty-state">
+                    <span><i class="bi bi-check2-circle"></i></span>
+                    <h3>No matching spawn pairs found</h3>
+                    <p>Try another name, pool/link result option, map, entry mode, or distance tolerance if you want a broader overlap check.</p>
+                </div>
+            }
+            else
+            {
+
+                <div class="world-record-table-wrap double-spawn-table-wrap">
+                    <table class="table studio-table world-record-table double-spawn-table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Map</th>
+                                <th>First spawn</th>
+                                <th>Second spawn</th>
+                                <th>Distance</th>
+                                <th>Position A</th>
+                                <th>Position B</th>
+                                <th>Linked GO details</th>
+                                <th>Pool details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (int matchIndex = 0; matchIndex < Model.Result.Matches.Items.Count; matchIndex++)
+                            {
+                                DoubleSpawnMatch match = Model.Result.Matches.Items[matchIndex];
+                                <tr>
+                                    <td>
+                                        <span class="double-spawn-kind-badge @(match.Kind == "Creature" ? "is-creature" : "is-gameobject")">
+                                            <i class="bi @(match.Kind == "Creature" ? "bi-person-standing" : "bi-box-seam")"></i>
+                                            @match.Kind
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <strong>@match.First.MapId</strong>
+                                    </td>
+                                    <td>
+                                        <div class="double-spawn-entity">
+                                            <strong>@(string.IsNullOrWhiteSpace(match.First.Name) ? "Entry " + match.First.Entry : match.First.Name)</strong>
+                                            <span>Entry @match.First.Entry · GUID @match.First.Guid</span>
+                                            <div class="double-spawn-entity-badges">
+                                                @if (match.First.IsEventRelated)
+                                                {
+                                                    <small class="double-spawn-event-badge"><i class="bi bi-calendar-event"></i> Event linked</small>
+                                                }
+                                                @if (match.First.IsPooled)
+                                                {
+                                                    <small class="double-spawn-pool-badge"><i class="bi bi-diagram-3"></i> Pooled</small>
+                                                }
+                                                @if (match.LinkedGameObjectRelation?.SourceGuid == match.First.Guid)
+                                                {
+                                                    <small class="double-spawn-linked-badge"><i class="bi bi-link-45deg"></i> Links to @match.LinkedGameObjectRelation.LinkedEntry</small>
+                                                }
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="double-spawn-entity">
+                                            <strong>@(string.IsNullOrWhiteSpace(match.Second.Name) ? "Entry " + match.Second.Entry : match.Second.Name)</strong>
+                                            <span>Entry @match.Second.Entry · GUID @match.Second.Guid</span>
+                                            <div class="double-spawn-entity-badges">
+                                                @if (match.Second.IsEventRelated)
+                                                {
+                                                    <small class="double-spawn-event-badge"><i class="bi bi-calendar-event"></i> Event linked</small>
+                                                }
+                                                @if (match.Second.IsPooled)
+                                                {
+                                                    <small class="double-spawn-pool-badge"><i class="bi bi-diagram-3"></i> Pooled</small>
+                                                }
+                                                @if (match.LinkedGameObjectRelation?.SourceGuid == match.Second.Guid)
+                                                {
+                                                    <small class="double-spawn-linked-badge"><i class="bi bi-link-45deg"></i> Links to @match.LinkedGameObjectRelation.LinkedEntry</small>
+                                                }
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="double-spawn-distance @(match.Distance == 0d ? "is-exact" : "")">
+                                            @(match.Distance == 0d ? "Exact" : match.Distance.ToString("0.###", CultureInfo.InvariantCulture) + " yd")
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <code>@match.First.PositionX.ToString("0.###", CultureInfo.InvariantCulture), @match.First.PositionY.ToString("0.###", CultureInfo.InvariantCulture), @match.First.PositionZ.ToString("0.###", CultureInfo.InvariantCulture)</code>
+                                    </td>
+                                    <td>
+                                        <code>@match.Second.PositionX.ToString("0.###", CultureInfo.InvariantCulture), @match.Second.PositionY.ToString("0.###", CultureInfo.InvariantCulture), @match.Second.PositionZ.ToString("0.###", CultureInfo.InvariantCulture)</code>
+                                    </td>
+                                    <td>
+                                        @if (match.IsLinkedGameObjectPair)
+                                        {
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-secondary double-spawn-linked-action"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#doubleSpawnLinkedModal-@matchIndex">
+                                                <i class="bi bi-link-45deg"></i>
+                                                Linked GO details
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <span class="double-spawn-linked-clear"><i class="bi bi-check2"></i> Not linked</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (match.First.IsPooled || match.Second.IsPooled)
+                                        {
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-secondary double-spawn-pool-action"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#doubleSpawnPoolModal-@matchIndex">
+                                                <i class="bi bi-diagram-3"></i>
+                                                Pool details
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <span class="double-spawn-pool-clear"><i class="bi bi-check2"></i> Not pooled</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @for (int matchIndex = 0; matchIndex < Model.Result.Matches.Items.Count; matchIndex++)
+                {
+                    DoubleSpawnMatch poolMatch = Model.Result.Matches.Items[matchIndex];
+                    if (poolMatch.First.IsPooled || poolMatch.Second.IsPooled)
+                    {
+                        long[] sharedPoolEntries = poolMatch.First.Pools
+                            .Select(membership => membership.PoolEntry)
+                            .Intersect(poolMatch.Second.Pools.Select(membership => membership.PoolEntry))
+                            .Distinct()
+                            .OrderBy(poolEntry => poolEntry)
+                            .ToArray();
+                        <div class="modal fade npc-vendor-editor-modal double-spawn-pool-modal" id="doubleSpawnPoolModal-@matchIndex" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <div>
+                                            <span class="eyebrow">Pool inspection</span>
+                                            <h2 class="modal-title">Pool details</h2>
+                                            <p class="mb-0">@poolMatch.Kind pair · Map @poolMatch.First.MapId · GUID @poolMatch.First.Guid ↔ GUID @poolMatch.Second.Guid</p>
+                                        </div>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="double-spawn-pool-modal-note">
+                                            <i class="bi bi-info-circle"></i>
+                                            <span>
+                                                @if (sharedPoolEntries.Length > 0)
+                                                {
+                                                    <strong>@("Both spawns share " + (sharedPoolEntries.Length == 1 ? "pool template " : "pool templates ") + string.Join(", ", sharedPoolEntries.Select(poolEntry => "#" + poolEntry.ToString(CultureInfo.InvariantCulture))) + ".")</strong>
+                                                }
+                                                Pool membership can make overlapping spawn rows intentional. Review the membership source, pool limit, chance, and any immediate mother-pool relationship before cleanup.
+                                            </span>
+                                        </div>
+
+                                        <div class="double-spawn-pool-spawn-grid">
+                                            @for (int spawnIndex = 0; spawnIndex < 2; spawnIndex++)
+                                            {
+                                                DoubleSpawnPoint spawn = spawnIndex == 0 ? poolMatch.First : poolMatch.Second;
+                                                <section class="double-spawn-pool-spawn-card">
+                                                    <header>
+                                                        <div>
+                                                            <span class="eyebrow">@(spawnIndex == 0 ? "First spawn" : "Second spawn")</span>
+                                                            <h3>@(string.IsNullOrWhiteSpace(spawn.Name) ? "Entry " + spawn.Entry : spawn.Name)</h3>
+                                                            <p>Entry @spawn.Entry · GUID @spawn.Guid</p>
+                                                        </div>
+                                                        @if (spawn.IsPooled)
+                                                        {
+                                                            <span class="double-spawn-pool-badge"><i class="bi bi-diagram-3"></i> @spawn.Pools.Count pool@(spawn.Pools.Count == 1 ? string.Empty : "s")</span>
+                                                        }
+                                                    </header>
+
+                                                    @if (!spawn.IsPooled)
+                                                    {
+                                                        <div class="double-spawn-pool-none">
+                                                            <i class="bi bi-check2-circle"></i>
+                                                            <div>
+                                                                <strong>No pool membership found</strong>
+                                                                <p>No GUID-level or template-level pool row was found for this spawn in the available pool tables.</p>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <div class="double-spawn-pool-memberships">
+                                                            @foreach (DoubleSpawnPoolMembership membership in spawn.Pools)
+                                                            {
+                                                                <article class="double-spawn-pool-membership">
+                                                                    <div class="double-spawn-pool-membership-heading">
+                                                                        <div>
+                                                                            <small>Pool template</small>
+                                                                            <strong>#@membership.PoolEntry</strong>
+                                                                        </div>
+                                                                        <span>@membership.MembershipType</span>
+                                                                    </div>
+
+                                                                    <dl class="double-spawn-pool-data">
+                                                                        <div>
+                                                                            <dt>Source table</dt>
+                                                                            <dd>
+                                                                                <code>@membership.SourceTable</code>
+                                                                            </dd>
+                                                                        </div>
+                                                                        <div>
+                                                                            <dt>Pool entry</dt>
+                                                                            <dd>@membership.PoolEntry</dd>
+                                                                        </div>
+                                                                        <div>
+                                                                            <dt>Chance</dt>
+                                                                            <dd>@(membership.Chance.HasValue ? (membership.Chance.Value == 0d ? "Equal chance (0)" : membership.Chance.Value.ToString("0.###", CultureInfo.InvariantCulture) + "%") : "Not exposed")</dd>
+                                                                        </div>
+                                                                        <div>
+                                                                            <dt>Max limit</dt>
+                                                                            <dd>@(membership.MaxLimit.HasValue ? membership.MaxLimit.Value.ToString(CultureInfo.InvariantCulture) : "Not exposed")</dd>
+                                                                        </div>
+                                                                        <div class="is-wide">
+                                                                            <dt>Membership description</dt>
+                                                                            <dd>@(string.IsNullOrWhiteSpace(membership.MembershipDescription) ? "—" : membership.MembershipDescription)</dd>
+                                                                        </div>
+                                                                        <div class="is-wide">
+                                                                            <dt>Pool template description</dt>
+                                                                            <dd>@(string.IsNullOrWhiteSpace(membership.PoolDescription) ? "—" : membership.PoolDescription)</dd>
+                                                                        </div>
+                                                                    </dl>
+
+                                                                    @if (membership.ParentPools.Count > 0)
+                                                                    {
+                                                                        <div class="double-spawn-parent-pools">
+                                                                            <strong>Immediate mother pool@(membership.ParentPools.Count == 1 ? string.Empty : "s")</strong>
+                                                                            @foreach (DoubleSpawnPoolParent parent in membership.ParentPools)
+                                                                            {
+                                                                                <div class="double-spawn-parent-pool">
+                                                                                    <div>
+                                                                                        <span>Pool #@parent.PoolEntry</span>
+                                                                                        <small>@(string.IsNullOrWhiteSpace(parent.PoolDescription) ? "No pool_template description" : parent.PoolDescription)</small>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <span>Chance: @(parent.Chance.HasValue ? (parent.Chance.Value == 0d ? "Equal chance (0)" : parent.Chance.Value.ToString("0.###", CultureInfo.InvariantCulture) + "%") : "Not exposed")</span>
+                                                                                        <small>Max limit: @(parent.MaxLimit.HasValue ? parent.MaxLimit.Value.ToString(CultureInfo.InvariantCulture) : "Not exposed")</small>
+                                                                                    </div>
+                                                                                    @if (!string.IsNullOrWhiteSpace(parent.MembershipDescription))
+                                                                                    {
+                                                                                        <p>@parent.MembershipDescription</p>
+                                                                                    }
+                                                                                </div>
+                                                                            }
+                                                                        </div>
+                                                                    }
+                                                                </article>
+                                                            }
+                                                        </div>
+                                                    }
+                                                </section>
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+
+                @for (int matchIndex = 0; matchIndex < Model.Result.Matches.Items.Count; matchIndex++)
+                {
+                    DoubleSpawnMatch linkedMatch = Model.Result.Matches.Items[matchIndex];
+                    if (linkedMatch.LinkedGameObjectRelation != null)
+                    {
+                        DoubleSpawnLinkedGameObjectRelation relation = linkedMatch.LinkedGameObjectRelation;
+                        DoubleSpawnPoint sourceSpawn = linkedMatch.First.Guid == relation.SourceGuid ? linkedMatch.First : linkedMatch.Second;
+                        DoubleSpawnPoint targetSpawn = linkedMatch.First.Guid == relation.TargetGuid ? linkedMatch.First : linkedMatch.Second;
+                        <div class="modal fade npc-vendor-editor-modal double-spawn-pool-modal double-spawn-linked-modal" id="doubleSpawnLinkedModal-@matchIndex" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <div>
+                                            <span class="eyebrow">Linked GameObject inspection</span>
+                                            <h2 class="modal-title">Linked GO details</h2>
+                                            <p class="mb-0">GameObject pair · Map @linkedMatch.First.MapId · GUID @linkedMatch.First.Guid ↔ GUID @linkedMatch.Second.Guid</p>
+                                        </div>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="double-spawn-pool-modal-note double-spawn-linked-modal-note">
+                                            <i class="bi bi-info-circle"></i>
+                                            <span>
+                                                <strong>The source gameobject_template explicitly links to entry @relation.LinkedEntry through @relation.SourceField.</strong>
+                                                Like pool details, this shows why the overlap may be intentional without automatically marking the two static spawn rows as safe to remove or keep.
+                                            </span>
+                                        </div>
+
+                                        <div class="double-spawn-pool-spawn-grid">
+                                            <section class="double-spawn-pool-spawn-card">
+                                                <header>
+                                                    <div>
+                                                        <span class="eyebrow">Link source</span>
+                                                        <h3>@(string.IsNullOrWhiteSpace(sourceSpawn.Name) ? "Entry " + sourceSpawn.Entry : sourceSpawn.Name)</h3>
+                                                        <p>Entry @sourceSpawn.Entry · GUID @sourceSpawn.Guid</p>
+                                                    </div>
+                                                    <span class="double-spawn-linked-badge"><i class="bi bi-link-45deg"></i> Link source</span>
+                                                </header>
+
+                                                <div class="double-spawn-pool-memberships">
+                                                    <article class="double-spawn-pool-membership">
+                                                        <div class="double-spawn-pool-membership-heading">
+                                                            <div>
+                                                                <small>Template relationship</small>
+                                                                <strong>@relation.SourceField → @relation.LinkedEntry</strong>
+                                                            </div>
+                                                            <span>Source</span>
+                                                        </div>
+                                                        <dl class="double-spawn-pool-data">
+                                                            <div>
+                                                                <dt>Source table</dt>
+                                                                <dd>
+                                                                    <code>gameobject_template</code>
+                                                                </dd>
+                                                            </div>
+                                                            <div>
+                                                                <dt>GO type</dt>
+                                                                <dd>@(sourceSpawn.GameObjectType.HasValue ? sourceSpawn.GameObjectType.Value.ToString(CultureInfo.InvariantCulture) + " · " + sourceSpawn.GameObjectTypeName : "Not available")</dd>
+                                                            </div>
+                                                            <div>
+                                                                <dt>Template field</dt>
+                                                                <dd>
+                                                                    <code>@relation.SourceField</code>
+                                                                </dd>
+                                                            </div>
+                                                            <div>
+                                                                <dt>Linked entry</dt>
+                                                                <dd>@relation.LinkedEntry</dd>
+                                                            </div>
+                                                            <div class="is-wide">
+                                                                <dt>Resolved target</dt>
+                                                                <dd>Entry @targetSpawn.Entry · GUID @targetSpawn.Guid</dd>
+                                                            </div>
+                                                            <div class="is-wide">
+                                                                <dt>Relationship</dt>
+                                                                <dd>@(relation.IsReciprocal ? "Reciprocal template link" : "One-way template link")</dd>
+                                                            </div>
+                                                        </dl>
+                                                    </article>
+                                                </div>
+                                            </section>
+
+                                            <section class="double-spawn-pool-spawn-card">
+                                                <header>
+                                                    <div>
+                                                        <span class="eyebrow">Link target</span>
+                                                        <h3>@(string.IsNullOrWhiteSpace(targetSpawn.Name) ? "Entry " + targetSpawn.Entry : targetSpawn.Name)</h3>
+                                                        <p>Entry @targetSpawn.Entry · GUID @targetSpawn.Guid</p>
+                                                    </div>
+                                                    @if (relation.TargetIsTrap)
+                                                    {
+                                                        <span class="double-spawn-linked-type-badge"><i class="bi bi-bullseye"></i> Trap target</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="double-spawn-linked-badge"><i class="bi bi-link-45deg"></i> Link target</span>
+                                                    }
+                                                </header>
+
+                                                <div class="double-spawn-pool-memberships">
+                                                    <article class="double-spawn-pool-membership">
+                                                        <div class="double-spawn-pool-membership-heading">
+                                                            <div>
+                                                                <small>Resolved linked GameObject</small>
+                                                                <strong>Entry @targetSpawn.Entry</strong>
+                                                            </div>
+                                                            <span>Target</span>
+                                                        </div>
+                                                        <dl class="double-spawn-pool-data">
+                                                            <div>
+                                                                <dt>Target entry</dt>
+                                                                <dd>@targetSpawn.Entry</dd>
+                                                            </div>
+                                                            <div>
+                                                                <dt>Target GUID</dt>
+                                                                <dd>@targetSpawn.Guid</dd>
+                                                            </div>
+                                                            <div>
+                                                                <dt>GO type</dt>
+                                                                <dd>@(targetSpawn.GameObjectType.HasValue ? targetSpawn.GameObjectType.Value.ToString(CultureInfo.InvariantCulture) + " · " + targetSpawn.GameObjectTypeName : "Not available")</dd>
+                                                            </div>
+                                                            <div>
+                                                                <dt>Expected entry</dt>
+                                                                <dd>@relation.LinkedEntry</dd>
+                                                            </div>
+                                                            <div class="is-wide">
+                                                                <dt>Entry match</dt>
+                                                                <dd>@relation.LinkedEntry = @targetSpawn.Entry</dd>
+                                                            </div>
+                                                            <div class="is-wide">
+                                                                <dt>Position relationship</dt>
+                                                                <dd>@(linkedMatch.Distance == 0d ? "Exact same 3D position" : linkedMatch.Distance.ToString("0.###", CultureInfo.InvariantCulture) + " yd apart")</dd>
+                                                            </div>
+                                                        </dl>
+                                                    </article>
+                                                </div>
+
+                                                @if (!relation.TargetIsTrap)
+                                                {
+                                                    <div class="double-spawn-linked-review-note">
+                                                        <i class="bi bi-exclamation-triangle-fill"></i>
+                                                        <span><strong>Review target type.</strong> The linked entry resolves to this overlapping spawn, but its template is not GO type 6 (Trap). This is informational and should still be reviewed.</span>
+                                                    </div>
+                                                }
+                                            </section>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+
+                <footer class="double-spawn-results-footer">
+                    <div class="double-spawn-pagination-wrap">
+                        <div class="pagination-status">
+                            <strong>Page @Model.Result.Matches.Page</strong>
+                            <span>of @Math.Max(Model.Result.Matches.TotalPages, 1) · @Model.Result.Matches.TotalCount.ToString("N0") pairs</span>
+                        </div>
+
+                        @if (Model.Result.Matches.TotalPages > 1)
+                        {
+                            <nav class="world-pagination double-spawn-pagination" aria-label="Spawn overlap result pages">
+                                <ul class="pagination mb-0">
+                                    <li class="page-item pagination-direction @(Model.Result.Matches.Page <= 1 ? "disabled" : string.Empty)">
+                                        <a class="page-link"
+                                           asp-action="DoubleSpawns"
+                                           asp-route-database="@Model.Database"
+                                           asp-route-scan="true"
+                                           asp-route-scope="@Model.Scope"
+                                           asp-route-matchMode="@Model.MatchMode"
+                                           asp-route-poolFilter="@Model.PoolFilter"
+                                           asp-route-linkedGameObjectFilter="@Model.LinkedGameObjectFilter"
+                                           asp-route-search="@Model.Search"
+                                           asp-route-mapId="@Model.MapId"
+                                           asp-route-tolerance="@Model.DistanceTolerance"
+                                           asp-route-excludeEvents="@Model.ExcludeEventRelated"
+                                           asp-route-page="@(Math.Max(1, Model.Result.Matches.Page - 1))"
+                                           asp-route-pageSize="@Model.Result.Matches.PageSize"
+                                           aria-label="Previous result page">
+                                            <i class="bi bi-chevron-left"></i>
+                                            <span>Previous</span>
+                                        </a>
+                                    </li>
+                                    @for (int pageNumber = firstPage; pageNumber <= lastPage; pageNumber++)
+                                    {
+                                        <li class="page-item @(pageNumber == Model.Result.Matches.Page ? "active" : string.Empty)">
+                                            <a class="page-link"
+                                               asp-action="DoubleSpawns"
+                                               asp-route-database="@Model.Database"
+                                               asp-route-scan="true"
+                                               asp-route-scope="@Model.Scope"
+                                               asp-route-matchMode="@Model.MatchMode"
+                                               asp-route-poolFilter="@Model.PoolFilter"
+                                               asp-route-linkedGameObjectFilter="@Model.LinkedGameObjectFilter"
+                                               asp-route-search="@Model.Search"
+                                               asp-route-mapId="@Model.MapId"
+                                               asp-route-tolerance="@Model.DistanceTolerance"
+                                               asp-route-excludeEvents="@Model.ExcludeEventRelated"
+                                               asp-route-page="@pageNumber"
+                                               asp-route-pageSize="@Model.Result.Matches.PageSize"
+                                               aria-current="@(pageNumber == Model.Result.Matches.Page ? "page" : null)">@pageNumber</a>
+                                        </li>
+                                    }
+                                    <li class="page-item pagination-direction @(Model.Result.Matches.Page >= Model.Result.Matches.TotalPages ? "disabled" : string.Empty)">
+                                        <a class="page-link"
+                                           asp-action="DoubleSpawns"
+                                           asp-route-database="@Model.Database"
+                                           asp-route-scan="true"
+                                           asp-route-scope="@Model.Scope"
+                                           asp-route-matchMode="@Model.MatchMode"
+                                           asp-route-poolFilter="@Model.PoolFilter"
+                                           asp-route-linkedGameObjectFilter="@Model.LinkedGameObjectFilter"
+                                           asp-route-search="@Model.Search"
+                                           asp-route-mapId="@Model.MapId"
+                                           asp-route-tolerance="@Model.DistanceTolerance"
+                                           asp-route-excludeEvents="@Model.ExcludeEventRelated"
+                                           asp-route-page="@(Math.Min(Model.Result.Matches.TotalPages, Model.Result.Matches.Page + 1))"
+                                           asp-route-pageSize="@Model.Result.Matches.PageSize"
+                                           aria-label="Next result page">
+                                            <span>Next</span>
+                                            <i class="bi bi-chevron-right"></i>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </nav>
+                        }
+                    </div>
+
+                    <form method="get" asp-action="DoubleSpawns" class="double-spawn-page-size">
+                        <input type="hidden" name="database" value="@Model.Database" />
+                        <input type="hidden" name="scan" value="true" />
+                        <input type="hidden" name="scope" value="@Model.Scope" />
+                        <input type="hidden" name="matchMode" value="@Model.MatchMode" />
+                        <input type="hidden" name="poolFilter" value="@Model.PoolFilter" />
+                        <input type="hidden" name="linkedGameObjectFilter" value="@Model.LinkedGameObjectFilter" />
+                        <input type="hidden" name="search" value="@Model.Search" />
+                        @if (Model.MapId.HasValue)
+                        {
+                            <input type="hidden" name="mapId" value="@Model.MapId.Value" />
+                        }
+                        <input type="hidden" name="tolerance" value="@Model.DistanceTolerance.ToString("0.###", CultureInfo.InvariantCulture)" />
+                        <input type="hidden" name="excludeEvents" value="@Model.ExcludeEventRelated.ToString().ToLowerInvariant()" />
+                        <input type="hidden" name="page" value="1" />
+                        <label class="world-filter-select">
+                            <span>Rows per page</span>
+                            <select name="pageSize" class="form-select" onchange="this.form.submit()">
+                                @foreach (int size in pageSizes)
+                                {
+                                    if (Model.Result.Matches.PageSize == size) { <option value="@size" selected>@size</option> } else { <option value="@size">@size</option> }
+                                }
+                            </select>
+                        </label>
+                    </form>
+                </footer>
+            }
+        </section>
+    }
+    else
+    {
+        <section class="panel double-spawn-empty-state is-ready">
+            <span><i class="bi bi-intersect"></i></span>
+            <h3>Ready to analyze world spawns</h3>
+            <p>Choose the filters above and run the analyzer. No database records are modified by this tool.</p>
+        </section>
+    }
+</div>

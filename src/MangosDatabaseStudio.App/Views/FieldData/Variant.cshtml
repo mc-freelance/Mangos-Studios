@@ -1,0 +1,265 @@
+@* Present the FieldData Variant workflow within the shared studio layout. *@
+
+@model FieldDataVariantEditViewModel
+@{
+    ViewData["Title"] = Model.IsCreate ? "Add Expansion Data Set" : "Edit Expansion Data Set";
+    ViewData["Section"] = "System / Field Data / Expansion Data";
+    int firstPage = Math.Max(1, Model.Page - 2);
+    int lastPage = Math.Min(Model.TotalPages, firstPage + 4);
+    firstPage = Math.Max(1, lastPage - 4);
+    bool showHexValue = Model.ValueHandling == MangosFieldValueHandling.BitwiseOr;
+}
+<div class="page-actions">
+    <div>
+        <p class="page-lead">Map one set of entries to one or more expansions that use the same values.</p>
+    </div>
+    <a class="btn btn-outline-secondary" asp-action="EditDefinition" asp-route-id="@Model.DefinitionId"><i class="bi bi-arrow-left"></i> Column data</a>
+</div>
+
+<div class="alert alert-secondary studio-inline-alert rbac-notice">
+    <i class="bi bi-diagram-3"></i>
+    <div>
+        <strong>@Model.DefinitionName</strong>
+        <span><code>@(Model.TableName).@(Model.ColumnName)</code> · @Model.SelectionMode selection · @FormatHandling(Model.ValueHandling)</span>
+    </div>
+</div>
+
+<form method="post" asp-action="SaveVariant" class="panel field-data-editor-form">
+    <input asp-for="Id" type="hidden" />
+    <input asp-for="DefinitionId" type="hidden" />
+    <input asp-for="Page" type="hidden" />
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+    <div class="section-heading">
+        <div>
+            <span class="eyebrow">Expansion mapping</span>
+            <h2>@(Model.IsCreate ? "New data set" : Model.Key)</h2>
+        </div>
+        <i class="bi bi-layers"></i>
+    </div>
+    <div class="form-grid field-data-variant-form-grid">
+        <div class="field-data-variant-key">
+            <label class="form-label" asp-for="Key">Data-set key</label>
+            <input class="form-control" asp-for="Key" placeholder="vanilla" /><span asp-validation-for="Key" class="text-danger"></span>
+            <div class="form-text">Use a short stable key that describes this expansion grouping.</div>
+        </div>
+        <div class="field-data-variant-description">
+            <label class="form-label" asp-for="Description">Description</label>
+            <textarea class="form-control" asp-for="Description" rows="3"></textarea>
+        </div>
+    </div>
+    <div class="field-data-expansion-picker">
+        <div class="field-data-picker-heading">
+            <strong>Expansions</strong>
+            <span>Each expansion can belong to only one data set for this column.</span>
+        </div>
+        @for (int generation = 0; generation <= 4; generation++)
+        {
+            bool selected = Model.Generations.Contains(generation);
+            <label class="field-data-expansion-option">
+                <input class="form-check-input" type="checkbox" name="Generations" value="@generation" checked="@(selected ? "checked" : null)" />
+                <span><strong>@MangosProjectNames.GetExpansionName((MangosProjectGeneration)generation)</strong><small>@MangosProjectNames.GetName((MangosProjectGeneration)generation) · schema @MangosProjectNames.GetSchemaVersion((MangosProjectGeneration)generation)</small></span>
+            </label>
+        }
+        <span asp-validation-for="Generations" class="text-danger"></span>
+    </div>
+    <div class="form-actions sticky-actions">
+        <a class="btn btn-outline-secondary" asp-action="EditDefinition" asp-route-id="@Model.DefinitionId">Cancel</a>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i> @(Model.IsCreate ? "Add data set" : "Save data set")</button>
+    </div>
+</form>
+
+@if (!Model.IsCreate)
+{
+    <section class="panel viewer-panel-flush viewer-results-panel mt-4 field-data-list-panel">
+        <header class="viewer-results-header">
+            <div>
+                <span class="eyebrow">Selectable data</span>
+                <h3>Entries</h3>
+                <p>Values users can select when editing this expansion data set.</p>
+            </div>
+            <div class="field-data-results-header-tools">
+                <div class="viewer-results-count">
+                    <strong>@Model.TotalEntries.ToString("N0")</strong>
+                    <span>entr@(Model.TotalEntries == 1 ? "y" : "ies")</span>
+                </div>
+                <a class="btn btn-primary btn-sm field-data-header-add"
+                   asp-action="CreateEntry"
+                   asp-route-variantId="@Model.Id"
+                   asp-route-page="@Model.Page"><i class="bi bi-plus-lg"></i> Add entry</a>
+            </div>
+        </header>
+        @if (Model.TotalEntries == 0)
+        {
+            <div class="viewer-record-empty">
+                <i class="bi bi-list-check"></i>
+                <strong>No entries</strong>
+                <p>Add the values users should be able to select for these expansions.</p>
+            </div>
+        }
+        else
+        {
+            <div class="world-filter-bar viewer-results-toolbar">
+                <span class="world-filter-hint">Page @Model.Page of @Math.Max(Model.TotalPages, 1)</span>
+                <form method="get" asp-action="EditVariant" class="viewer-record-page-size">
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <input type="hidden" name="page" value="1" />
+                    <label class="world-filter-select">
+                        <span>Rows per page</span>
+                        <select name="pageSize" class="form-select" onchange="this.form.submit()">
+                            @foreach (int size in new[] { 10, 20, 50, 100, 200 })
+                            {
+                                if (Model.PageSize == size)
+                                {
+                                    <option value="@size" selected>@size</option>
+                                }
+                                else
+                                {
+                                    <option value="@size">@size</option>
+                                }
+                            }
+                        </select>
+                    </label>
+                </form>
+            </div>
+
+            <div class="world-record-table-wrap viewer-results-table-wrap">
+                <table class="table studio-table responsive-table viewer-results-table field-data-entry-table @(showHexValue ? "is-bitmask" : "is-standard") mb-0">
+                    <colgroup>
+                        <col class="field-data-entry-col-order" />
+                        <col class="field-data-entry-col-label" />
+                        <col class="field-data-entry-col-value" />
+                        @if (showHexValue)
+                        {
+                            <col class="field-data-entry-col-hex" />
+                        }
+                        <col class="field-data-entry-col-description" />
+                        <col class="field-data-entry-col-actions" />
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th class="field-data-entry-order-cell">Order</th>
+                            <th>Label</th>
+                            <th>Stored value</th>
+                            @if (showHexValue)
+                            {
+                                <th class="field-data-entry-hex-cell">Hex value</th>
+                            }
+                            <th>Description</th>
+                            <th class="actions-column viewer-action-column">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (FieldDataOptionRecord option in Model.Options)
+                    {
+                        <tr>
+                            <td data-label="Order" class="field-data-entry-order-cell">@option.SortOrder.ToString("N0", CultureInfo.InvariantCulture)</td>
+                            <td data-label="Label">
+                                <strong>@option.Label</strong>
+                            </td>
+                            <td data-label="Stored value" class="field-data-entry-value-cell">
+                                <code>@FormatStoredValue(option.Value)</code>
+                            </td>
+                            @if (showHexValue)
+                            {
+                                <td data-label="Hex value" class="field-data-entry-hex-cell">
+                                    @if (ulong.TryParse(option.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out ulong numeric))
+                                    {
+                                        <code>@("0x" + numeric.ToString("X", CultureInfo.InvariantCulture))</code>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                </td>
+                            }
+                            <td data-label="Description" class="field-data-description-cell">
+                                @if (string.IsNullOrWhiteSpace(option.Description))
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                                else
+                                {
+                                    <span class="field-data-description-preview" title="@option.Description">@option.Description</span>
+                                }
+                            </td>
+                            <td data-label="Actions" class="actions-column viewer-action-column">
+                                <div class="row-actions row-actions-compact">
+                                    <a class="icon-button"
+                                       asp-action="EditEntry"
+                                       asp-route-variantId="@Model.Id"
+                                       asp-route-id="@option.Id"
+                                       asp-route-page="@Model.Page"
+                                       title="Edit entry"
+                                       aria-label="Edit @option.Label"><i class="bi bi-pencil"></i></a>
+                                    <form asp-action="DeleteEntry" method="post" data-confirm="Remove '@option.Label' from this data set?">
+                                        <input type="hidden" name="id" value="@option.Id" />
+                                        <input type="hidden" name="variantId" value="@Model.Id" />
+                                        <input type="hidden" name="page" value="@Model.Page" />
+                                        <button class="icon-button danger" type="submit" title="Remove entry" aria-label="Remove @option.Label"><i class="bi bi-trash"></i></button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (Model.TotalPages > 1)
+            {
+            <nav class="pagination-shell world-pagination viewer-results-pagination" aria-label="Field-data entry pages">
+                <div class="pagination-status">
+                    <strong>Page @Model.Page</strong>
+                    <span>of @Model.TotalPages · @Model.TotalEntries.ToString("N0") entries</span>
+                </div>
+                <ul class="pagination mb-0">
+                    <li class="page-item pagination-direction @(Model.Page <= 1 ? "disabled" : string.Empty)">
+                        <a
+                            class="page-link"
+                            asp-action="EditVariant"
+                            asp-route-id="@Model.Id"
+                            asp-route-page="@(Math.Max(1, Model.Page - 1))"
+                            aria-label="Previous page"><i class="bi bi-chevron-left"></i><span>Previous</span></a>
+                    </li>
+                    @for (int entryPage = firstPage; entryPage <= lastPage; entryPage++)
+                    {
+                        <li class="page-item @(entryPage == Model.Page ? "active" : string.Empty)">
+                            <a
+                                class="page-link"
+                                asp-action="EditVariant"
+                                asp-route-id="@Model.Id"
+                                asp-route-page="@entryPage"
+                                aria-current="@(entryPage == Model.Page ? "page" : null)">@entryPage</a>
+                        </li>
+                    }
+                    <li class="page-item pagination-direction @(Model.Page >= Model.TotalPages ? "disabled" : string.Empty)">
+                        <a
+                            class="page-link"
+                            asp-action="EditVariant"
+                            asp-route-id="@Model.Id"
+                            asp-route-page="@(Math.Min(Model.TotalPages, Model.Page + 1))"
+                            aria-label="Next page"><span>Next</span><i class="bi bi-chevron-right"></i></a>
+                    </li>
+                </ul>
+            </nav>
+            }
+        }
+    </section>
+}
+
+@functions {
+    private static string FormatHandling(MangosFieldValueHandling handling)
+    {
+        return handling switch { MangosFieldValueHandling.BitwiseOr => "Bitwise OR", MangosFieldValueHandling.Additive => "Additive sum", _ => "Direct value" };
+    }
+
+    private static string FormatStoredValue(string value)
+    {
+        if (System.Numerics.BigInteger.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out System.Numerics.BigInteger numeric))
+        {
+            return numeric.ToString("N0", CultureInfo.CurrentCulture);
+        }
+
+        return value;
+    }
+}

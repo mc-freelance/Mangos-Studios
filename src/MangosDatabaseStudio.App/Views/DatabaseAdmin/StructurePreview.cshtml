@@ -1,0 +1,99 @@
+@* Present the DatabaseAdmin StructurePreview workflow within the shared studio layout. *@
+
+@model SchemaChangePreviewViewModel
+@{
+    ViewData["Title"] = "Review schema change";
+    ViewData["Section"] = "Database Administration / " + Model.Request.Database + " / " + Model.Request.Table;
+}
+
+<div class="page-actions schema-editor-page-heading">
+    <div>
+        <span class="eyebrow">SQL confirmation</span>
+        <h1>Review schema change</h1>
+        <p class="page-lead">Nothing has been changed yet. Review the server-generated ALTER TABLE statement before execution.</p>
+    </div>
+    <a class="btn btn-outline-secondary" asp-action="Structure" asp-route-database="@Model.Request.Database" asp-route-table="@Model.Request.Table"><i class="bi bi-x-lg"></i> Cancel</a>
+</div>
+
+<section class="panel schema-preview-panel">
+    <div class="section-heading">
+        <div>
+            <span class="eyebrow">@Model.Plan.Operation</span>
+            <h2>@Model.Plan.Summary</h2>
+            <p>@Model.Request.Database.@Model.Request.Table</p>
+        </div>
+        <span class="schema-access-badge @(Model.Plan.IsDestructive ? "danger" : "write")"><i class="bi @(Model.Plan.IsDestructive ? "bi-exclamation-triangle" : "bi-shield-check")"></i>@(Model.Plan.IsDestructive ? "Destructive" : "Validated")</span>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.Plan.Warning))
+    {
+        <div class="schema-editor-safety-note warning">
+            <i class="bi bi-exclamation-triangle"></i>
+            <div>
+                <strong>Review required</strong>
+                <p>@Model.Plan.Warning</p>
+            </div>
+        </div>
+    }
+
+    <div class="schema-sql-preview">
+        <div class="schema-sql-heading">
+            <span><i class="bi bi-code-slash"></i> Generated SQL</span>
+            <div class="schema-sql-actions">
+                <small>Generated from validated structured inputs</small>
+                <button type="button" class="btn btn-outline-light btn-sm" data-copy-schema-sql><i class="bi bi-copy"></i> Copy SQL</button>
+            </div>
+        </div>
+        <pre><code data-schema-sql>@Model.Plan.Sql</code></pre>
+    </div>
+
+    <form method="post" asp-action="ExecuteSchemaChange" class="schema-confirm-form">
+        @Html.AntiForgeryToken()
+        <div asp-validation-summary="All" class="alert alert-danger schema-validation-summary"></div>
+        <input type="hidden" name="Database" value="@Model.Request.Database" />
+        <input type="hidden" name="Table" value="@Model.Request.Table" />
+        <input type="hidden" name="Operation" value="@Model.Request.Operation" />
+        <input type="hidden" name="OriginalColumnName" value="@Model.Request.OriginalColumnName" />
+        <input type="hidden" name="ColumnName" value="@Model.Request.ColumnName" />
+        <input type="hidden" name="ColumnType" value="@Model.Request.ColumnType" />
+        <input type="hidden" name="IsNullable" value="@Model.Request.IsNullable" />
+        <input type="hidden" name="DefaultMode" value="@Model.Request.DefaultMode" />
+        <input type="hidden" name="DefaultValue" value="@Model.Request.DefaultValue" />
+        <input type="hidden" name="IsAutoIncrement" value="@Model.Request.IsAutoIncrement" />
+        <input type="hidden" name="Comment" value="@Model.Request.Comment" />
+        <input type="hidden" name="Position" value="@Model.Request.Position" />
+        <input type="hidden" name="AfterColumn" value="@Model.Request.AfterColumn" />
+        <input type="hidden" name="IndexName" value="@Model.Request.IndexName" />
+        <input type="hidden" name="IndexKind" value="@Model.Request.IndexKind" />
+        @foreach (string column in Model.Request.IndexColumns)
+        {
+            <input type="hidden" name="IndexColumns" value="@column" />
+        }
+        <input type="hidden" name="Engine" value="@Model.Request.Engine" />
+        <input type="hidden" name="Collation" value="@Model.Request.Collation" />
+        <input type="hidden" name="TableComment" value="@Model.Request.TableComment" />
+        <input type="hidden" name="PreviewSql" value="@Model.Request.PreviewSql" />
+        <input type="hidden" name="PreviewToken" value="@Model.Request.PreviewToken" />
+
+        @if (Model.Plan.IsDestructive)
+        {
+            <div class="schema-destructive-confirm">
+                <label for="Confirmation">Type <code>@Model.Plan.ConfirmationValue</code> to confirm</label>
+                <input id="Confirmation" name="Confirmation" class="form-control" autocomplete="off" />
+            </div>
+        }
+
+        <div class="schema-audit-note">
+            <i class="bi bi-clock-history"></i>
+            <span>This operation will be recorded in Change Storage as a schema audit entry with manual rollback only.</span>
+        </div>
+        <div class="form-actions">
+            <a class="btn btn-outline-secondary" asp-action="Structure" asp-route-database="@Model.Request.Database" asp-route-table="@Model.Request.Table">Cancel</a>
+            <button class="btn @(Model.Plan.IsDestructive ? "btn-danger" : "btn-primary")" type="submit"><i class="bi bi-check2-circle"></i> Execute schema change</button>
+        </div>
+    </form>
+</section>
+
+@section Scripts {
+    <script src="~/js/schema-editor.js" asp-append-version="true"></script>
+}

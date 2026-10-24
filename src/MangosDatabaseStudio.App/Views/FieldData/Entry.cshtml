@@ -1,0 +1,72 @@
+@* Present the FieldData Entry workflow within the shared studio layout. *@
+
+@model FieldDataOptionEditViewModel
+@{
+    ViewData["Title"] = Model.IsCreate ? "Add Field Data Entry" : "Edit Field Data Entry";
+    ViewData["Section"] = "System / Field Data / Entry";
+    bool numeric = Model.SelectionMode == MangosFieldSelectionMode.Multiple || Model.ValueHandling != MangosFieldValueHandling.Direct;
+}
+<div class="page-actions">
+    <div>
+        <p class="page-lead">Define one selectable value and its user-facing meaning.</p>
+    </div>
+    <a class="btn btn-outline-secondary" asp-action="EditVariant" asp-route-id="@Model.VariantId" asp-route-page="@Model.Page"><i class="bi bi-arrow-left"></i> Data set</a>
+</div>
+
+<div class="alert alert-secondary studio-inline-alert rbac-notice">
+    <i class="bi bi-list-check"></i>
+    <div>
+        <strong>@Model.DefinitionName · @Model.VariantName</strong>
+        <span>@Model.SelectionMode selection · @FormatHandling(Model.ValueHandling)</span>
+    </div>
+</div>
+
+<form method="post" asp-action="SaveEntry" class="panel field-data-editor-form">
+    <input asp-for="Id" type="hidden" /><input asp-for="VariantId" type="hidden" /><input asp-for="DefinitionId" type="hidden" /><input asp-for="Page" type="hidden" />
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+    <div class="section-heading">
+        <div>
+            <span class="eyebrow">Catalog entry</span>
+            <h2>@(Model.IsCreate ? "New entry" : Model.Label)</h2>
+        </div>
+        <i class="bi bi-tag"></i>
+    </div>
+    <div class="form-grid field-data-entry-form-grid">
+        <div class="field-data-entry-label">
+            <label class="form-label" asp-for="Label">Label</label>
+            <input class="form-control" asp-for="Label" /><span asp-validation-for="Label" class="text-danger"></span>
+        </div>
+        <div class="field-data-entry-value">
+            <label class="form-label" asp-for="Value">Stored value</label>
+            <input class="form-control" asp-for="Value" inputmode="@(numeric ? "numeric" : "text")" /><span asp-validation-for="Value" class="text-danger"></span>
+            @if (Model.ValueHandling == MangosFieldValueHandling.BitwiseOr)
+            {
+                <div class="form-text">Bitwise OR entries must be one bit each: 1, 2, 4, 8, 16, …</div>
+            }
+            else if (Model.ValueHandling == MangosFieldValueHandling.Additive)
+            {
+                <div class="form-text">Selected entry values are added together.</div>
+            }
+        </div>
+        <div class="field-data-entry-order">
+            <label class="form-label" asp-for="SortOrder">Sort order</label>
+            <input class="form-control" asp-for="SortOrder" type="number" />
+        </div>
+        <div class="field-data-form-wide">
+            <label class="form-label" asp-for="Description">Description</label>
+            <textarea class="form-control" asp-for="Description" rows="3"></textarea>
+            <span asp-validation-for="Description" class="text-danger"></span>
+        </div>
+    </div>
+    <div class="form-actions sticky-actions">
+        <a class="btn btn-outline-secondary" asp-action="EditVariant" asp-route-id="@Model.VariantId" asp-route-page="@Model.Page">Cancel</a>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i> @(Model.IsCreate ? "Add entry" : "Save entry")</button>
+    </div>
+</form>
+
+@functions {
+    private static string FormatHandling(MangosFieldValueHandling handling)
+    {
+        return handling switch { MangosFieldValueHandling.BitwiseOr => "Bitwise OR", MangosFieldValueHandling.Additive => "Additive sum", _ => "Direct value" };
+    }
+}

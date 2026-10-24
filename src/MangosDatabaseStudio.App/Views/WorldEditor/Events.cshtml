@@ -1,0 +1,998 @@
+@* Present the WorldEditor Events workflow within the shared studio layout. *@
+
+@using System.Globalization
+@using MangosDatabaseStudio.Domain.World
+@model EventViewerViewModel
+@{
+    ViewData["Title"] = "Event Viewer";
+    ViewData["Section"] = Model.Database + " / " + Model.CatalogName;
+    ViewData["PageClass"] = "world-editor-page";
+    ViewData["ContentClass"] = "world-editor-content world-record-editor-content";
+
+    int[] pageSizes = new[] { 10, 20, 50, 100, 200 };
+    int firstPage = Math.Max(1, Model.Events.Page - 2);
+    int lastPage = Math.Min(Model.Events.TotalPages, Model.Events.Page + 2);
+    int memberFirstPage = Model.SelectedEvent == null ? 1 : Math.Max(1, Model.SelectedEvent.Members.Page - 2);
+    int memberLastPage = Model.SelectedEvent == null ? 1 : Math.Min(Model.SelectedEvent.Members.TotalPages, Model.SelectedEvent.Members.Page + 2);
+    bool canManageEvents = Model.CanCreateEvents || Model.CanEditEvents || Model.CanDeleteEvents || Model.CanAddMembers || Model.CanEditMembers || Model.CanRemoveMembers;
+}
+
+<div class="world-record-editor viewer-page event-viewer" data-event-viewer>
+    <header class="record-editor-commandbar">
+        <div class="record-command-identity">
+            <a class="record-back-button" asp-action="Index" asp-route-database="@Model.Database" aria-label="Back to World Editor"><i class="bi bi-arrow-left"></i></a>
+            <span class="record-command-icon"><i class="bi bi-calendar-event"></i></span>
+            <div>
+                <span class="eyebrow">Structured world data viewer</span>
+                <h2>Event Viewer</h2>
+                <p>Inspect game events and the creature or GameObject spawns linked to each event.</p>
+            </div>
+        </div>
+        <div class="record-command-actions">
+            <span class="record-change-badge"><i class="bi @(canManageEvents ? "bi-pencil-square" : "bi-shield-check")"></i> @(canManageEvents ? "Event editor" : "Read-only")</span>
+            @if (Model.IsAvailable && Model.CanCreateEvents)
+            {
+                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#eventCreateModal"><i class="bi bi-plus-lg"></i> Add event</button>
+            }
+        </div>
+    </header>
+
+    <div class="viewer-flow">
+        <section class="panel viewer-search-panel" aria-labelledby="eventDirectoryHeading">
+            <header class="panel-header viewer-search-heading">
+                <div>
+                    <span class="eyebrow">Event directory</span>
+                    <h2 id="eventDirectoryHeading">Find a game event</h2>
+                    <p>Search by event ID or event name, then open the event to review its linked world spawns.</p>
+                </div>
+                <span class="viewer-catalog-badge"><i class="bi bi-database-check"></i> @Model.CatalogName @Model.CatalogVersion</span>
+            </header>
+
+            @if (!Model.IsAvailable)
+            {
+                <div class="alert alert-warning studio-inline-alert mb-0">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <div>
+                        <strong>Event Viewer unavailable</strong>
+                        <span>The connected world database does not expose game_event.</span>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <form method="get" asp-action="Events" class="viewer-search-form">
+                    <input type="hidden" name="database" value="@Model.Database" />
+                    <input type="hidden" name="show" value="true" />
+                    <input type="hidden" name="pageSize" value="@Model.Events.PageSize" />
+                    <label class="viewer-search-field" for="eventSearch">
+                        <span>Event ID or name</span>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input id="eventSearch" type="search" name="search" class="form-control" value="@Model.Search" placeholder="Example: 2 or Darkmoon Faire" autocomplete="off" />
+                        </div>
+                        <small>Search is limited to game_event ID and description so directory lookups stay fast.</small>
+                    </label>
+                    <div class="viewer-context-card">
+                        <span class="viewer-context-icon"><i class="bi bi-link-45deg"></i></span>
+                        <div>
+                            <small>Event data sources</small>
+                            <strong>@Model.AvailableTables.Count table@(Model.AvailableTables.Count == 1 ? string.Empty : "s")</strong>
+                            <span>Creature and GameObject event-link tables are detected independently.</span>
+                        </div>
+                    </div>
+                    <div class="viewer-context-card">
+                        <span class="viewer-context-icon"><i class="bi @(canManageEvents ? "bi-pencil-square" : "bi-shield-check")"></i></span>
+                        <div>
+                            <small>Workspace access</small>
+                            <strong>@(canManageEvents ? "Event management enabled" : "Read-only viewer")</strong>
+                            <span>@(canManageEvents ? "Event definitions and spawn relationships follow your World Editor permissions." : "Event definitions and relationships can be inspected without changing world data.")</span>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary viewer-search-button"><i class="bi bi-search"></i> Search events</button>
+                </form>
+            }
+        </section>
+
+        @if (Model.IsAvailable && Model.HasSearched)
+        {
+            <section class="viewer-summary-grid" aria-label="Event viewer summary">
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-calendar-event"></i></span>
+                    <div>
+                        <small>Matching events</small>
+                        <strong>@Model.Events.TotalCount.ToString("N0")</strong>
+                        <p>@(string.IsNullOrWhiteSpace(Model.Search) ? "All game events" : "Search applied")</p>
+                    </div>
+                </article>
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-file-earmark-text"></i></span>
+                    <div>
+                        <small>Directory page</small>
+                        <strong>@Model.Events.Page / @Math.Max(Model.Events.TotalPages, 1)</strong>
+                        <p>@Model.Events.PageSize rows per page</p>
+                    </div>
+                </article>
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-bounding-box-circles"></i></span>
+                    <div>
+                        <small>Current selection</small>
+                        @if (Model.SelectedEvent == null)
+                        {
+                            <strong>None</strong>
+                            <p>Select an event below</p>
+                        }
+                        else
+                        {
+                            <strong>Event @Model.SelectedEvent.Event.Entry</strong>
+                            <p>@Model.SelectedEvent.Event.TotalMemberCount.ToString("N0") linked spawn@(Model.SelectedEvent.Event.TotalMemberCount == 1 ? string.Empty : "s")</p>
+                        }
+                    </div>
+                </article>
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi @(canManageEvents ? "bi-check2-circle" : "bi-shield-lock")"></i></span>
+                    <div>
+                        <small>Event access</small>
+                        <strong>@(canManageEvents ? "Editable" : "Read-only")</strong>
+                        <p>@Model.CatalogName @Model.CatalogVersion</p>
+                    </div>
+                </article>
+            </section>
+        }
+
+        <main class="viewer-detail-stack">
+            @if (!ViewData.ModelState.IsValid)
+            {
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+            }
+
+            @if (!Model.IsAvailable)
+            {
+                <section class="panel viewer-empty-state is-warning">
+                    <span><i class="bi bi-database-exclamation"></i></span>
+                    <h3>game_event was not found</h3>
+                    <p>The Event Viewer requires game_event. Creature and GameObject relationship tables are used when available.</p>
+                </section>
+            }
+            else if (!Model.HasSearched)
+            {
+                <section class="panel viewer-empty-state">
+                    <span><i class="bi bi-calendar-event"></i></span>
+                    <h3>Review event relationships in one workspace</h3>
+                    <p>Search the event directory to see an event's schedule and all creature or GameObject spawns attached to it.</p>
+                </section>
+            }
+            else if (Model.Events.Items.Count == 0)
+            {
+                <section class="panel viewer-empty-state">
+                    <span><i class="bi bi-search"></i></span>
+                    <h3>No matching events</h3>
+                    <p>No game_event rows match the current event ID or name search.</p>
+                </section>
+            }
+            else if (Model.SelectedEvent == null)
+            {
+                <section class="panel viewer-panel-flush viewer-results-panel">
+                    <header class="viewer-results-header">
+                        <div>
+                            <span class="eyebrow">Event search results</span>
+                            <h3>Choose a game event</h3>
+                            <p>Each row summarizes the schedule and linked creature/GameObject population before you open it.</p>
+                        </div>
+                        <div class="viewer-results-count">
+                            <strong>@Model.Events.TotalCount.ToString("N0")</strong>
+                            <span>event@(Model.Events.TotalCount == 1 ? string.Empty : "s")</span>
+                        </div>
+                    </header>
+                    <form method="get" asp-action="Events" class="world-filter-bar viewer-results-toolbar">
+                        <input type="hidden" name="database" value="@Model.Database" /><input type="hidden" name="search" value="@Model.Search" /><input type="hidden" name="show" value="true" />
+                        <span class="world-filter-hint">Page @Model.Events.Page of @Math.Max(Model.Events.TotalPages, 1)</span>
+                        <label class="world-filter-select">
+                            <span>Rows per page</span>
+                            <select name="pageSize" class="form-select" onchange="this.form.submit()">
+                                @foreach (int size in pageSizes)
+                                {
+                                    if (Model.Events.PageSize == size)
+                                    {
+                                        <option value="@size" selected>@size</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@size">@size</option>
+                                    }
+                                }
+                            </select>
+                        </label>
+                    </form>
+                    <div class="world-record-table-wrap viewer-results-table-wrap">
+                        <table class="table studio-table viewer-results-table viewer-directory-table mb-0" aria-label="Event search results">
+                            <colgroup><col class="viewer-directory-col" style="--viewer-col-width:34%" /><col class="viewer-directory-col" style="--viewer-col-width:27%" /><col class="viewer-directory-col" style="--viewer-col-width:10%" /><col class="viewer-directory-col" style="--viewer-col-width:21%" /><col class="viewer-directory-col" style="--viewer-col-width:8%" /></colgroup>
+                            <thead>
+                                <tr>
+                                    <th>Game event</th>
+                                    <th>Schedule</th>
+                                    <th class="viewer-directory-center">Linked</th>
+                                    <th class="viewer-directory-center">Composition</th>
+                                    <th class="actions-column viewer-action-column viewer-directory-center">Open</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            @foreach (EventSummary gameEvent in Model.Events.Items)
+                            {
+                                string title = string.IsNullOrWhiteSpace(gameEvent.Description) ? "Unnamed game event" : gameEvent.Description;
+                                <tr>
+                                    <td class="viewer-directory-name-cell">
+                                        <div class="viewer-directory-identity">
+                                            <span class="viewer-directory-icon"><i class="bi bi-calendar-event"></i></span>
+                                            <span><strong>@title</strong><small>Event @gameEvent.Entry</small></span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="viewer-cell-stack viewer-schedule-cell">
+                                            <strong>@(string.IsNullOrWhiteSpace(gameEvent.StartTime) ? "No start time" : gameEvent.StartTime)</strong>
+                                            <small>@(string.IsNullOrWhiteSpace(gameEvent.EndTime) ? "No end time" : "to " + gameEvent.EndTime)</small>
+                                        </div>
+                                    </td>
+                                    <td class="viewer-directory-center">
+                                        <span class="npc-vendor-item-count">@gameEvent.TotalMemberCount.ToString("N0")</span>
+                                    </td>
+                                    <td class="viewer-directory-center">
+                                        <div class="viewer-composition-chips">
+                                            @if (gameEvent.CreatureCount > 0)
+                                            {
+                                                <span><i class="bi bi-person-walking"></i> @gameEvent.CreatureCount</span>
+                                            }
+                                        @if (gameEvent.GameObjectCount > 0)
+                                        {
+                                            <span><i class="bi bi-box"></i> @gameEvent.GameObjectCount</span>
+                                        }
+                                        @if (gameEvent.NegativeLinkCount > 0)
+                                        {
+                                            <span class="is-inverse"><i class="bi bi-eye-slash"></i> @gameEvent.NegativeLinkCount inverse</span>
+                                        }
+                                        @if (gameEvent.TotalMemberCount == 0)
+                                        {
+                                            <span class="is-empty">No links</span>
+                                        }
+                                        </div>
+                                        </td>
+                                    <td class="actions-column viewer-action-column viewer-directory-center">
+                                        <a
+                                            class="icon-button"
+                                            asp-action="Events"
+                                            asp-route-database="@Model.Database"
+                                            asp-route-search="@Model.Search"
+                                            asp-route-show="true"
+                                            asp-route-page="@Model.Events.Page"
+                                            asp-route-pageSize="@Model.Events.PageSize"
+                                            asp-route-entry="@gameEvent.Entry"
+                                            title="Open event @gameEvent.Entry"
+                                            aria-label="Open event @gameEvent.Entry"><i class="bi bi-chevron-right"></i></a>
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (Model.Events.TotalPages > 1)
+                    {
+                        <nav class="pagination-shell world-pagination viewer-results-pagination" aria-label="Event result pages">
+                            <div class="pagination-status">
+                                <strong>Page @Model.Events.Page</strong>
+                                <span>of @Model.Events.TotalPages · @Model.Events.TotalCount.ToString("N0") events</span>
+                            </div>
+                            <ul class="pagination mb-0">
+                                <li class="page-item pagination-direction @(Model.Events.Page == 1 ? "disabled" : string.Empty)">
+                                    <a
+                                        class="page-link"
+                                        asp-action="Events"
+                                        asp-route-database="@Model.Database"
+                                        asp-route-search="@Model.Search"
+                                        asp-route-show="true"
+                                        asp-route-page="@(Model.Events.Page - 1)"
+                                        asp-route-pageSize="@Model.Events.PageSize"><i class="bi bi-chevron-left"></i><span>Previous</span></a>
+                                </li>
+                                @for (int pageNumber = firstPage; pageNumber <= lastPage; pageNumber++)
+                                {
+                                    <li class="page-item @(pageNumber == Model.Events.Page ? "active" : string.Empty)"><a class="page-link" asp-action="Events" asp-route-database="@Model.Database" asp-route-search="@Model.Search" asp-route-show="true" asp-route-page="@pageNumber" asp-route-pageSize="@Model.Events.PageSize">@pageNumber</a></li>
+                                }
+                                <li class="page-item pagination-direction @(Model.Events.Page == Model.Events.TotalPages ? "disabled" : string.Empty)">
+                                    <a
+                                        class="page-link"
+                                        asp-action="Events"
+                                        asp-route-database="@Model.Database"
+                                        asp-route-search="@Model.Search"
+                                        asp-route-show="true"
+                                        asp-route-page="@(Model.Events.Page + 1)"
+                                        asp-route-pageSize="@Model.Events.PageSize"><span>Next</span><i class="bi bi-chevron-right"></i></a>
+                                </li>
+                            </ul>
+                        </nav>
+                    }
+                </section>
+            }
+            else
+            {
+                EventDetail selected = Model.SelectedEvent;
+                EventSummary gameEvent = selected.Event;
+                bool hasRelationships = selected.Members.TotalCount > 0;
+                string eventTitle = string.IsNullOrWhiteSpace(gameEvent.Description) ? "Unnamed game event" : gameEvent.Description;
+                <section class="panel viewer-panel-flush viewer-workbench">
+                    <header class="viewer-record-header">
+                        <span class="viewer-record-icon"><i class="bi bi-calendar-event"></i></span>
+                        <div>
+                            <span class="eyebrow">Selected game event</span>
+                            <h2>@eventTitle</h2>
+                            <p>Event @gameEvent.Entry · @gameEvent.TotalMemberCount.ToString("N0") linked spawn@(gameEvent.TotalMemberCount == 1 ? string.Empty : "s")</p>
+                        </div>
+                        <div class="viewer-record-actions">
+                            <a
+                                class="btn btn-outline-secondary btn-sm"
+                                asp-action="Events"
+                                asp-route-database="@Model.Database"
+                                asp-route-search="@Model.Search"
+                                asp-route-show="true"
+                                asp-route-page="@Model.Events.Page"
+                                asp-route-pageSize="@Model.Events.PageSize"><i class="bi bi-arrow-left"></i> Results</a>
+                            @if (Model.CanAddMembers && Model.EditorCapabilities.MemberSources.Count > 0)
+                            {
+                                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#eventAddMemberModal"><i class="bi bi-plus-lg"></i> Add relationship</button>
+                            }
+                            @if (Model.CanEditEvents)
+                            {
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#eventEditModal"><i class="bi bi-pencil"></i> Edit event</button>
+                            }
+                            @if (Model.CanDeleteEvents)
+                            {
+                                <button
+                                    type="button"
+                                    class="btn btn-outline-danger btn-sm"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#eventDeleteModal"
+                                    disabled="@hasRelationships"
+                                    title="@(hasRelationships ? "Remove all creature and GameObject links before deleting this event." : "Delete game event")"><i class="bi bi-trash"></i> Delete event</button>
+                            }
+
+
+                            <partial name="_ViewerPendingRecordActions" />
+                        </div>
+                    </header>
+
+                    <div class="viewer-detail-metrics">
+                        <div>
+                            <small>Schedule</small>
+                            <strong>@(string.IsNullOrWhiteSpace(gameEvent.StartTime) ? "—" : gameEvent.StartTime)</strong>
+                            <span>Ends @(string.IsNullOrWhiteSpace(gameEvent.EndTime) ? "—" : gameEvent.EndTime) · Holiday @(gameEvent.Holiday?.ToString(CultureInfo.InvariantCulture) ?? "—")</span>
+                        </div>
+                        <div>
+                            <small>Occurrence</small>
+                            <strong>@(gameEvent.Occurrence?.ToString("N0", CultureInfo.InvariantCulture) ?? "—")</strong>
+                            <span>stored schedule value</span>
+                        </div>
+                        <div>
+                            <small>Length</small>
+                            <strong>@(gameEvent.Length?.ToString("N0", CultureInfo.InvariantCulture) ?? "—")</strong>
+                            <span>stored schedule value</span>
+                        </div>
+                        <div>
+                            <small>Linked spawns</small>
+                            <strong>@gameEvent.TotalMemberCount.ToString("N0")</strong>
+                            <span>@gameEvent.CreatureCount creatures · @gameEvent.GameObjectCount GameObjects</span>
+                        </div>
+                    </div>
+
+                    <div class="viewer-record-section">
+                        <header class="viewer-record-section-header">
+                            <div>
+                                <span class="eyebrow">Event relationships</span>
+                                <h3>Creature and GameObject links</h3>
+                                <p>Positive links spawn with the event; inverse links despawn while the event is active.</p>
+                            </div>
+                            <span class="badge rounded-pill">@selected.Members.TotalCount.ToString("N0") link@(selected.Members.TotalCount == 1 ? string.Empty : "s")</span>
+                        </header>
+
+                        @if (selected.Members.TotalCount == 0)
+                        {
+                            <div class="viewer-record-empty">
+                                <i class="bi bi-link-45deg"></i>
+                                <strong>No linked spawns</strong>
+                                <p>This event has no creature or GameObject relationships in the available event tables.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="viewer-record-table-wrap">
+                                <table class="table studio-table viewer-record-table viewer-workbench-table event-member-table mb-0">
+                                    <colgroup><col class="event-member-col-type" /><col class="event-member-col-spawn" /><col class="event-member-col-entity" /><col class="event-member-col-behavior" /><col class="event-member-col-map" /><col class="viewer-table-col-actions" /></colgroup>
+                                    <thead>
+                                        <tr>
+                                            <th>Type</th>
+                                            <th class="viewer-table-center">Spawn GUID</th>
+                                            <th>Resolved entry</th>
+                                            <th>Event behavior</th>
+                                            <th class="event-member-map-column">Map</th>
+                                            <th class="actions-column viewer-action-column">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    @foreach (EventMember member in selected.Members.Items)
+                                    {
+                                        string fallback = member.Source == EventMemberSources.Creature ? "Creature spawn" : "GameObject spawn";
+                                        string displayName = !string.IsNullOrWhiteSpace(member.ResolvedName) ? member.ResolvedName : (member.EntityEntry.HasValue ? fallback + " entry " + member.EntityEntry.Value.ToString(CultureInfo.InvariantCulture) : "Unresolved spawn");
+                                        EventMemberSourceCapability? memberCapability = Model.EditorCapabilities.MemberSources.FirstOrDefault(source => string.Equals(source.Source, member.Source, StringComparison.OrdinalIgnoreCase));
+                                        bool canEditMember = Model.CanEditMembers && memberCapability != null;
+                                        bool canRemoveMember = Model.CanRemoveMembers && memberCapability != null;
+                                        bool supportsNegativeMember = memberCapability?.SupportsNegativeEvent == true;
+                                        <tr>
+                                            <td>
+                                                <div class="viewer-member-type">
+                                                    <span><i class="bi @(member.Source == EventMemberSources.Creature ? "bi-person-walking" : "bi-box")"></i></span>
+                                                    <div>
+                                                        <strong>@member.SourceLabel</strong>
+                                                        <code>@member.Source</code>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="viewer-table-center">
+                                                <div class="viewer-cell-stack viewer-cell-code">
+                                                    <strong>@member.Guid.ToString(CultureInfo.InvariantCulture)</strong>
+                                                    <small>Database spawn GUID</small>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                @if (member.IsResolved && member.EntityEntry.HasValue)
+                                                {
+                                                    <div class="viewer-resolved-entity is-resolved">
+                                                        <strong>@displayName</strong>
+                                                        <small>Entry @member.EntityEntry.Value.ToString(CultureInfo.InvariantCulture)</small>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="viewer-resolved-entity is-unresolved">
+                                                        <strong>Unresolved reference</strong>
+                                                        <small>Spawn GUID @member.Guid.ToString(CultureInfo.InvariantCulture)</small>
+                                                    </div>
+                                                }
+                                            </td>
+                                            <td>
+                                                <span class="event-behavior-badge @(member.ActiveDuringEvent ? "is-active" : "is-inverse")"><i class="bi @(member.ActiveDuringEvent ? "bi-eye" : "bi-eye-slash")"></i>@(member.ActiveDuringEvent ? "Spawn during event" : "Despawn during event")</span>
+                                            </td>
+                                            <td class="event-member-map-column">@(member.MapId?.ToString(CultureInfo.InvariantCulture) ?? "—")</td>
+                                            <td class="actions-column viewer-action-column">
+                                                <div class="row-actions row-actions-compact">
+                                                @if (canEditMember)
+                                                {
+                                                    <button
+                                                        type="button"
+                                                        class="icon-button"
+                                                        data-event-edit-member-open
+                                                        data-source="@member.Source"
+                                                        data-source-label="@member.SourceLabel"
+                                                        data-guid="@member.Guid"
+                                                        data-event-value="@member.EventValue"
+                                                        data-supports-negative="@supportsNegativeMember.ToString().ToLowerInvariant()"
+                                                        data-member-name="@displayName"
+                                                        title="Edit @displayName"
+                                                        aria-label="Edit @displayName"><i class="bi bi-pencil"></i></button>
+                                                }
+                                                @if (canRemoveMember)
+                                                {
+                                                    <button
+                                                        type="button"
+                                                        class="icon-button danger"
+                                                        data-event-remove-open
+                                                        data-source="@member.Source"
+                                                        data-guid="@member.Guid"
+                                                        data-event-value="@member.EventValue"
+                                                        data-member-name="@displayName"
+                                                        title="Remove @displayName"
+                                                        aria-label="Remove @displayName"><i class="bi bi-trash"></i></button>
+                                                }
+
+                                            </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <footer class="viewer-record-footer">
+                                <div class="viewer-record-pagination-wrap">
+                                    <div class="pagination-status">
+                                        <strong>Page @selected.Members.Page</strong>
+                                        <span>of @Math.Max(selected.Members.TotalPages, 1) · @selected.Members.TotalCount.ToString("N0") links</span>
+                                    </div>
+                                    @if (selected.Members.TotalPages > 1)
+                                    {
+                                        <nav class="world-pagination viewer-record-pagination" aria-label="Event relationship pages">
+                                            <ul class="pagination mb-0">
+                                            <li class="page-item pagination-direction @(selected.Members.Page == 1 ? "disabled" : string.Empty)">
+                                                <a
+                                                    class="page-link"
+                                                    asp-action="Events"
+                                                    asp-route-database="@Model.Database"
+                                                    asp-route-search="@Model.Search"
+                                                    asp-route-show="true"
+                                                    asp-route-page="@Model.Events.Page"
+                                                    asp-route-pageSize="@Model.Events.PageSize"
+                                                    asp-route-entry="@gameEvent.Entry"
+                                                    asp-route-memberPage="@(selected.Members.Page - 1)"
+                                                    asp-route-memberPageSize="@selected.Members.PageSize"><i class="bi bi-chevron-left"></i><span>Previous</span></a>
+                                            </li>
+                                            @for (int pageNumber = memberFirstPage; pageNumber <= memberLastPage; pageNumber++)
+                                            {
+                                                <li class="page-item @(pageNumber == selected.Members.Page ? "active" : string.Empty)"><a class="page-link" asp-action="Events" asp-route-database="@Model.Database" asp-route-search="@Model.Search" asp-route-show="true" asp-route-page="@Model.Events.Page" asp-route-pageSize="@Model.Events.PageSize" asp-route-entry="@gameEvent.Entry" asp-route-memberPage="@pageNumber" asp-route-memberPageSize="@selected.Members.PageSize">@pageNumber</a></li>
+                                            }
+                                            <li class="page-item pagination-direction @(selected.Members.Page == selected.Members.TotalPages ? "disabled" : string.Empty)">
+                                                <a
+                                                    class="page-link"
+                                                    asp-action="Events"
+                                                    asp-route-database="@Model.Database"
+                                                    asp-route-search="@Model.Search"
+                                                    asp-route-show="true"
+                                                    asp-route-page="@Model.Events.Page"
+                                                    asp-route-pageSize="@Model.Events.PageSize"
+                                                    asp-route-entry="@gameEvent.Entry"
+                                                    asp-route-memberPage="@(selected.Members.Page + 1)"
+                                                    asp-route-memberPageSize="@selected.Members.PageSize"><span>Next</span><i class="bi bi-chevron-right"></i></a>
+                                            </li>
+                                        </ul>
+                                        </nav>
+                                    }
+                                </div>
+                                <form method="get" asp-action="Events" class="viewer-record-page-size">
+                                    <input type="hidden" name="database" value="@Model.Database" /><input type="hidden" name="search" value="@Model.Search" /><input type="hidden" name="show" value="true" /><input type="hidden" name="page" value="@Model.Events.Page" /><input type="hidden" name="pageSize" value="@Model.Events.PageSize" /><input type="hidden" name="entry" value="@gameEvent.Entry" /><input type="hidden" name="memberPage" value="1" />
+                                    <label class="world-filter-select">
+                                        <span>Rows per page</span>
+                                        <select name="memberPageSize" class="form-select" onchange="this.form.submit()">
+                                            @foreach (int size in pageSizes)
+                                            {
+                                                if (selected.Members.PageSize == size)
+                                                {
+                                                    <option value="@size" selected>@size</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@size">@size</option>
+                                                }
+                                            }
+                                        </select>
+                                    </label>
+                                </form>
+                            </footer>
+                        }
+                    </div>
+                </section>
+            }
+        </main>
+    </div>
+</div>
+
+@if (Model.IsAvailable && Model.CanCreateEvents)
+{
+    <div class="modal fade viewer-editor-modal" id="eventCreateModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <form method="post" asp-action="EventCreate">
+        <div class="modal-header">
+            <div>
+                <span class="eyebrow">game_event</span>
+                <h2 class="modal-title fs-5">Add game event</h2>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body viewer-editor-form-grid event-editor-form-grid">
+            <input type="hidden" name="Database" value="@Model.Database" /><input type="hidden" name="Search" value="@Model.Search" /><input type="hidden" name="Entry" value="0" /><input type="hidden" name="Page" value="@Model.Events.Page" /><input type="hidden" name="PageSize" value="@Model.Events.PageSize" /><input type="hidden" name="MemberPage" value="1" /><input type="hidden" name="MemberPageSize" value="@Model.Events.PageSize" />
+            <label>
+                <span>Event ID</span>
+                <input class="form-control" type="number" name="NewEntry" min="1" required />
+            </label>
+            @if (Model.EditorCapabilities.HasDescription)
+            {
+                <label class="viewer-editor-wide">
+                    <span>Event name / description</span>
+                    <input class="form-control" type="text" name="Description" maxlength="255" />
+                </label>
+            }
+            @if (Model.EditorCapabilities.HasStartTime)
+            {
+                <label>
+                    <span>Start time</span>
+                    <input class="form-control" type="text" name="StartTime" placeholder="YYYY-MM-DD HH:mm:ss" required />
+                </label>
+            }
+            @if (Model.EditorCapabilities.HasEndTime)
+            {
+                <label>
+                    <span>End time</span>
+                    <input class="form-control" type="text" name="EndTime" placeholder="YYYY-MM-DD HH:mm:ss" required />
+                </label>
+            }
+            @if (Model.EditorCapabilities.HasOccurrence)
+            {
+                <label>
+                    <span>Occurrence</span>
+                    <input class="form-control" type="number" name="Occurrence" min="0" value="86400" />
+                </label>
+            }
+            @if (Model.EditorCapabilities.HasLength)
+            {
+                <label>
+                    <span>Length</span>
+                    <input class="form-control" type="number" name="Length" min="0" value="43200" />
+                </label>
+            }
+            @if (Model.EditorCapabilities.HasHoliday)
+            {
+                <label>
+                    <span>Holiday ID</span>
+                    <input class="form-control" type="number" name="Holiday" min="0" value="0" />
+                </label>
+            }
+            <div class="viewer-editor-help viewer-editor-wide">
+                <i class="bi bi-info-circle"></i>
+                <span>Schedule fields are stored exactly as game_event expects. Existing MaNGOS databases commonly use timestamps plus occurrence and length values.</span>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Create event</button>
+        </div>
+    </form>
+    </div>
+    </div>
+    </div>
+}
+
+@if (Model.SelectedEvent != null)
+{
+    EventSummary selectedEvent = Model.SelectedEvent.Event;
+    @if (Model.CanEditEvents)
+    {
+        <div class="modal fade viewer-editor-modal" id="eventEditModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content">
+                    <form method="post" asp-action="EventEdit">
+            <div class="modal-header">
+                <div>
+                    <span class="eyebrow">Event @selectedEvent.Entry</span>
+                    <h2 class="modal-title fs-5">Edit game event</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body viewer-editor-form-grid event-editor-form-grid">
+                <input type="hidden" name="Database" value="@Model.Database" /><input type="hidden" name="Search" value="@Model.Search" /><input type="hidden" name="Entry" value="@selectedEvent.Entry" /><input type="hidden" name="Page" value="@Model.Events.Page" /><input type="hidden" name="PageSize" value="@Model.Events.PageSize" /><input type="hidden" name="MemberPage" value="@Model.SelectedEvent.Members.Page" /><input type="hidden" name="MemberPageSize" value="@Model.SelectedEvent.Members.PageSize" />
+                @if (Model.EditorCapabilities.HasDescription)
+                {
+                    <label class="viewer-editor-wide">
+                        <span>Event name / description</span>
+                        <input class="form-control" type="text" name="Description" value="@selectedEvent.Description" maxlength="255" />
+                    </label>
+                }
+                @if (Model.EditorCapabilities.HasStartTime)
+                {
+                    <label>
+                        <span>Start time</span>
+                        <input class="form-control" type="text" name="StartTime" value="@selectedEvent.StartTime" required />
+                    </label>
+                }
+                @if (Model.EditorCapabilities.HasEndTime)
+                {
+                    <label>
+                        <span>End time</span>
+                        <input class="form-control" type="text" name="EndTime" value="@selectedEvent.EndTime" required />
+                    </label>
+                }
+                @if (Model.EditorCapabilities.HasOccurrence)
+                {
+                    <label>
+                        <span>Occurrence</span>
+                        <input class="form-control" type="number" name="Occurrence" min="0" value="@(selectedEvent.Occurrence?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)" />
+                    </label>
+                }
+                @if (Model.EditorCapabilities.HasLength)
+                {
+                    <label>
+                        <span>Length</span>
+                        <input class="form-control" type="number" name="Length" min="0" value="@(selectedEvent.Length?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)" />
+                    </label>
+                }
+                @if (Model.EditorCapabilities.HasHoliday)
+                {
+                    <label>
+                        <span>Holiday ID</span>
+                        <input class="form-control" type="number" name="Holiday" min="0" value="@(selectedEvent.Holiday?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)" />
+                    </label>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check2"></i> Save event changes</button>
+            </div>
+        </form>
+        </div>
+        </div>
+        </div>
+    }
+
+    @if (Model.CanAddMembers && Model.EditorCapabilities.MemberSources.Count > 0)
+    {
+        <div class="modal fade viewer-editor-modal" id="eventAddMemberModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <form method="post" asp-action="EventAddMember">
+            <div class="modal-header">
+                <div>
+                    <span class="eyebrow">Event @selectedEvent.Entry</span>
+                    <h2 class="modal-title fs-5">Add event relationship</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body viewer-editor-form-grid">
+                <input type="hidden" name="Database" value="@Model.Database" /><input type="hidden" name="Search" value="@Model.Search" /><input type="hidden" name="Entry" value="@selectedEvent.Entry" /><input type="hidden" name="Page" value="@Model.Events.Page" /><input type="hidden" name="PageSize" value="@Model.Events.PageSize" /><input type="hidden" name="MemberPage" value="@Model.SelectedEvent.Members.Page" /><input type="hidden" name="MemberPageSize" value="@Model.SelectedEvent.Members.PageSize" />
+                <label class="viewer-editor-wide">
+                    <span>Relationship type</span>
+                    <select class="form-select" name="Source" required data-event-source-select>
+                        @foreach (EventMemberSourceCapability source in Model.EditorCapabilities.MemberSources)
+                        {
+                            <option value="@source.Source" data-member-label="@source.MemberLabel" data-supports-negative="@source.SupportsNegativeEvent.ToString().ToLowerInvariant()">@source.Label — @source.Source</option>
+                        }
+                    </select>
+                </label>
+                <label>
+                    <span data-event-guid-label>Spawn GUID</span>
+                    <input class="form-control" type="number" name="Guid" min="1" required />
+                </label>
+                <label>
+                    <span>Event behavior</span>
+                    <select class="form-select" name="EventValue" data-event-behavior-select><option value="1">Spawn during event</option><option value="-1" data-event-negative-option>Despawn during event</option></select>
+                </label>
+                <div class="viewer-editor-help viewer-editor-wide">
+                    <i class="bi bi-info-circle"></i>
+                    <span>The event field is signed: positive spawns the object at event start; negative despawns it at event start and restores it at event end.</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add relationship</button>
+            </div>
+        </form>
+        </div>
+        </div>
+        </div>
+    }
+
+    @if (Model.CanEditMembers)
+    {
+        <div class="modal fade viewer-editor-modal" id="eventEditMemberModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <form method="post" asp-action="EventEditMember">
+            <div class="modal-header">
+                <div>
+                    <span class="eyebrow">Event relationship</span>
+                    <h2 class="modal-title fs-5">Edit linked spawn</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body viewer-editor-form-grid">
+                <input type="hidden" name="Database" value="@Model.Database" /><input type="hidden" name="Search" value="@Model.Search" /><input type="hidden" name="Entry" value="@selectedEvent.Entry" /><input type="hidden" name="Page" value="@Model.Events.Page" /><input type="hidden" name="PageSize" value="@Model.Events.PageSize" /><input type="hidden" name="MemberPage" value="@Model.SelectedEvent.Members.Page" /><input type="hidden" name="MemberPageSize" value="@Model.SelectedEvent.Members.PageSize" /><input type="hidden" name="Source" data-event-edit-source /><input type="hidden" name="OriginalGuid" data-event-edit-original-guid /><input type="hidden" name="OriginalEventValue" data-event-edit-original-event />
+                <div class="viewer-edit-member-context viewer-editor-wide">
+                    <span><i class="bi bi-link-45deg"></i></span>
+                    <div>
+                        <small>Relationship source</small>
+                        <strong data-event-edit-source-label>Event link</strong>
+                        <code data-event-edit-source-code></code>
+                    </div>
+                </div>
+                <label>
+                    <span>Spawn GUID</span>
+                    <input class="form-control" type="number" name="Guid" min="1" required data-event-edit-guid />
+                </label>
+                <label>
+                    <span>Event behavior</span>
+                    <select class="form-select" name="EventValue" data-event-edit-behavior><option value="1">Spawn during event</option><option value="-1" data-event-edit-negative-option>Despawn during event</option></select>
+                </label>
+                <div class="viewer-editor-help viewer-editor-wide">
+                    <i class="bi bi-info-circle"></i>
+                    <span>The relationship remains in the same event table. Change the spawn GUID or invert its behavior here.</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check2"></i> Save relationship changes</button>
+            </div>
+        </form>
+        </div>
+        </div>
+        </div>
+    }
+
+    @if (Model.CanDeleteEvents)
+    {
+        <div class="modal fade viewer-editor-modal" id="eventDeleteModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <form method="post" asp-action="EventDelete">
+            <div class="modal-header">
+                <div>
+                    <span class="eyebrow">Destructive action</span>
+                    <h2 class="modal-title fs-5">Delete event @selectedEvent.Entry?</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="Database" value="@Model.Database" /><input type="hidden" name="Search" value="@Model.Search" /><input type="hidden" name="Entry" value="@selectedEvent.Entry" /><input type="hidden" name="Page" value="@Model.Events.Page" /><input type="hidden" name="PageSize" value="@Model.Events.PageSize" /><input type="hidden" name="MemberPage" value="@Model.SelectedEvent.Members.Page" /><input type="hidden" name="MemberPageSize" value="@Model.SelectedEvent.Members.PageSize" />
+                <div class="alert alert-warning studio-inline-alert mb-0">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <div>
+                        <strong>Event must have no linked spawns</strong>
+                        <span>Remove all game_event_creature and game_event_gameobject relationships first. Event Viewer will not cascade-delete world relationships.</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-danger"><i class="bi bi-trash"></i> Delete event</button>
+            </div>
+        </form>
+        </div>
+        </div>
+        </div>
+    }
+
+    @if (Model.CanRemoveMembers)
+    {
+        <div class="modal fade viewer-editor-modal" id="eventRemoveMemberModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <form method="post" asp-action="EventRemoveMember">
+            <div class="modal-header">
+                <div>
+                    <span class="eyebrow">Event relationship</span>
+                    <h2 class="modal-title fs-5">Remove linked spawn?</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="Database" value="@Model.Database" /><input type="hidden" name="Search" value="@Model.Search" /><input type="hidden" name="Entry" value="@selectedEvent.Entry" /><input type="hidden" name="Page" value="@Model.Events.Page" /><input type="hidden" name="PageSize" value="@Model.Events.PageSize" /><input type="hidden" name="MemberPage" value="@Model.SelectedEvent.Members.Page" /><input type="hidden" name="MemberPageSize" value="@Model.SelectedEvent.Members.PageSize" /><input type="hidden" name="Source" data-event-remove-source /><input type="hidden" name="Guid" data-event-remove-guid /><input type="hidden" name="EventValue" data-event-remove-event />
+                <div class="viewer-remove-confirmation">
+                    <span><i class="bi bi-link-45deg"></i></span>
+                    <div>
+                        <small>Relationship to remove</small>
+                        <strong data-event-remove-name>Selected spawn</strong>
+                        <p>This deletes only the event-link row. The underlying creature or GameObject spawn remains in world data.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-danger"><i class="bi bi-x-lg"></i> Remove relationship</button>
+            </div>
+        </form>
+        </div>
+        </div>
+        </div>
+    }
+}
+
+@section Scripts {
+<script>
+(() => {
+    const root = document.querySelector('[data-event-viewer]');
+    if (!root)
+    {
+        return;
+    }
+
+    const sourceSelect = document.querySelector('[data-event-source-select]');
+    const guidLabel = document.querySelector('[data-event-guid-label]');
+    const behaviorSelect = document.querySelector('[data-event-behavior-select]');
+    const negativeOption = document.querySelector('[data-event-negative-option]');
+    const syncAddSource = () => {
+        if (!sourceSelect)
+        {
+            return;
+        }
+        const option = sourceSelect.selectedOptions[0];
+        if (!option)
+        {
+            return;
+        }
+        if (guidLabel)
+        {
+            guidLabel.textContent = option.dataset.memberLabel || 'Spawn GUID';
+        }
+        const supportsNegative = option.dataset.supportsNegative === 'true';
+        if (negativeOption)
+        {
+            negativeOption.disabled = !supportsNegative;
+        }
+        if (!supportsNegative && behaviorSelect && behaviorSelect.value === '-1')
+        {
+            behaviorSelect.value = '1';
+        }
+    };
+    sourceSelect?.addEventListener('change', syncAddSource);
+    syncAddSource();
+
+    const editElement = document.getElementById('eventEditMemberModal');
+    const editModal = editElement && window.bootstrap ? bootstrap.Modal.getOrCreateInstance(editElement) : null;
+    document.querySelectorAll('[data-event-edit-member-open]').forEach(button => {
+        button.addEventListener('click', () => {
+            const source = document.querySelector('[data-event-edit-source]');
+            const originalGuid = document.querySelector('[data-event-edit-original-guid]');
+            const originalEvent = document.querySelector('[data-event-edit-original-event]');
+            const guid = document.querySelector('[data-event-edit-guid]');
+            const behavior = document.querySelector('[data-event-edit-behavior]');
+            const negativeEditOption = document.querySelector('[data-event-edit-negative-option]');
+            const label = document.querySelector('[data-event-edit-source-label]');
+            const code = document.querySelector('[data-event-edit-source-code]');
+            if (source)
+            {
+                source.value = button.dataset.source || '';
+            }
+            if (originalGuid)
+            {
+                originalGuid.value = button.dataset.guid || '';
+            }
+            if (originalEvent)
+            {
+                originalEvent.value = button.dataset.eventValue || '';
+            }
+            if (guid)
+            {
+                guid.value = button.dataset.guid || '';
+            }
+            const supportsNegative = button.dataset.supportsNegative === 'true';
+            if (negativeEditOption)
+            {
+                negativeEditOption.disabled = !supportsNegative;
+            }
+            if (behavior)
+            {
+                behavior.value = supportsNegative && Number(button.dataset.eventValue || '1') < 0 ? '-1' : '1';
+            }
+            if (label)
+            {
+                label.textContent = button.dataset.sourceLabel || 'Event link';
+            }
+            if (code)
+            {
+                code.textContent = button.dataset.source || '';
+            }
+            editModal?.show();
+        });
+    });
+
+    const removeElement = document.getElementById('eventRemoveMemberModal');
+    const removeModal = removeElement && window.bootstrap ? bootstrap.Modal.getOrCreateInstance(removeElement) : null;
+    document.querySelectorAll('[data-event-remove-open]').forEach(button => {
+        button.addEventListener('click', () => {
+            const source = document.querySelector('[data-event-remove-source]');
+            const guid = document.querySelector('[data-event-remove-guid]');
+            const eventValue = document.querySelector('[data-event-remove-event]');
+            const name = document.querySelector('[data-event-remove-name]');
+            if (source)
+            {
+                source.value = button.dataset.source || '';
+            }
+            if (guid)
+            {
+                guid.value = button.dataset.guid || '';
+            }
+            if (eventValue)
+            {
+                eventValue.value = button.dataset.eventValue || '';
+            }
+            if (name)
+            {
+                name.textContent = button.dataset.memberName || 'Selected spawn';
+            }
+            removeModal?.show();
+        });
+    });
+})();
+</script>
+}

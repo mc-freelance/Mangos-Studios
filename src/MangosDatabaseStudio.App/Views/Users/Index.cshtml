@@ -1,0 +1,102 @@
+@* Present the Users workspace and its available actions. *@
+
+@model UsersIndexViewModel
+@{
+    ViewData["Title"] = "Users";
+    ViewData["Section"] = "System / Access Control";
+}
+<div class="page-actions">
+    <div>
+        <p class="page-lead">Manage application accounts and assign the role each person receives.</p>
+    </div>
+    <div class="page-action-group">
+        @if (Model.CanManageRoles)
+        {
+            <a class="btn btn-outline-primary" asp-controller="Roles" asp-action="Index"><i class="bi bi-shield-lock"></i> Roles &amp; permissions</a>
+        }
+        @if (Model.CanCreate)
+        {
+            <a class="btn btn-primary" asp-action="Create"><i class="bi bi-person-plus"></i> Add user</a>
+        }
+    </div>
+</div>
+
+<div class="panel mb-4">
+    <div class="section-heading">
+        <div>
+            <span class="eyebrow">Role assignments</span>
+            <h2>Application roles</h2>
+        </div>
+        <i class="bi bi-shield-lock"></i>
+    </div>
+    <div class="role-grid">
+        @foreach (string role in AppRoles.All)
+        {
+            <div class="role-card">
+                <span class="role-badge role-@role.ToLowerInvariant()">@AppRoles.GetDisplayName(role)</span>
+                <p>@AppRoles.GetDescription(role)</p>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="data-table-wrap">
+    <table class="studio-table responsive-table users-table">
+        <thead>
+            <tr>
+                <th>Username</th>
+                <th>Role</th>
+                <th>Created</th>
+                <th>Last updated</th>
+                <th class="actions-column">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (ApplicationUser user in Model.Users)
+        {
+            bool current = Model.CurrentUserId == user.Id;
+            bool manageable = Model.ManageableUserIds.Contains(user.Id);
+            bool canEditUser = Model.CanEdit && manageable;
+            bool canDeleteUser = Model.CanDelete && manageable && !current;
+            <tr>
+                <td data-label="Username">
+                    <strong>@user.Username</strong>
+                    @if (current)
+                    {
+                        <span class="badge text-bg-primary ms-2">You</span>
+                    }
+                </td>
+                <td data-label="Role">
+                    <span class="role-badge role-@user.Role.ToLowerInvariant()">@AppRoles.GetDisplayName(user.Role)</span>
+                </td>
+                <td data-label="Created">@user.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                <td data-label="Last updated">@user.UpdatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                <td data-label="Actions" class="actions-column">
+                    <div class="row-actions row-actions-compact">
+                        @if (canEditUser)
+                        {
+                            <a
+                                class="icon-button"
+                                title="Edit user"
+                                aria-label="Edit @user.Username"
+                                asp-action="Edit"
+                                asp-route-id="@user.Id"><i class="bi bi-pencil" aria-hidden="true"></i></a>
+                        }
+                        @if (canDeleteUser)
+                        {
+                            <form asp-action="Delete" method="post" data-confirm="Delete the user account '@user.Username'?">
+                                <input type="hidden" name="id" value="@user.Id" />
+                                <button class="icon-button danger" title="Delete user" aria-label="Delete @user.Username" type="submit"><i class="bi bi-trash" aria-hidden="true"></i></button>
+                            </form>
+                        }
+                        @if (!canEditUser && !canDeleteUser)
+                        {
+                            <span class="read-only-pill"><i class="bi bi-lock"></i> Protected</span>
+                        }
+                    </div>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div>

@@ -1,0 +1,78 @@
+@* Present the DatabaseAdmin IndexEditor workflow within the shared studio layout. *@
+
+@model SchemaIndexEditorViewModel
+@{
+    ViewData["Title"] = "Add index";
+    ViewData["Section"] = "Database Administration / " + Model.Database + " / " + Model.Table;
+}
+
+<div class="page-actions schema-editor-page-heading">
+    <div>
+        <span class="eyebrow">Restricted schema editor</span>
+        <h1>Add table index</h1>
+        <p class="page-lead">Create a primary, unique, full-text, or standard index after reviewing the generated SQL.</p>
+    </div>
+    <a class="btn btn-outline-secondary" asp-action="Structure" asp-route-database="@Model.Database" asp-route-table="@Model.Table"><i class="bi bi-arrow-left"></i> Back to structure</a>
+</div>
+
+<section class="panel schema-editor-form-panel">
+    <form method="post" asp-action="PreviewIndex" class="schema-editor-form">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="Database" />
+        <input type="hidden" asp-for="Table" />
+        <div asp-validation-summary="All" class="alert alert-danger schema-validation-summary"></div>
+
+        <div class="schema-form-grid two-column">
+            <div class="form-group">
+                <label asp-for="Kind">Index type</label>
+                <select asp-for="Kind" class="form-select">
+                    <option value="INDEX">Standard index</option>
+                    <option value="UNIQUE">Unique index</option>
+                    <option value="FULLTEXT">Full-text index</option>
+                    <option value="PRIMARY">Primary key</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label asp-for="Name">Index name</label>
+                <input asp-for="Name" class="form-control" autocomplete="off" />
+                <small>Not used for a primary key.</small>
+            </div>
+        </div>
+
+        <div class="schema-column-picker">
+            <div class="schema-picker-heading">
+                <strong>Index columns</strong>
+                <span>Order follows the table column order.</span>
+            </div>
+            <div class="schema-picker-grid">
+                @foreach (var column in Model.TableMetadata.Columns)
+                {
+                    bool selected = Model.Columns.Contains(column.Name, StringComparer.OrdinalIgnoreCase);
+                    <label class="schema-check-option compact">
+                        @if (selected)
+                        {
+                            <input type="checkbox" name="Columns" value="@column.Name" checked />
+                        }
+                        else
+                        {
+                            <input type="checkbox" name="Columns" value="@column.Name" />
+                        }
+                        <span><strong>@column.Name</strong><small>@column.ColumnType</small></span>
+                    </label>
+                }
+            </div>
+        </div>
+
+        <div class="schema-editor-safety-note">
+            <i class="bi bi-shield-check"></i>
+            <div>
+                <strong>Server validated</strong>
+                <p>Column names and existing keys are checked against the current live table before the SQL preview is generated.</p>
+            </div>
+        </div>
+        <div class="form-actions">
+            <a class="btn btn-outline-secondary" asp-action="Structure" asp-route-database="@Model.Database" asp-route-table="@Model.Table">Cancel</a>
+            <button class="btn btn-primary" type="submit"><i class="bi bi-code-square"></i> Review SQL</button>
+        </div>
+    </form>
+</section>

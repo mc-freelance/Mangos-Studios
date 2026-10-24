@@ -1,0 +1,199 @@
+@* Present the Home workspace and its available actions. *@
+
+@model DashboardViewModel
+@{
+    ViewData["Title"] = "Dashboard";
+    ViewData["Section"] = "Overview";
+    long totalRows = Model.DefaultDatabaseTables.Sum(table => table.ApproximateRows);
+    long totalBytes = Model.DefaultDatabaseTables.Sum(table => table.DataLength + table.IndexLength);
+}
+@if (Model.ActiveConnection == null)
+{
+    <div class="empty-state">
+        <i class="bi bi-plug"></i>
+        <h2>Connect a MySQL or MariaDB server</h2>
+        @if (Model.CanViewConnections)
+        {
+            <p>Select a configured connection to start browsing the areas available to your role.</p>
+            <a class="btn btn-primary" asp-controller="Connections" asp-action="Index">Open connections</a>
+        }
+        else
+        {
+            <p>Your role cannot select a database connection. Ask an administrator to review your RBAC permissions.</p>
+        }
+    </div>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(Model.Error))
+    {
+        <div class="alert alert-danger studio-inline-alert">
+            <i class="bi bi-exclamation-octagon-fill"></i>
+            <div>
+                <strong>Connection unavailable</strong>
+                <span>@Model.Error</span>
+            </div>
+        </div>
+    }
+
+    @if (Model.CanBrowseWorld || Model.CanBrowseDatabases)
+    {
+        <div class="metric-grid">
+            <div class="metric-card">
+                <div class="metric-icon">
+                    <i class="bi bi-database"></i>
+                </div>
+                <div>
+                    <small>Visible databases</small>
+                    <strong>@Model.Databases.Count</strong>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-icon">
+                    <i class="bi bi-table"></i>
+                </div>
+                <div>
+                    <small>@Model.ActiveConnection.DefaultDatabase tables</small>
+                    <strong>@Model.DefaultDatabaseTables.Count</strong>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-icon">
+                    <i class="bi bi-list-ol"></i>
+                </div>
+                <div>
+                    <small>Approximate rows</small>
+                    <strong>@totalRows.ToString("N0")</strong>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-icon">
+                    <i class="bi bi-device-ssd"></i>
+                </div>
+                <div>
+                    <small>World database size</small>
+                    <strong>@FormatBytes(totalBytes)</strong>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="dashboard-grid">
+        @if (Model.CanBrowseWorld)
+        {
+            <section class="panel dashboard-world-panel">
+                <div class="panel-header">
+                    <div>
+                        <span class="eyebrow">World content</span>
+                        <h2>@Model.ActiveConnection.DefaultDatabase editor</h2>
+                    </div>
+                    <i class="bi bi-globe2"></i>
+                </div>
+                <p>Browse game-oriented table groups and use the record actions allowed by your role.</p>
+                <a class="btn dashboard-world-button" asp-controller="WorldEditor" asp-action="Index" asp-route-database="@Model.ActiveConnection.DefaultDatabase"><i class="bi bi-arrow-up-right-square"></i> Open world editor</a>
+            </section>
+        }
+        @if (Model.CanBrowseDatabases)
+        {
+            <section class="panel">
+                <div class="panel-header">
+                    <div>
+                        <span class="eyebrow">Administration</span>
+                        <h2>Database server</h2>
+                    </div>
+                    <i class="bi bi-server"></i>
+                </div>
+                <p>Inspect visible databases, table engines, storage usage, structures, and primary keys.</p>
+                <a class="btn btn-outline-primary" asp-controller="DatabaseAdmin" asp-action="Index">Browse databases</a>
+            </section>
+        }
+        @if (Model.CanUseSqlConsole || Model.CanUseSqlImport || Model.CanUseSqlExport)
+        {
+            <section class="panel">
+                <div class="panel-header">
+                    <div>
+                        <span class="eyebrow">SQL tools</span>
+                        <h2>Console, imports, and exports</h2>
+                    </div>
+                    <i class="bi bi-terminal"></i>
+                </div>
+                <p>Use the SQL tools currently granted to your role.</p>
+                <div class="d-flex gap-2">
+                    @if (Model.CanUseSqlConsole)
+                    {
+                        <a class="btn btn-outline-primary" asp-controller="SqlConsole" asp-action="Index">SQL console</a>
+                    }
+                    @if (Model.CanUseSqlImport)
+                    {
+                        <a class="btn btn-outline-secondary" asp-controller="Import" asp-action="Index">Import file</a>
+                    }
+                    @if (Model.CanUseSqlExport)
+                    {
+                        <a class="btn btn-outline-secondary" asp-controller="Export" asp-action="Index">Export data</a>
+                    }
+                </div>
+            </section>
+        }
+        @if (!Model.CanBrowseWorld && !Model.CanBrowseDatabases && !Model.CanUseSqlConsole && !Model.CanUseSqlImport && !Model.CanUseSqlExport)
+        {
+            <section class="panel">
+                <div class="panel-header">
+                    <div>
+                        <span class="eyebrow">Restricted role</span>
+                        <h2>No database tools assigned</h2>
+                    </div>
+                    <i class="bi bi-shield-lock"></i>
+                </div>
+                <p>Your account is signed in, but its role currently has no World Editor or database-tool permissions.</p>
+            </section>
+        }
+    </div>
+
+    @if (Model.CanViewConnections)
+    {
+        <section class="panel mt-4">
+            <div class="panel-header">
+                <div>
+                    <span class="eyebrow">Current server</span>
+                    <h2>@Model.ActiveConnection.Name</h2>
+                </div>
+                <div class="panel-header-actions">
+                    <span class="badge text-bg-success"><i class="bi bi-exclamation-octagon-fill"></i> Connected profile</span>
+                    @if (Model.CanSelectConnections)
+                    {
+                        <form asp-controller="Connections" asp-action="Disconnect" asp-route-returnTo="dashboard" method="post">
+                            <button class="btn btn-outline-danger btn-sm" type="submit"><i class="bi bi-plug"></i> Disconnect</button>
+                        </form>
+                    }
+                </div>
+            </div>
+            <dl class="detail-grid">
+                <div>
+                    <dt>Host</dt>
+                    <dd>@Model.ActiveConnection.Host:@Model.ActiveConnection.Port</dd>
+                </div>
+                <div>
+                    <dt>Default database</dt>
+                    <dd>@Model.ActiveConnection.DefaultDatabase</dd>
+                </div>
+                <div>
+                    <dt>Username</dt>
+                    <dd>@Model.ActiveConnection.Username</dd>
+                </div>
+                <div>
+                    <dt>SSL mode</dt>
+                    <dd>@Model.ActiveConnection.SslMode</dd>
+                </div>
+            </dl>
+        </section>
+    }
+}
+@functions {
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes >= 1024L * 1024L * 1024L) return (bytes / (1024d * 1024d * 1024d)).ToString("0.##") + " GB";
+        if (bytes >= 1024L * 1024L) return (bytes / (1024d * 1024d)).ToString("0.##") + " MB";
+        if (bytes >= 1024L) return (bytes / 1024d).ToString("0.##") + " KB";
+        return bytes + " B";
+    }
+}

@@ -1,0 +1,42 @@
+@* Present the Roles workspace and its available actions. *@
+
+@model RolePermissionsIndexViewModel
+@{
+    ViewData["Title"] = "Roles & Permissions";
+    ViewData["Section"] = "System / Access Control";
+}
+<div class="page-actions">
+    <div>
+        <p class="page-lead">Configure the permissions granted to each application role. Changes apply to users on their next request.</p>
+    </div>
+    <a class="btn btn-outline-secondary" asp-controller="Users" asp-action="Index"><i class="bi bi-people"></i> Users</a>
+</div>
+
+<div class="alert alert-info studio-inline-alert rbac-notice">
+    <i class="bi bi-info-circle-fill"></i>
+    <div>
+        <strong>Protected access rules</strong>
+        <span>The Administrator role always keeps full access. Connection credentials and role management remain administrator-only.</span>
+    </div>
+</div>
+
+<div class="rbac-role-grid">
+    @foreach (RolePermissionSummaryViewModel role in Model.Roles)
+    {
+        <article class="panel rbac-role-card">
+            <div class="rbac-role-card-header">
+                <span class="role-badge role-@role.Role.ToLowerInvariant()">@role.DisplayName</span>
+                @if (role.IsAdministrator)
+                {
+                    <span class="badge text-bg-primary"><i class="bi bi-lock-fill"></i> Full access</span>
+                }
+            </div>
+            <p>@role.Description</p>
+            <div class="rbac-role-count">
+                <strong>@role.GrantedPermissionCount</strong>
+                <span>of @role.TotalPermissionCount @(role.IsAdministrator ? "permissions" : "configurable permissions") granted</span>
+            </div>
+            <a class="btn btn-outline-primary w-100" asp-action="Edit" asp-route-role="@role.Role"><i class="bi bi-sliders"></i> Configure permissions</a>
+        </article>
+    }
+</div>

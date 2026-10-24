@@ -1,0 +1,869 @@
+@* Present the WorldEditor NpcTrainers workflow within the shared studio layout. *@
+
+@model NpcTrainerViewModel
+@{
+    ViewData["Title"] = "Trainer Viewer";
+    ViewData["Section"] = Model.Database + " / " + Model.CatalogName;
+    ViewData["PageClass"] = "world-editor-page";
+    ViewData["ContentClass"] = "world-editor-content world-record-editor-content";
+    int[] pageSizes = new[] { 10, 20, 50, 100, 200 };
+    int firstPage = Math.Max(1, Model.Trainers.Page - 2);
+    int lastPage = Math.Min(Model.Trainers.TotalPages, Model.Trainers.Page + 2);
+    int spellFirstPage = Model.SelectedTrainer == null
+        ? 1
+        : Math.Max(1, Model.SelectedTrainer.Spells.Page - 2);
+    int spellLastPage = Model.SelectedTrainer == null
+        ? 1
+        : Math.Min(Model.SelectedTrainer.Spells.TotalPages, Model.SelectedTrainer.Spells.Page + 2);
+    bool canManage = Model.CanAddTrainerSpells || Model.CanEditTrainerSpells || Model.CanDeleteTrainerSpells;
+    string spellLookupUrl = Model.HasSpellTemplate ? (Url.Action("NpcTrainerSpells", "WorldEditor") ?? string.Empty) : string.Empty;
+    var caps = Model.EditorCapabilities;
+}
+
+<div class="world-record-editor viewer-page npc-trainer-viewer"
+     data-npc-trainer-spell-search-url="@spellLookupUrl"
+     data-npc-trainer-database="@Model.Database">
+    <header class="record-editor-commandbar">
+        <div class="record-command-identity">
+            <a class="record-back-button" asp-action="Index" asp-route-database="@Model.Database" aria-label="Back to World Editor">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <span class="record-command-icon"><i class="bi bi-mortarboard"></i></span>
+            <div>
+                <span class="eyebrow">Structured world data viewer</span>
+                <h2>Trainer Viewer</h2>
+                <p>Browse trainer NPCs and the spells they teach.</p>
+            </div>
+        </div>
+        <div class="record-command-actions">
+            <span class="record-change-badge">
+                <i class="bi @(canManage ? "bi-pencil-square" : "bi-shield-check")"></i>
+                @(canManage ? "Spell editor" : "Read-only")
+            </span>
+        </div>
+    </header>
+
+    <div class="viewer-flow">
+        <section class="panel viewer-search-panel" aria-labelledby="trainerDirectoryHeading">
+            <header class="panel-header viewer-search-heading">
+                <div>
+                    <span class="eyebrow">Trainer directory</span>
+                    <h2 id="trainerDirectoryHeading">Find an NPC trainer</h2>
+                    <p>Search the world catalog by NPC name or entry, then open a trainer to inspect direct and inherited spell relationships.</p>
+                </div>
+                <span class="viewer-catalog-badge"><i class="bi bi-database-check"></i> @Model.CatalogName @Model.CatalogVersion</span>
+            </header>
+
+            @if (!Model.IsAvailable)
+            {
+                <div class="alert alert-warning studio-inline-alert mb-0">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <div>
+                        <strong>Trainer viewer unavailable</strong>
+                        <span>The connected database is missing creature_template or npc_trainer.</span>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <form method="get" asp-action="NpcTrainers" class="viewer-search-form">
+                    <input type="hidden" name="database" value="@Model.Database" />
+                    <input type="hidden" name="show" value="true" />
+                    <input type="hidden" name="pageSize" value="@Model.Trainers.PageSize" />
+
+                    <label class="viewer-search-field" for="trainerSearch">
+                        <span>NPC name or entry</span>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input id="trainerSearch" type="search" name="search" class="form-control" value="@Model.Search" placeholder="Example: Alchemist or 5499" autocomplete="off" />
+                        </div>
+                        <small>Leave the search empty to browse every trainer in the current catalog.</small>
+                    </label>
+
+                    <div class="viewer-context-card">
+                        <span class="viewer-context-icon"><i class="bi bi-bezier2"></i></span>
+                        <div>
+                            <small>Trainer flag mask</small>
+                            <strong><code>@Model.TrainerFlagMaskDisplay</code></strong>
+                            <span>NPC flag used to identify trainer-capable creatures.</span>
+                        </div>
+                    </div>
+
+                    <div class="viewer-context-card">
+                        <span class="viewer-context-icon"><i class="bi @(canManage ? "bi-pencil-square" : "bi-shield-check")"></i></span>
+                        <div>
+                            <small>Workspace access</small>
+                            <strong>@(canManage ? "Spell editor" : "Read-only viewer")</strong>
+                            <span>@(canManage ? "Direct trainer spells can be managed from the selected NPC workbench." : "Trainer spell data can be inspected without changing world records.")</span>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary viewer-search-button">
+                        <i class="bi bi-search"></i>
+                        Search trainers
+                    </button>
+                </form>
+            }
+        </section>
+
+        @if (Model.IsAvailable && Model.HasSearched)
+        {
+            <section class="viewer-summary-grid" aria-label="Trainer viewer summary">
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-people"></i></span>
+                    <div>
+                        <small>Matching trainers</small>
+                        <strong>@Model.Trainers.TotalCount.ToString("N0")</strong>
+                        <p>@(string.IsNullOrWhiteSpace(Model.Search) ? "All trainer NPCs" : "Filtered directory")</p>
+                    </div>
+                </article>
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-file-earmark-text"></i></span>
+                    <div>
+                        <small>Directory page</small>
+                        <strong>@Model.Trainers.Page / @Math.Max(Model.Trainers.TotalPages, 1)</strong>
+                        <p>@Model.Trainers.PageSize rows per page</p>
+                    </div>
+                </article>
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-person-vcard"></i></span>
+                    <div>
+                        <small>Current selection</small>
+                        @if (Model.SelectedTrainer == null)
+                        {
+                            <strong>None</strong>
+                            <p>Select a trainer below</p>
+                        }
+                        else
+                        {
+                            <strong>Entry @Model.SelectedTrainer.Trainer.Entry</strong>
+                            <p>@Model.SelectedTrainer.Spells.TotalCount.ToString("N0") linked spell@(Model.SelectedTrainer.Spells.TotalCount == 1 ? string.Empty : "s")</p>
+                        }
+                    </div>
+                </article>
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi @(canManage ? "bi-check2-circle" : "bi-shield-lock")"></i></span>
+                    <div>
+                        <small>Trainer access</small>
+                        <strong>@(canManage ? "Editable" : "Read-only")</strong>
+                        <p>@Model.CatalogName @Model.CatalogVersion</p>
+                    </div>
+                </article>
+            </section>
+        }
+
+        <main class="viewer-detail-stack">
+            @if (!ViewData.ModelState.IsValid)
+            {
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+            }
+
+            @if (!Model.IsAvailable)
+            {
+                <section class="panel viewer-empty-state is-warning">
+                    <span><i class="bi bi-database-exclamation"></i></span>
+                    <h3>Required trainer data was not found</h3>
+                    <p>The selected database needs creature_template and npc_trainer for this viewer.</p>
+                </section>
+            }
+            else if (!Model.HasSearched)
+            {
+                <section class="panel viewer-empty-state">
+                    <span><i class="bi bi-mortarboard"></i></span>
+                    <h3>Browse trainer spell lists</h3>
+                    <p>Search for a trainer to view the spells linked to that NPC.</p>
+                </section>
+            }
+            else if (Model.Trainers.Items.Count == 0)
+            {
+                <section class="panel viewer-empty-state">
+                    <span><i class="bi bi-search"></i></span>
+                    <h3>No matching trainer NPCs</h3>
+                    <p>Try another name, entry ID, or an empty search.</p>
+                </section>
+            }
+            else if (Model.SelectedTrainer == null)
+            {
+                <section class="panel viewer-panel-flush viewer-results-panel">
+                    <header class="viewer-results-header">
+                        <div>
+                            <span class="eyebrow">Trainer search results</span>
+                            <h3>Choose an NPC trainer</h3>
+                            <p>Select a trainer to view the spells it teaches.</p>
+                        </div>
+                        <div class="viewer-results-count">
+                            <strong>@Model.Trainers.TotalCount.ToString("N0")</strong>
+                            <span>trainer@(Model.Trainers.TotalCount == 1 ? string.Empty : "s")</span>
+                        </div>
+                    </header>
+
+                    <form method="get" asp-action="NpcTrainers" class="world-filter-bar viewer-results-toolbar">
+                        <input type="hidden" name="database" value="@Model.Database" />
+                        <input type="hidden" name="search" value="@Model.Search" />
+                        <input type="hidden" name="show" value="true" />
+                        <span class="world-filter-hint">Page @Model.Trainers.Page of @Math.Max(Model.Trainers.TotalPages, 1)</span>
+                        <label class="world-filter-select">
+                            <span>Rows per page</span>
+                            <select name="pageSize" class="form-select" onchange="this.form.submit()">
+                                @foreach (int pageSize in pageSizes)
+                                {
+                                    if (Model.Trainers.PageSize == pageSize)
+                                    {
+                                        <option value="@pageSize" selected>@pageSize</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@pageSize">@pageSize</option>
+                                    }
+                                }
+                            </select>
+                        </label>
+                    </form>
+
+                    <div class="world-record-table-wrap viewer-results-table-wrap">
+                        <table class="table studio-table viewer-results-table viewer-directory-table mb-0" aria-label="Trainer search results">
+                            <colgroup>
+                                <col class="viewer-directory-col" style="--viewer-col-width:48%" />
+                                <col class="viewer-directory-col" style="--viewer-col-width:29%" />
+                                <col class="viewer-directory-col" style="--viewer-col-width:15%" />
+                                <col class="viewer-directory-col" style="--viewer-col-width:8%" />
+                            </colgroup>
+                            <thead>
+                                <tr>
+                                    <th>NPC trainer</th>
+                                    <th>Subname</th>
+                                    <th class="viewer-directory-center">Linked spells</th>
+                                    <th class="actions-column viewer-action-column viewer-directory-center">Open</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var trainer in Model.Trainers.Items)
+                                {
+                                    string trainerDisplayName = string.IsNullOrWhiteSpace(trainer.Name) ? "Unnamed NPC" : trainer.Name;
+                                    <tr>
+                                        <td class="viewer-directory-name-cell">
+                                            <div class="viewer-directory-identity">
+                                                <span class="viewer-directory-icon"><i class="bi bi-person-badge"></i></span>
+                                                <span><strong>@trainerDisplayName</strong><small>Entry @trainer.Entry</small></span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            @if (string.IsNullOrWhiteSpace(trainer.SubName))
+                                            {
+                                                <span class="text-muted">—</span>
+                                            }
+                                            else
+                                            {
+                                                <span>@trainer.SubName</span>
+                                            }
+                                        </td>
+                                        <td class="viewer-directory-center">
+                                            <span class="npc-vendor-item-count">@trainer.SpellCount.ToString("N0")</span>
+                                        </td>
+                                        <td class="actions-column viewer-action-column viewer-directory-center">
+                                            <a class="icon-button"
+                                               asp-action="NpcTrainers"
+                                               asp-route-database="@Model.Database"
+                                               asp-route-search="@Model.Search"
+                                               asp-route-show="true"
+                                               asp-route-page="@Model.Trainers.Page"
+                                               asp-route-pageSize="@Model.Trainers.PageSize"
+                                               asp-route-entry="@trainer.Entry"
+                                               title="Open @trainerDisplayName"
+                                               aria-label="Open @trainerDisplayName">
+                                                <i class="bi bi-chevron-right"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    @if (Model.Trainers.TotalPages > 1)
+                    {
+                        <nav class="pagination-shell world-pagination viewer-results-pagination" aria-label="Trainer result pages">
+                            <div class="pagination-status">
+                                <strong>Page @Model.Trainers.Page</strong>
+                                <span>of @Model.Trainers.TotalPages · @Model.Trainers.TotalCount.ToString("N0") trainers</span>
+                            </div>
+                            <ul class="pagination mb-0">
+                                <li class="page-item pagination-direction @(Model.Trainers.Page == 1 ? "disabled" : string.Empty)">
+                                    <a class="page-link"
+                                       asp-action="NpcTrainers"
+                                       asp-route-database="@Model.Database"
+                                       asp-route-search="@Model.Search"
+                                       asp-route-show="true"
+                                       asp-route-page="@(Model.Trainers.Page - 1)"
+                                       asp-route-pageSize="@Model.Trainers.PageSize"
+                                       aria-label="Previous page">
+                                        <i class="bi bi-chevron-left"></i>
+                                        <span>Previous</span>
+                                    </a>
+                                </li>
+                                @for (int trainerPage = firstPage; trainerPage <= lastPage; trainerPage++)
+                                {
+                                    <li class="page-item @(trainerPage == Model.Trainers.Page ? "active" : string.Empty)">
+                                        <a class="page-link"
+                                           asp-action="NpcTrainers"
+                                           asp-route-database="@Model.Database"
+                                           asp-route-search="@Model.Search"
+                                           asp-route-show="true"
+                                           asp-route-page="@trainerPage"
+                                           asp-route-pageSize="@Model.Trainers.PageSize"
+                                           aria-current="@(trainerPage == Model.Trainers.Page ? "page" : null)">@trainerPage</a>
+                                    </li>
+                                }
+                                <li class="page-item pagination-direction @(Model.Trainers.Page == Model.Trainers.TotalPages ? "disabled" : string.Empty)">
+                                    <a class="page-link"
+                                       asp-action="NpcTrainers"
+                                       asp-route-database="@Model.Database"
+                                       asp-route-search="@Model.Search"
+                                       asp-route-show="true"
+                                       asp-route-page="@(Model.Trainers.Page + 1)"
+                                       asp-route-pageSize="@Model.Trainers.PageSize"
+                                       aria-label="Next page">
+                                        <span>Next</span>
+                                        <i class="bi bi-chevron-right"></i>
+                                    </a>
+                                </li>
+                            </ul>
+                        </nav>
+                    }
+                </section>
+            }
+            else
+            {
+                var selected = Model.SelectedTrainer.Trainer;
+                <section class="panel viewer-panel-flush viewer-workbench">
+                    <header class="viewer-record-header">
+                        <span class="viewer-record-icon"><i class="bi bi-mortarboard"></i></span>
+                        <div>
+                            <span class="eyebrow">Selected NPC trainer</span>
+                            <h2>@(string.IsNullOrWhiteSpace(selected.Name) ? "Unnamed NPC" : selected.Name)</h2>
+                            <p>@(string.IsNullOrWhiteSpace(selected.SubName) ? "No NPC subname" : selected.SubName)</p>
+                        </div>
+                        <div class="viewer-record-actions">
+                            <a class="btn btn-outline-secondary btn-sm"
+                               asp-action="NpcTrainers"
+                               asp-route-database="@Model.Database"
+                               asp-route-search="@Model.Search"
+                               asp-route-show="true"
+                               asp-route-page="@Model.Trainers.Page"
+                               asp-route-pageSize="@Model.Trainers.PageSize">
+                                <i class="bi bi-arrow-left"></i>
+                                Results
+                            </a>
+                            @if (Model.CanAddTrainerSpells)
+                            {
+                                <button type="button" class="btn btn-primary btn-sm" data-npc-trainer-add-open>
+                                    <i class="bi bi-plus-lg"></i>
+                                    Add trainer spells
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-primary btn-sm" disabled title="Your role cannot add world records.">
+                                    <i class="bi bi-plus-lg"></i>
+                                    Add trainer spells
+                                </button>
+                            }
+
+                            <partial name="_ViewerPendingRecordActions" />
+                        </div>
+                    </header>
+
+                    <div class="viewer-detail-metrics">
+                        <div>
+                            <small>NPC entry</small>
+                            <strong>@selected.Entry</strong>
+                            <span>creature_template</span>
+                        </div>
+                        <div>
+                            <small>Linked spells</small>
+                            <strong>@selected.SpellCount.ToString("N0")</strong>
+                            <span>direct and inherited trainer rows</span>
+                        </div>
+                        <div>
+                            <small>Trainer template</small>
+                            <strong>@(selected.TrainerTemplateId?.ToString() ?? "None")</strong>
+                            <span>@(selected.TrainerTemplateId.GetValueOrDefault() > 0 ? "inherited template enabled" : "direct trainer only")</span>
+                        </div>
+                        <div>
+                            <small>Spell page</small>
+                            <strong>@Model.SelectedTrainer.Spells.Page / @Math.Max(Model.SelectedTrainer.Spells.TotalPages, 1)</strong>
+                            <span>@Model.SelectedTrainer.Spells.PageSize rows per page</span>
+                        </div>
+                    </div>
+
+                    @if (selected.TrainerTemplateId.GetValueOrDefault() > 0)
+                    {
+                        <div class="npc-trainer-template-notice" role="note">
+                            <span class="npc-trainer-template-notice-icon"><i class="bi bi-diagram-3"></i></span>
+                            <div>
+                                <strong>Trainer template @selected.TrainerTemplateId is linked</strong>
+                                <p>Inherited template spells are included below and are read-only here because the template may be shared by multiple NPCs.</p>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="viewer-record-section">
+                        <header class="viewer-record-section-header">
+                            <div>
+                                <span class="eyebrow">Linked trainer spells</span>
+                                <h3>Spells taught by this NPC</h3>
+                                <p>Direct trainer spells and inherited template spells are shown together.</p>
+                            </div>
+                            <span class="badge rounded-pill">@Model.SelectedTrainer.Spells.TotalCount.ToString("N0") spell@(Model.SelectedTrainer.Spells.TotalCount == 1 ? string.Empty : "s")</span>
+                        </header>
+
+                        @if (Model.SelectedTrainer.Spells.TotalCount == 0)
+                        {
+                            <div class="viewer-record-empty">
+                                <i class="bi bi-journal-x"></i>
+                                <strong>No trainer spells</strong>
+                                <p>This trainer has no direct or inherited spells.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="viewer-record-table-wrap">
+                                <table class="table studio-table viewer-record-table viewer-workbench-table npc-trainer-spell-table mb-0" aria-label="Trainer spell list">
+                                    <thead>
+                                        <tr>
+                                            <th>Spell</th>
+                                            @if (caps.HasSpellCost)
+                                            {
+                                                <th>Cost</th>
+                                            }
+                                            @if (caps.HasRequiredLevel)
+                                            {
+                                                <th>Req. level</th>
+                                            }
+                                            @if (caps.HasRequiredSkill)
+                                            {
+                                                <th>Req. skill</th>
+                                            }
+                                            @if (caps.HasRequiredSkillValue)
+                                            {
+                                                <th>Skill value</th>
+                                            }
+                                            @if (caps.HasRequiredSpell)
+                                            {
+                                                <th>Req. spell</th>
+                                            }
+                                            @if (caps.HasConditionId)
+                                            {
+                                                <th>Condition</th>
+                                            }
+                                            <th>Source</th>
+                                            <th class="actions-column viewer-action-column">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var spell in Model.SelectedTrainer.Spells.Items)
+                                        {
+                                            string displayName = string.IsNullOrWhiteSpace(spell.SpellName) ? "Spell " + spell.SpellId : spell.SpellName;
+                                            <tr class="@(spell.IsTemplateSpell ? "npc-trainer-template-row" : string.Empty)">
+                                                <td>
+                                                    <div class="npc-vendor-item-name">
+                                                        <span><i class="bi bi-stars"></i></span>
+                                                        <div>
+                                                            <strong>@displayName</strong>
+                                                            <small>ID: @spell.SpellId</small>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                @if (caps.HasSpellCost)
+                                                {
+                                                    <td>@(spell.SpellCost?.ToString("N0") ?? "—")</td>
+                                                }
+                                                @if (caps.HasRequiredLevel)
+                                                {
+                                                    <td>@(spell.RequiredLevel?.ToString() ?? "—")</td>
+                                                }
+                                                @if (caps.HasRequiredSkill)
+                                                {
+                                                    <td>@(spell.RequiredSkill?.ToString() ?? "—")</td>
+                                                }
+                                                @if (caps.HasRequiredSkillValue)
+                                                {
+                                                    <td>@(spell.RequiredSkillValue?.ToString() ?? "—")</td>
+                                                }
+                                                @if (caps.HasRequiredSpell)
+                                                {
+                                                    <td>@(spell.RequiredSpell?.ToString() ?? "—")</td>
+                                                }
+                                                @if (caps.HasConditionId)
+                                                {
+                                                    <td>@(spell.ConditionId?.ToString() ?? "—")</td>
+                                                }
+                                                <td>
+                                                    @if (spell.IsTemplateSpell)
+                                                    {
+                                                        <span class="npc-trainer-source-badge is-template"><i class="bi bi-diagram-3"></i> Template @spell.TemplateId</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="npc-trainer-source-badge is-direct"><i class="bi bi-link-45deg"></i> Direct</span>
+                                                    }
+                                                </td>
+                                                <td class="actions-column viewer-action-column">
+                                                    <div class="row-actions row-actions-compact">
+                                                        <button type="button"
+                                                                class="icon-button"
+                                                                data-npc-trainer-edit-open
+                                                                data-spell-id="@spell.SpellId"
+                                                                data-spell-name="@displayName"
+                                                                data-spell-cost="@spell.SpellCost"
+                                                                data-required-spell="@spell.RequiredSpell"
+                                                                data-required-skill="@spell.RequiredSkill"
+                                                                data-required-skill-value="@spell.RequiredSkillValue"
+                                                                data-required-level="@spell.RequiredLevel"
+                                                                data-condition-id="@spell.ConditionId"
+                                                                disabled="@(spell.IsTemplateSpell || !Model.CanEditTrainerSpells)"
+                                                                title="@(spell.IsTemplateSpell ? "Inherited template spells are read-only here." : Model.CanEditTrainerSpells ? "Edit trainer spell" : "Your role cannot edit world records.")"
+                                                                aria-label="Edit @displayName">
+                                                            <i class="bi bi-pencil"></i>
+                                                        </button>
+                                                        <button type="button"
+                                                                class="icon-button danger"
+                                                                data-npc-trainer-delete-open
+                                                                data-spell-id="@spell.SpellId"
+                                                                data-spell-name="@displayName"
+                                                                data-spell-cost="@spell.SpellCost"
+                                                                data-required-spell="@spell.RequiredSpell"
+                                                                data-required-skill="@spell.RequiredSkill"
+                                                                data-required-skill-value="@spell.RequiredSkillValue"
+                                                                data-required-level="@spell.RequiredLevel"
+                                                                data-condition-id="@spell.ConditionId"
+                                                                disabled="@(spell.IsTemplateSpell || !Model.CanDeleteTrainerSpells)"
+                                                                title="@(spell.IsTemplateSpell ? "Inherited template spells are read-only here." : Model.CanDeleteTrainerSpells ? "Remove trainer spell" : "Your role cannot delete world records.")"
+                                                                aria-label="Remove @displayName">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <footer class="viewer-record-footer">
+                                <div class="viewer-record-pagination-wrap">
+                                    <div class="pagination-status">
+                                        <strong>Page @Model.SelectedTrainer.Spells.Page</strong>
+                                        <span>of @Math.Max(Model.SelectedTrainer.Spells.TotalPages, 1) · @Model.SelectedTrainer.Spells.TotalCount.ToString("N0") spells</span>
+                                    </div>
+
+                                    @if (Model.SelectedTrainer.Spells.TotalPages > 1)
+                                    {
+                                        <nav class="world-pagination viewer-record-pagination" aria-label="Trainer spell pages">
+                                            <ul class="pagination mb-0">
+                                                <li class="page-item pagination-direction @(Model.SelectedTrainer.Spells.Page == 1 ? "disabled" : string.Empty)">
+                                                    <a class="page-link"
+                                                       asp-action="NpcTrainers"
+                                                       asp-route-database="@Model.Database"
+                                                       asp-route-search="@Model.Search"
+                                                       asp-route-show="true"
+                                                       asp-route-page="@Model.Trainers.Page"
+                                                       asp-route-pageSize="@Model.Trainers.PageSize"
+                                                       asp-route-entry="@selected.Entry"
+                                                       asp-route-spellPage="@(Model.SelectedTrainer.Spells.Page - 1)"
+                                                       asp-route-spellPageSize="@Model.SelectedTrainer.Spells.PageSize"
+                                                       aria-label="Previous spell page">
+                                                        <i class="bi bi-chevron-left"></i>
+                                                        <span>Previous</span>
+                                                    </a>
+                                                </li>
+                                                @for (int spellPageNumber = spellFirstPage; spellPageNumber <= spellLastPage; spellPageNumber++)
+                                                {
+                                                    <li class="page-item @(spellPageNumber == Model.SelectedTrainer.Spells.Page ? "active" : string.Empty)">
+                                                        <a class="page-link"
+                                                           asp-action="NpcTrainers"
+                                                           asp-route-database="@Model.Database"
+                                                           asp-route-search="@Model.Search"
+                                                           asp-route-show="true"
+                                                           asp-route-page="@Model.Trainers.Page"
+                                                           asp-route-pageSize="@Model.Trainers.PageSize"
+                                                           asp-route-entry="@selected.Entry"
+                                                           asp-route-spellPage="@spellPageNumber"
+                                                           asp-route-spellPageSize="@Model.SelectedTrainer.Spells.PageSize"
+                                                           aria-current="@(spellPageNumber == Model.SelectedTrainer.Spells.Page ? "page" : null)">@spellPageNumber</a>
+                                                    </li>
+                                                }
+                                                <li class="page-item pagination-direction @(Model.SelectedTrainer.Spells.Page == Model.SelectedTrainer.Spells.TotalPages ? "disabled" : string.Empty)">
+                                                    <a class="page-link"
+                                                       asp-action="NpcTrainers"
+                                                       asp-route-database="@Model.Database"
+                                                       asp-route-search="@Model.Search"
+                                                       asp-route-show="true"
+                                                       asp-route-page="@Model.Trainers.Page"
+                                                       asp-route-pageSize="@Model.Trainers.PageSize"
+                                                       asp-route-entry="@selected.Entry"
+                                                       asp-route-spellPage="@(Model.SelectedTrainer.Spells.Page + 1)"
+                                                       asp-route-spellPageSize="@Model.SelectedTrainer.Spells.PageSize"
+                                                       aria-label="Next spell page">
+                                                        <span>Next</span>
+                                                        <i class="bi bi-chevron-right"></i>
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </nav>
+                                    }
+                                </div>
+
+                                <form method="get" asp-action="NpcTrainers" class="viewer-record-page-size">
+                                    <input type="hidden" name="database" value="@Model.Database" />
+                                    <input type="hidden" name="search" value="@Model.Search" />
+                                    <input type="hidden" name="show" value="true" />
+                                    <input type="hidden" name="page" value="@Model.Trainers.Page" />
+                                    <input type="hidden" name="pageSize" value="@Model.Trainers.PageSize" />
+                                    <input type="hidden" name="entry" value="@selected.Entry" />
+                                    <input type="hidden" name="spellPage" value="1" />
+                                    <label class="world-filter-select">
+                                        <span>Rows per page</span>
+                                        <select name="spellPageSize" class="form-select" onchange="this.form.submit()">
+                                            @foreach (int pageSize in pageSizes)
+                                            {
+                                                if (Model.SelectedTrainer.Spells.PageSize == pageSize)
+                                                {
+                                                    <option value="@pageSize" selected>@pageSize</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@pageSize">@pageSize</option>
+                                                }
+                                            }
+                                        </select>
+                                    </label>
+                                </form>
+                            </footer>
+                        }
+                    </div>
+                </section>
+            }
+        </main>
+    </div>
+
+@if (Model.SelectedTrainer != null)
+{
+    var selected = Model.SelectedTrainer.Trainer;
+    @if (Model.CanAddTrainerSpells)
+    {
+        <div class="modal fade npc-vendor-editor-modal" id="npcTrainerAddModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content">
+                <form method="post" asp-action="NpcTrainerAddSpells" data-npc-trainer-add-form>
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="Database" value="@Model.Database" /><input type="hidden" name="Search" value="@Model.Search" /><input type="hidden" name="Entry" value="@selected.Entry" /><input type="hidden" name="Page" value="@Model.Trainers.Page" /><input type="hidden" name="PageSize" value="@Model.Trainers.PageSize" /><input type="hidden" name="SpellPage" value="@Model.SelectedTrainer.Spells.Page" /><input type="hidden" name="SpellPageSize" value="@Model.SelectedTrainer.Spells.PageSize" />
+                    <div class="modal-header">
+                        <div>
+                            <span class="eyebrow">Trainer spell editor</span>
+                            <h2 class="modal-title">Add trainer spells</h2>
+                            <p class="mb-0">Add one or several direct npc_trainer entries.</p>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="npc-vendor-batch-toolbar">
+                            <div>
+                                <strong>Spells to add</strong>
+                                <span>Add one or more direct npc_trainer rows together.</span>
+                            </div>
+                            <button type="button" class="btn btn-outline-primary btn-sm" data-npc-trainer-add-row><i class="bi bi-plus-lg"></i> Add another row</button>
+                        </div>
+                        <div class="npc-vendor-batch-list" data-npc-trainer-add-rows>
+                            <div class="npc-vendor-batch-row" data-npc-trainer-add-row-item>
+                                <div class="npc-vendor-batch-row-number" data-row-number>1</div>
+                                <label>
+                                    <span>Spell ID</span>
+                                    <input class="form-control" type="number" min="1" name="Spells[0].SpellId" data-field="SpellId" required />
+                                </label>
+                                @if (caps.HasSpellCost)
+                                {
+                                    <label>
+                                        <span>Cost</span>
+                                        <input class="form-control" type="number" min="0" value="0" name="Spells[0].SpellCost" data-field="SpellCost" />
+                                    </label>
+                                }
+                                @if (caps.HasRequiredLevel)
+                                {
+                                    <label>
+                                        <span>Required level</span>
+                                        <input class="form-control" type="number" min="0" value="0" name="Spells[0].RequiredLevel" data-field="RequiredLevel" />
+                                    </label>
+                                }
+                                @if (caps.HasRequiredSkill)
+                                {
+                                    <label>
+                                        <span>Required skill</span>
+                                        <input class="form-control" type="number" min="0" value="0" name="Spells[0].RequiredSkill" data-field="RequiredSkill" />
+                                    </label>
+                                }
+                                @if (caps.HasRequiredSkillValue)
+                                {
+                                    <label>
+                                        <span>Skill value</span>
+                                        <input class="form-control" type="number" min="0" value="0" name="Spells[0].RequiredSkillValue" data-field="RequiredSkillValue" />
+                                    </label>
+                                }
+                                @if (caps.HasRequiredSpell)
+                                {
+                                    <label>
+                                        <span>Required spell</span>
+                                        <input class="form-control" type="number" min="0" value="0" name="Spells[0].RequiredSpell" data-field="RequiredSpell" />
+                                    </label>
+                                }
+                                @if (caps.HasConditionId)
+                                {
+                                    <label>
+                                        <span>Condition</span>
+                                        <input class="form-control" type="number" min="0" value="0" name="Spells[0].ConditionId" data-field="ConditionId" />
+                                    </label>
+                                }
+                                <button
+                                    type="button"
+                                    class="btn btn-outline-danger btn-sm npc-vendor-batch-remove"
+                                    data-npc-trainer-remove-row
+                                    disabled
+                                    title="Remove row"
+                                    aria-label="Remove row"><i class="bi bi-trash"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add selected spells</button>
+                    </div>
+                </form>
+            </div>
+            </div>
+        </div>
+    }
+
+    @if (Model.CanEditTrainerSpells)
+    {
+        <div class="modal fade npc-vendor-editor-modal" id="npcTrainerEditModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-centered">
+                <div class="modal-content">
+            <form method="post" asp-action="NpcTrainerEditSpell" data-npc-trainer-edit-form>
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Database" value="@Model.Database" /><input type="hidden" name="Search" value="@Model.Search" /><input type="hidden" name="Entry" value="@selected.Entry" /><input type="hidden" name="Page" value="@Model.Trainers.Page" /><input type="hidden" name="PageSize" value="@Model.Trainers.PageSize" /><input type="hidden" name="SpellPage" value="@Model.SelectedTrainer.Spells.Page" /><input type="hidden" name="SpellPageSize" value="@Model.SelectedTrainer.Spells.PageSize" />
+                @foreach (string field in new[] { "SpellId", "SpellCost", "RequiredSpell", "RequiredSkill", "RequiredSkillValue", "RequiredLevel", "ConditionId" })
+                {
+                    <input type="hidden" name="Original.@field" data-original-field="@field" />
+                }
+                <div class="modal-header">
+                    <div>
+                        <span class="eyebrow">Trainer spell editor</span>
+                        <h2 class="modal-title">Edit trainer spell</h2>
+                        <p class="mb-0" data-npc-trainer-edit-title></p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="npc-vendor-edit-grid">
+                        <label>
+                            <span>Spell ID</span>
+                            <input class="form-control" type="number" min="1" name="Replacement.SpellId" data-replacement-field="SpellId" required />
+                        </label>
+                        @if (caps.HasSpellCost)
+                        {
+                            <label>
+                                <span>Cost</span>
+                                <input class="form-control" type="number" min="0" name="Replacement.SpellCost" data-replacement-field="SpellCost" />
+                            </label>
+                        }
+                        @if (caps.HasRequiredLevel)
+                        {
+                            <label>
+                                <span>Required level</span>
+                                <input class="form-control" type="number" min="0" name="Replacement.RequiredLevel" data-replacement-field="RequiredLevel" />
+                            </label>
+                        }
+                        @if (caps.HasRequiredSkill)
+                        {
+                            <label>
+                                <span>Required skill</span>
+                                <input class="form-control" type="number" min="0" name="Replacement.RequiredSkill" data-replacement-field="RequiredSkill" />
+                            </label>
+                        }
+                        @if (caps.HasRequiredSkillValue)
+                        {
+                            <label>
+                                <span>Skill value</span>
+                                <input class="form-control" type="number" min="0" name="Replacement.RequiredSkillValue" data-replacement-field="RequiredSkillValue" />
+                            </label>
+                        }
+                        @if (caps.HasRequiredSpell)
+                        {
+                            <label>
+                                <span>Required spell</span>
+                                <input class="form-control" type="number" min="0" name="Replacement.RequiredSpell" data-replacement-field="RequiredSpell" />
+                            </label>
+                        }
+                        @if (caps.HasConditionId)
+                        {
+                            <label>
+                                <span>Condition</span>
+                                <input class="form-control" type="number" min="0" name="Replacement.ConditionId" data-replacement-field="ConditionId" />
+                            </label>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check2"></i> Save spell changes</button>
+                </div>
+            </form>
+        </div>
+        </div>
+        </div>
+    }
+
+    @if (Model.CanDeleteTrainerSpells)
+    {
+        <div class="modal fade npc-vendor-editor-modal" id="npcTrainerDeleteModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-md modal-dialog-centered">
+                <div class="modal-content">
+            <form method="post" asp-action="NpcTrainerDeleteSpell" data-npc-trainer-delete-form>
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Database" value="@Model.Database" /><input type="hidden" name="Search" value="@Model.Search" /><input type="hidden" name="Entry" value="@selected.Entry" /><input type="hidden" name="Page" value="@Model.Trainers.Page" /><input type="hidden" name="PageSize" value="@Model.Trainers.PageSize" /><input type="hidden" name="SpellPage" value="@Model.SelectedTrainer.Spells.Page" /><input type="hidden" name="SpellPageSize" value="@Model.SelectedTrainer.Spells.PageSize" />
+                @foreach (string field in new[] { "SpellId", "SpellCost", "RequiredSpell", "RequiredSkill", "RequiredSkillValue", "RequiredLevel", "ConditionId" })
+                {
+                    <input type="hidden" name="Original.@field" data-delete-field="@field" />
+                }
+                <div class="modal-header">
+                    <div>
+                        <span class="eyebrow">Remove trainer spell</span>
+                        <h2 class="modal-title">Confirm removal</h2>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="npc-vendor-delete-confirmation">
+                        <span><i class="bi bi-trash3"></i></span>
+                        <div>
+                            <strong data-npc-trainer-delete-title></strong>
+                            <p>This removes the direct spell row from this NPC trainer. Shared trainer-template data is not changed.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger"><i class="bi bi-trash"></i> Remove spell</button>
+                </div>
+            </form>
+        </div>
+        </div>
+        </div>
+    }
+}
+</div>
+
+@section Scripts {
+    <script src="~/js/npc-trainer-editor.js" asp-append-version="true"></script>
+}

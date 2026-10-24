@@ -1,0 +1,48 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MangosDatabaseStudio.Domain", "src\MangosDatabaseStudio.Domain\MangosDatabaseStudio.Domain.csproj", "{7C778A8A-58DF-4C37-938F-93A4F4D2A00D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MangosDatabaseStudio.Application", "src\MangosDatabaseStudio.Application\MangosDatabaseStudio.Application.csproj", "{71B2760C-47A4-44A1-A65E-68A9BFE055E2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MangosDatabaseStudio.Infrastructure.MySql", "src\MangosDatabaseStudio.Infrastructure.MySql\MangosDatabaseStudio.Infrastructure.MySql.csproj", "{409FC91E-C496-4C62-8483-8D4E6F62063A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MangosDatabaseStudio.Schema", "src\MangosDatabaseStudio.Schema\MangosDatabaseStudio.Schema.csproj", "{8969E686-BE9C-414D-B8F2-D827C70F8158}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MangosDatabaseStudio.HardwareIdentityHelper", "src\MangosDatabaseStudio.HardwareIdentityHelper\MangosDatabaseStudio.HardwareIdentityHelper.csproj", "{962753EE-CEB3-43A1-9DE8-F40BAA33D76D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MangosDatabaseStudio", "src\MangosDatabaseStudio.App\MangosDatabaseStudio.App.csproj", "{00947DDE-A4DE-480A-B23F-7F4BC3C79E43}"
+EndProject
+Global
+  GlobalSection(SolutionConfigurationPlatforms) = preSolution
+    Debug|Any CPU = Debug|Any CPU
+    Release|Any CPU = Release|Any CPU
+  EndGlobalSection
+  GlobalSection(ProjectConfigurationPlatforms) = postSolution
+    {7C778A8A-58DF-4C37-938F-93A4F4D2A00D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {7C778A8A-58DF-4C37-938F-93A4F4D2A00D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {7C778A8A-58DF-4C37-938F-93A4F4D2A00D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {7C778A8A-58DF-4C37-938F-93A4F4D2A00D}.Release|Any CPU.Build.0 = Release|Any CPU
+    {71B2760C-47A4-44A1-A65E-68A9BFE055E2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {71B2760C-47A4-44A1-A65E-68A9BFE055E2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {71B2760C-47A4-44A1-A65E-68A9BFE055E2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {71B2760C-47A4-44A1-A65E-68A9BFE055E2}.Release|Any CPU.Build.0 = Release|Any CPU
+    {409FC91E-C496-4C62-8483-8D4E6F62063A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {409FC91E-C496-4C62-8483-8D4E6F62063A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {409FC91E-C496-4C62-8483-8D4E6F62063A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {409FC91E-C496-4C62-8483-8D4E6F62063A}.Release|Any CPU.Build.0 = Release|Any CPU
+    {8969E686-BE9C-414D-B8F2-D827C70F8158}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {8969E686-BE9C-414D-B8F2-D827C70F8158}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {8969E686-BE9C-414D-B8F2-D827C70F8158}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {8969E686-BE9C-414D-B8F2-D827C70F8158}.Release|Any CPU.Build.0 = Release|Any CPU
+    {962753EE-CEB3-43A1-9DE8-F40BAA33D76D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {962753EE-CEB3-43A1-9DE8-F40BAA33D76D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {962753EE-CEB3-43A1-9DE8-F40BAA33D76D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {962753EE-CEB3-43A1-9DE8-F40BAA33D76D}.Release|Any CPU.Build.0 = Release|Any CPU
+    {00947DDE-A4DE-480A-B23F-7F4BC3C79E43}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {00947DDE-A4DE-480A-B23F-7F4BC3C79E43}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {00947DDE-A4DE-480A-B23F-7F4BC3C79E43}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {00947DDE-A4DE-480A-B23F-7F4BC3C79E43}.Release|Any CPU.Build.0 = Release|Any CPU
+  EndGlobalSection
+EndGlobal

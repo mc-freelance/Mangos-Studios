@@ -1,0 +1,69 @@
+@* Present and validate the Users record editor. *@
+
+@model UserEditViewModel
+@{
+    ViewData["Title"] = Model.IsCreate ? "Add User" : "Edit User";
+    ViewData["Section"] = "System / Users";
+    string action = Model.IsCreate ? "Create" : "Edit";
+}
+<div class="form-shell narrow">
+    <form method="post" asp-action="@action" class="panel">
+        <input asp-for="Id" type="hidden" />
+        <input asp-for="IsCreate" type="hidden" />
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+        <div class="section-heading">
+            <div>
+                <span class="eyebrow">Application account</span>
+                <h2>@(Model.IsCreate ? "Create a user" : "Update user access")</h2>
+                <p>Roles receive configurable RBAC permissions across the World Editor and database tools.</p>
+            </div>
+            <i class="bi bi-person-gear"></i>
+        </div>
+        <div class="form-grid">
+            <div class="form-group span-2">
+                <label asp-for="Username" class="form-label"></label>
+                <input asp-for="Username" class="form-control" autocomplete="off" />
+                <span asp-validation-for="Username" class="text-danger"></span>
+            </div>
+            <div class="form-group span-2">
+                <label asp-for="Role" class="form-label"></label>
+                <select asp-for="Role" class="form-select">
+                    @foreach (string role in Model.AvailableRoles)
+                    {
+                        <option value="@role">@AppRoles.GetDisplayName(role)</option>
+                    }
+                </select>
+                <span asp-validation-for="Role" class="text-danger"></span>
+                <div class="form-text">@AppRoles.GetDescription(Model.Role)</div>
+                @if (Model.IsCurrentUser && string.Equals(Model.Role, AppRoles.Administrator, StringComparison.Ordinal))
+                {
+                    <div class="form-text text-warning">
+                        <i class="bi bi-exclamation-triangle"></i> Your own administrator role cannot be removed while you are signed in.</div>
+                }
+                else if (Model.IsCurrentUser)
+                {
+                    <div class="form-text text-warning">
+                        <i class="bi bi-exclamation-triangle"></i> You cannot change your own role from this page.</div>
+                }
+            </div>
+            <div class="form-group">
+                <label asp-for="Password" class="form-label"></label>
+                <input asp-for="Password" class="form-control" autocomplete="new-password" />
+                <span asp-validation-for="Password" class="text-danger"></span>
+                @if (!Model.IsCreate)
+                {
+                    <div class="form-text">Leave blank to keep the current password.</div>
+                }
+            </div>
+            <div class="form-group">
+                <label asp-for="ConfirmPassword" class="form-label"></label>
+                <input asp-for="ConfirmPassword" class="form-control" autocomplete="new-password" />
+                <span asp-validation-for="ConfirmPassword" class="text-danger"></span>
+            </div>
+        </div>
+        <div class="form-actions">
+            <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+            <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i> @(Model.IsCreate ? "Create user" : "Save user")</button>
+        </div>
+    </form>
+</div>

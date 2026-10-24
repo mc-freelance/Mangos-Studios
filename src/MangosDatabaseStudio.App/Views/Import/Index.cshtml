@@ -1,0 +1,85 @@
+@* Present the Import workspace and its available actions. *@
+
+@model SqlImportUploadViewModel
+@{
+    ViewData["Title"] = "Import SQL";
+    ViewData["Section"] = "Database Administration";
+    bool canUpload = User.HasPermission(AppPermissions.SqlImportUpload);
+    bool canExecute = User.HasPermission(AppPermissions.SqlImportExecute);
+}
+@if (!canUpload)
+{
+    <div class="alert alert-info studio-inline-alert">
+        <i class="bi bi-info-circle-fill"></i>
+        <div>
+            <strong>Read-only access</strong>
+            <span>You can review the import workflow, but this role cannot upload SQL files.</span>
+        </div>
+    </div>
+}
+<div class="import-layout">
+<section class="panel">
+    <div class="section-heading">
+        <div>
+            <span class="eyebrow">Step 1 of 3</span>
+            <h2>Upload an SQL file</h2>
+            <p>Files are stored in private application data, analyzed, confirmed, and removed after execution.</p>
+        </div>
+        <i class="bi bi-cloud-arrow-up"></i>
+    </div>
+    @if (canUpload)
+    {
+        <form asp-action="Upload"
+              method="post"
+              enctype="multipart/form-data"
+              data-processing-form
+              data-processing-title="Analyzing SQL file"
+              data-processing-message="The upload is being copied, decompressed when needed, hashed, and scanned for potentially destructive SQL."
+              data-processing-label="Analyzing upload...">
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+            <div class="form-group mb-4">
+                <label asp-for="Database" class="form-label">Target database</label>
+                <select asp-for="Database" class="form-select form-select-lg">
+                    @foreach(var database in Model.Databases)
+                    {
+                        <option value="@database.Name">@database.Name</option>
+                    }
+                </select>
+                <span asp-validation-for="Database" class="text-danger small"></span>
+            </div>
+            <label class="drop-zone">
+                <input asp-for="File" type="file" accept=".sql,.gz" /><i class="bi bi-file-earmark-code"></i>
+                <strong>Choose a .sql or .sql.gz file</strong>
+                <span>Maximum upload size: 512 MB</span>
+            </label>
+            <span asp-validation-for="File" class="text-danger"></span>
+            <button class="btn btn-primary btn-lg mt-4" type="submit" data-processing-submit><span>Analyze upload</span> <i class="bi bi-arrow-right"></i></button>
+        </form>
+    }
+    else
+    {
+        <div class="empty-state compact">
+            <i class="bi bi-shield-lock"></i>
+            <h2>Upload permission required</h2>
+            <p>An administrator can grant <code>@AppPermissions.SqlImportUpload</code> to this role.</p>
+        </div>
+    }
+</section>
+<aside class="panel safety-panel">
+    <i class="bi bi-database-lock"></i>
+    <h2>Import workflow</h2>
+    <ol>
+        <li>Upload and decompress</li>
+        <li>Calculate SHA-256</li>
+        <li>Scan for destructive SQL</li>
+        <li>Confirm target database</li>
+        <li>Stream into the native client</li>
+        <li>Delete temporary upload</li>
+    </ol>
+    @if (!canExecute)
+    {
+        <p class="form-text mt-3">
+            <i class="bi bi-info-circle"></i> This role can analyze uploads but cannot execute them.</p>
+    }
+</aside>
+</div>

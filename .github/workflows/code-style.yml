@@ -1,0 +1,60 @@
+name: Code style and source checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: style-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  style:
+    name: Source formatting
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Test the style checker
+        run: python -m unittest discover -s tests -p 'test_style_checker.py' -v
+
+      # Covers C#/JavaScript braces, the requested nested-block blank-line
+      # rules, AGPL C# headers, non-XML comments, and whitespace in other source.
+      - name: Check project source conventions
+        run: python scripts/check_style.py
+
+      - name: Check JavaScript syntax
+        shell: bash
+        run: |
+          while IFS= read -r -d '' file; do
+              node --check "$file"
+          done < <(find src/MangosDatabaseStudio.App/wwwroot/js -type f -name '*.js' -print0)
+
+      - name: Install .NET 9 SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore for Roslyn formatting
+        run: dotnet restore MangosDatabaseStudio.sln
+
+      - name: Verify C# whitespace with .editorconfig
+        run: dotnet format whitespace MangosDatabaseStudio.sln --verify-no-changes --no-restore

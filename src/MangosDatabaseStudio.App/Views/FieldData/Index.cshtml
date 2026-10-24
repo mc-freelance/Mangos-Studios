@@ -1,0 +1,363 @@
+@* Present the FieldData workspace and its available actions. *@
+
+@model FieldDataIndexViewModel
+@{
+    ViewData["Title"] = "Field Data";
+    ViewData["Section"] = "System / Field Data";
+    int firstPage = Math.Max(1, Model.Page - 2);
+    int lastPage = Math.Min(Model.TotalPages, firstPage + 4);
+    firstPage = Math.Max(1, lastPage - 4);
+}
+<div class="page-actions">
+    <div>
+        <p class="page-lead">Manage the expansion-aware option data and value-handling rules used by World Editor columns.</p>
+    </div>
+    @if (Model.CanManage)
+    {
+        <div class="page-action-group">
+            <a class="btn btn-outline-primary" asp-action="CreateCategory"><i class="bi bi-folder-plus"></i> Add category</a>
+            <a class="btn btn-primary" asp-action="CreateDefinition" asp-route-categoryId="@Model.CategoryId"><i class="bi bi-plus-lg"></i> Add column data</a>
+        </div>
+    }
+</div>
+
+<div class="alert alert-info studio-inline-alert rbac-notice">
+    <i class="bi bi-database-check"></i>
+    <div>
+        <strong>SQLite is the active field-data catalog</strong>
+        <span>New installations receive the latest built-in baseline. Later audited built-in updates are merged non-destructively, so administrator edits, additions, and deletions remain intact.</span>
+    </div>
+</div>
+
+<div class="metric-grid field-data-metrics">
+    <article class="metric-card">
+        <span class="metric-icon"><i class="bi bi-collection"></i></span>
+        <div>
+            <small>Categories</small>
+            <strong>@Model.Stats.CategoryCount.ToString("N0")</strong>
+        </div>
+    </article>
+    <article class="metric-card">
+        <span class="metric-icon"><i class="bi bi-layout-three-columns"></i></span>
+        <div>
+            <small>Column definitions</small>
+            <strong>@Model.Stats.DefinitionCount.ToString("N0")</strong>
+        </div>
+    </article>
+    <article class="metric-card">
+        <span class="metric-icon"><i class="bi bi-layers"></i></span>
+        <div>
+            <small>Expansion data sets</small>
+            <strong>@Model.Stats.VariantCount.ToString("N0")</strong>
+        </div>
+    </article>
+    <article class="metric-card">
+        <span class="metric-icon"><i class="bi bi-list-check"></i></span>
+        <div>
+            <small>Data entries</small>
+            <strong>@Model.Stats.OptionCount.ToString("N0")</strong>
+        </div>
+    </article>
+</div>
+
+<section class="panel field-data-category-panel">
+    <div class="section-heading">
+        <div>
+            <span class="eyebrow">Catalog organization</span>
+            <h2>Categories</h2>
+        </div>
+        <span class="badge text-bg-light">@Model.Categories.Count.ToString("N0")</span>
+    </div>
+    @if (Model.Categories.Count == 0)
+    {
+        <div class="viewer-record-empty">
+            <i class="bi bi-collection"></i>
+            <strong>No categories</strong>
+            <p>Add a category before organizing column definitions.</p>
+        </div>
+    }
+    else
+    {
+        <div class="field-data-category-grid">
+            @foreach (FieldDataCategoryRecord category in Model.Categories)
+            {
+                bool selected = Model.CategoryId == category.Id;
+                <article class="field-data-category-card @(selected ? "active" : string.Empty) @(!category.IsEnabled ? "disabled" : string.Empty)">
+                    <div class="field-data-category-icon">
+                        <i class="bi @category.Icon"></i>
+                    </div>
+                    <div class="field-data-category-copy">
+                        <div class="field-data-category-title">
+                            <strong>@category.Name</strong>
+                            @if (!category.IsEnabled)
+                            {
+                                <span class="badge text-bg-secondary">Disabled</span>
+                            }
+                        </div>
+                        <p>@(string.IsNullOrWhiteSpace(category.Description) ? "No category description." : category.Description)</p>
+                        <span>@category.DefinitionCount.ToString("N0") columns · @category.VariantCount.ToString("N0") data sets · @category.OptionCount.ToString("N0") entries</span>
+                    </div>
+                    <div class="field-data-category-actions">
+                        <a class="icon-button @(selected ? "active" : string.Empty)"
+                           title="Filter to @category.Name"
+                           aria-label="Filter to @category.Name"
+                           asp-action="Index"
+                           asp-route-categoryId="@category.Id"
+                           asp-route-search="@Model.Search"
+                           asp-route-page="1"><i class="bi bi-funnel"></i></a>
+                        @if (Model.CanManage)
+                        {
+                            <a
+                                class="icon-button"
+                                title="Edit category"
+                                aria-label="Edit @category.Name"
+                                asp-action="EditCategory"
+                                asp-route-id="@category.Id"><i class="bi bi-pencil"></i></a>
+                            <form asp-action="DeleteCategory" method="post" data-confirm="Remove the field-data category '@category.Name'? The category must be empty first.">
+                                <input type="hidden" name="id" value="@category.Id" />
+                                <button class="icon-button danger" type="submit" title="Remove category" aria-label="Remove @category.Name"><i class="bi bi-trash"></i></button>
+                            </form>
+                        }
+                    </div>
+                </article>
+            }
+        </div>
+    }
+</section>
+
+<section class="panel viewer-panel-flush viewer-results-panel mt-4 field-data-list-panel">
+    <header class="viewer-results-header">
+        <div>
+            <span class="eyebrow">Column behavior</span>
+            <h3>Field definitions</h3>
+            <p>Expansion-aware selection and value-handling rules available to the World Editor.</p>
+        </div>
+        <div class="viewer-results-count">
+            <strong>@Model.TotalDefinitions.ToString("N0")</strong>
+            <span>definition@(Model.TotalDefinitions == 1 ? string.Empty : "s")</span>
+        </div>
+    </header>
+
+    <form method="get" asp-action="Index" class="field-data-filter-bar">
+        <input type="hidden" name="page" value="1" />
+        <div class="field-data-search">
+            <label for="field-data-search-input">Search</label>
+            <div class="world-filter-search field-data-search-control">
+                <i class="bi bi-search" aria-hidden="true"></i>
+                <input id="field-data-search-input" type="search" name="search" value="@Model.Search" placeholder="Search category, table, column, or description..." autocomplete="off" />
+            </div>
+        </div>
+        <label class="field-data-filter-select">
+            <span>Category</span>
+            <select class="form-select" name="categoryId" aria-label="Category filter">
+                <option value="">All categories</option>
+                @foreach (FieldDataCategoryRecord category in Model.Categories)
+                {
+                    <option value="@category.Id" selected="@(Model.CategoryId == category.Id ? "selected" : null)">@category.Name</option>
+                }
+            </select>
+        </label>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-funnel"></i> Apply</button>
+        @if (Model.CategoryId.HasValue || !string.IsNullOrWhiteSpace(Model.Search))
+        {
+            <a class="btn btn-outline-secondary" asp-action="Index">Clear</a>
+        }
+    </form>
+
+    @if (Model.Definitions.Count == 0)
+    {
+        <div class="viewer-record-empty field-data-empty">
+            <i class="bi bi-layout-three-columns"></i>
+            <strong>No matching column data</strong>
+            <p>Create a definition or change the current filters.</p>
+        </div>
+    }
+    else
+    {
+        <div class="world-filter-bar viewer-results-toolbar">
+            <span class="world-filter-hint">Page @Model.Page of @Math.Max(Model.TotalPages, 1)</span>
+            <form method="get" asp-action="Index" class="viewer-record-page-size">
+                <input type="hidden" name="categoryId" value="@Model.CategoryId" />
+                <input type="hidden" name="search" value="@Model.Search" />
+                <input type="hidden" name="page" value="1" />
+                <label class="world-filter-select">
+                    <span>Rows per page</span>
+                    <select name="pageSize" class="form-select" onchange="this.form.submit()">
+                        @foreach (int size in new[] { 10, 20, 50, 100, 200 })
+                        {
+                            if (Model.PageSize == size)
+                            {
+                                <option value="@size" selected>@size</option>
+                            }
+                            else
+                            {
+                                <option value="@size">@size</option>
+                            }
+                        }
+                    </select>
+                </label>
+            </form>
+        </div>
+
+        <div class="world-record-table-wrap viewer-results-table-wrap">
+            <table class="table studio-table responsive-table viewer-results-table field-data-table mb-0">
+                <colgroup>
+                    <col class="field-data-definition-col-data" />
+                    <col class="field-data-definition-col-target" />
+                    <col class="field-data-definition-col-selection" />
+                    <col class="field-data-definition-col-handling" />
+                    <col class="field-data-definition-col-expansions" />
+                    <col class="field-data-definition-col-entries" />
+                    <col class="field-data-definition-col-status" />
+                    <col class="field-data-definition-col-actions" />
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Database target</th>
+                        <th>Selection</th>
+                        <th>Handling</th>
+                        <th>Expansions</th>
+                        <th>Entries</th>
+                        <th>Status</th>
+                        <th class="actions-column viewer-action-column">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (FieldDataDefinitionRecord definition in Model.Definitions)
+                {
+                    <tr>
+                        <td data-label="Data">
+                            <strong>@(string.IsNullOrWhiteSpace(definition.DisplayName) ? definition.ColumnName : definition.DisplayName)</strong>
+                            <small class="d-block text-muted">@(string.IsNullOrWhiteSpace(definition.CategoryName) ? "Uncategorized" : definition.CategoryName)</small>
+                        </td>
+                        <td data-label="Database target">
+                            <code title="Table: @definition.TableName">@definition.ColumnName</code>
+                        </td>
+                        <td data-label="Selection">
+                            <span class="field-data-mode-pill"><i class="bi @(definition.SelectionMode == MangosFieldSelectionMode.Multiple ? "bi-ui-checks" : "bi-ui-radios")"></i> @definition.SelectionMode</span>
+                        </td>
+                        <td data-label="Handling">@FormatHandling(definition.ValueHandling)</td>
+                        <td data-label="Expansions">
+                            <div class="field-data-expansion-list">
+                                @foreach (int generation in definition.Generations)
+                                {
+                                    <span title="@MangosProjectNames.GetExpansionName((MangosProjectGeneration)generation)">@ShortExpansion(generation)</span>
+                                }
+                            </div>
+                        </td>
+                        <td data-label="Entries">
+                            <strong>@definition.OptionCount.ToString("N0")</strong>
+                            <small class="d-block text-muted">@definition.VariantCount.ToString("N0") data sets</small>
+                        </td>
+                        <td data-label="Status">
+                            <div class="field-data-status-list">
+                                @if (definition.IsEnabled)
+                                {
+                                    <span class="badge text-bg-success">Enabled</span>
+                                }
+                                else
+                                {
+                                    <span class="badge text-bg-secondary">Disabled</span>
+                                }
+                                @if (definition.IsSystem)
+                                {
+                                    <span class="badge text-bg-light">Built-in seed</span>
+                                }
+                            </div>
+                        </td>
+                        <td data-label="Actions" class="actions-column viewer-action-column">
+                            @if (Model.CanManage)
+                            {
+                                <div class="row-actions row-actions-compact">
+                                    <a
+                                        class="icon-button"
+                                        asp-action="EditDefinition"
+                                        asp-route-id="@definition.Id"
+                                        title="Edit column data"
+                                        aria-label="Edit @definition.ColumnName"><i class="bi bi-pencil"></i></a>
+                                    <form asp-action="DeleteDefinition" method="post" data-confirm="Remove field data for @(definition.TableName).@(definition.ColumnName)? All expansion data sets and entries will also be removed.">
+                                        <input type="hidden" name="id" value="@definition.Id" />
+                                        <input type="hidden" name="categoryId" value="@Model.CategoryId" />
+                                        <input type="hidden" name="search" value="@Model.Search" />
+                                        <input type="hidden" name="page" value="@Model.Page" />
+                                        <button class="icon-button danger" type="submit" title="Remove column data" aria-label="Remove @definition.ColumnName"><i class="bi bi-trash"></i></button>
+                                    </form>
+                                </div>
+                            }
+                            else
+                            {
+                                <span class="read-only-pill"><i class="bi bi-eye"></i> View only</span>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+
+        @if (Model.TotalPages > 1)
+        {
+        <nav class="pagination-shell world-pagination viewer-results-pagination" aria-label="Field definition pages">
+            <div class="pagination-status">
+                <strong>Page @Model.Page</strong>
+                <span>of @Model.TotalPages · @Model.TotalDefinitions.ToString("N0") definitions</span>
+            </div>
+            <ul class="pagination mb-0">
+                <li class="page-item pagination-direction @(Model.Page <= 1 ? "disabled" : string.Empty)">
+                    <a class="page-link"
+                       asp-action="Index"
+                       asp-route-categoryId="@Model.CategoryId"
+                       asp-route-search="@Model.Search"
+                       asp-route-page="@(Math.Max(1, Model.Page - 1))"
+                       aria-label="Previous page"><i class="bi bi-chevron-left"></i><span>Previous</span></a>
+                </li>
+                @for (int definitionPage = firstPage; definitionPage <= lastPage; definitionPage++)
+                {
+                    <li class="page-item @(definitionPage == Model.Page ? "active" : string.Empty)">
+                        <a class="page-link"
+                           asp-action="Index"
+                           asp-route-categoryId="@Model.CategoryId"
+                           asp-route-search="@Model.Search"
+                           asp-route-page="@definitionPage"
+                           aria-current="@(definitionPage == Model.Page ? "page" : null)">@definitionPage</a>
+                    </li>
+                }
+                <li class="page-item pagination-direction @(Model.Page >= Model.TotalPages ? "disabled" : string.Empty)">
+                    <a class="page-link"
+                       asp-action="Index"
+                       asp-route-categoryId="@Model.CategoryId"
+                       asp-route-search="@Model.Search"
+                       asp-route-page="@(Math.Min(Model.TotalPages, Model.Page + 1))"
+                       aria-label="Next page"><span>Next</span><i class="bi bi-chevron-right"></i></a>
+                </li>
+            </ul>
+        </nav>
+        }
+    }
+</section>
+
+@functions {
+    private static string FormatHandling(MangosFieldValueHandling handling)
+    {
+        return handling switch
+        {
+            MangosFieldValueHandling.BitwiseOr => "Bitwise OR",
+            MangosFieldValueHandling.Additive => "Additive sum",
+            _ => "Direct value"
+        };
+    }
+
+    private static string ShortExpansion(int generation)
+    {
+        return generation switch
+        {
+            0 => "Vanilla",
+            1 => "TBC",
+            2 => "Wrath",
+            3 => "Cata",
+            4 => "MoP",
+            _ => generation.ToString(CultureInfo.InvariantCulture)
+        };
+    }
+}

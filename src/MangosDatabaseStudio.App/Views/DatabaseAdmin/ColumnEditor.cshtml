@@ -1,0 +1,131 @@
+@* Present the DatabaseAdmin ColumnEditor workflow within the shared studio layout. *@
+
+@model SchemaColumnEditorViewModel
+@{
+    ViewData["Title"] = (Model.IsNew ? "Add column" : "Edit " + Model.OriginalColumnName);
+    ViewData["Section"] = "Database Administration / " + Model.Database + " / " + Model.Table;
+}
+
+<div class="page-actions schema-editor-page-heading">
+    <div>
+        <span class="eyebrow">Restricted schema editor</span>
+        <h1>@(Model.IsNew ? "Add table column" : "Edit table column")</h1>
+        <p class="page-lead">Define the column using guarded MySQL/MariaDB options. Nothing is executed until you review the generated SQL.</p>
+    </div>
+    <a class="btn btn-outline-secondary" asp-action="Structure" asp-route-database="@Model.Database" asp-route-table="@Model.Table"><i class="bi bi-arrow-left"></i> Back to structure</a>
+</div>
+
+<section class="panel schema-editor-form-panel">
+    <div class="section-heading">
+        <div>
+            <span class="eyebrow">Column definition</span>
+            <h2>@(Model.IsNew ? "New column" : Model.OriginalColumnName)</h2>
+            <p>@Model.Database.@Model.Table</p>
+        </div>
+        <span class="section-icon"><i class="bi bi-layout-text-sidebar-reverse"></i></span>
+    </div>
+
+    <form method="post" asp-action="PreviewColumn" class="schema-editor-form" data-schema-column-form>
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="Database" />
+        <input type="hidden" asp-for="Table" />
+        <input type="hidden" asp-for="IsNew" />
+        <input type="hidden" asp-for="OriginalColumnName" />
+
+        <div asp-validation-summary="All" class="alert alert-danger schema-validation-summary"></div>
+
+        <div class="schema-form-grid two-column">
+            <div class="form-group">
+                <label asp-for="Name">Column name</label>
+                <input asp-for="Name" class="form-control" autocomplete="off" />
+                <small>Letters, numbers, underscore, and dollar sign are supported.</small>
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="ColumnType">Column type</label>
+                <input asp-for="ColumnType" class="form-control font-monospace" placeholder="int(10) unsigned" autocomplete="off" />
+                <small>Examples: <code>int(10) unsigned</code>, <code>varchar(255)</code>, <code>decimal(10,2)</code>, <code>timestamp</code>.</small>
+                <span asp-validation-for="ColumnType" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label asp-for="DefaultMode">Default behavior</label>
+                <select asp-for="DefaultMode" class="form-select">
+                    <option value="none">No explicit default</option>
+                    <option value="null">NULL</option>
+                    <option value="value">Literal value</option>
+                    <option value="current-timestamp">CURRENT_TIMESTAMP</option>
+                    <option value="bit-literal">BIT literal</option>
+                </select>
+                <small>NULL requires a nullable column. CURRENT_TIMESTAMP is limited to compatible temporal columns.</small>
+            </div>
+            <div class="form-group">
+                <label asp-for="DefaultValue">Default value</label>
+                <input asp-for="DefaultValue" class="form-control" autocomplete="off" />
+                <small>Used for Literal value and BIT literal defaults.</small>
+            </div>
+
+            <div class="form-group">
+                <label asp-for="Position">Column position</label>
+                <select asp-for="Position" class="form-select">
+                    <option value="LAST">At end of table</option>
+                    <option value="FIRST">First column</option>
+                    <option value="AFTER">After another column</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label asp-for="AfterColumn">Position after</label>
+                <select asp-for="AfterColumn" class="form-select">
+                    <option value="">Choose a column…</option>
+                    @foreach (var column in Model.AvailableColumns.Where(column => !string.Equals(column.Name, Model.OriginalColumnName, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        <option value="@column.Name">@column.Name</option>
+                    }
+                </select>
+                <small>Used only when Column position is After another column.</small>
+            </div>
+        </div>
+
+        <div class="schema-option-row">
+            <label class="schema-check-option">
+                <input asp-for="IsNullable" />
+                <span><strong>Allow NULL</strong><small>Permit this column to store NULL values.</small></span>
+            </label>
+            <label class="schema-check-option @(Model.IsNew ? "is-disabled" : string.Empty)">
+                @if (Model.IsNew)
+                {
+                    <input asp-for="IsAutoIncrement" disabled />
+                    <span><strong>Auto increment</strong><small>Create the column first, add its key/index, then enable auto increment from Edit column.</small></span>
+                }
+                else
+                {
+                    <input asp-for="IsAutoIncrement" />
+                    <span><strong>Auto increment</strong><small>Available only for indexed integer columns.</small></span>
+                }
+            </label>
+        </div>
+
+        <div class="form-group">
+            <label asp-for="Comment">Column comment</label>
+            <textarea asp-for="Comment" class="form-control" rows="3"></textarea>
+            <span asp-validation-for="Comment" class="text-danger"></span>
+        </div>
+
+        <div class="schema-editor-safety-note">
+            <i class="bi bi-shield-check"></i>
+            <div>
+                <strong>Preview first</strong>
+                <p>Database Studio will validate the current live schema again and generate the exact ALTER TABLE statement before anything can run.</p>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <a class="btn btn-outline-secondary" asp-action="Structure" asp-route-database="@Model.Database" asp-route-table="@Model.Table">Cancel</a>
+            <button class="btn btn-primary" type="submit"><i class="bi bi-code-square"></i> Review SQL</button>
+        </div>
+    </form>
+</section>
+
+@section Scripts {
+    <script src="~/js/schema-editor.js" asp-append-version="true"></script>
+}

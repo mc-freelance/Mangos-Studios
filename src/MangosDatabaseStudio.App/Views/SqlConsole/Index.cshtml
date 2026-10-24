@@ -1,0 +1,127 @@
+@* Present the SqlConsole workspace and its available actions. *@
+
+@model SqlConsoleViewModel
+@{
+    ViewData["Title"] = "SQL Console";
+    ViewData["Section"] = "Database Administration";
+    bool canExecute = User.HasPermission(AppPermissions.SqlConsoleExecute);
+    bool canExecuteDestructive = User.HasPermission(AppPermissions.SqlConsoleDestructive);
+}
+@if (!canExecute)
+{
+    <div class="alert alert-info studio-inline-alert">
+        <i class="bi bi-info-circle-fill"></i>
+        <div>
+            <strong>Read-only access</strong>
+            <span>You can review the SQL Console, but this role cannot execute statements.</span>
+        </div>
+    </div>
+}
+<form method="post"
+      class="sql-console-layout"
+      data-processing-form
+      data-processing-title="Executing SQL statement"
+      data-processing-message="MaNGOS Database Studio is waiting for MySQL/MariaDB to finish the statement. Long-running queries may take several minutes."
+      data-processing-label="Executing query...">
+    <section class="panel">
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+        @if (!string.IsNullOrWhiteSpace(Model.Warning))
+        {
+            <div class="alert alert-warning studio-inline-alert">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <div>
+                    <strong>Confirmation required</strong>
+                    <span>@Model.Warning</span>
+                </div>
+            </div>
+        }
+        <div class="sql-toolbar">
+            <div>
+                <label asp-for="Database" class="form-label">Target database</label>
+                <select asp-for="Database" class="form-select" disabled="@(!canExecute)">
+                    @foreach(var database in Model.Databases)
+                    {
+                        <option value="@database.Name">@database.Name</option>
+                    }
+                </select>
+                <span asp-validation-for="Database" class="text-danger small"></span>
+            </div>
+            <div>
+                <label asp-for="MaximumRows" class="form-label">Maximum result rows</label>
+                <input asp-for="MaximumRows" class="form-control" disabled="@(!canExecute)" />
+            </div>
+            @if (canExecute)
+            {
+                <button class="btn btn-primary align-self-end" type="submit" data-processing-submit><i class="bi bi-play-fill"></i><span>Execute</span></button>
+            }
+        </div>
+        <label asp-for="Sql" class="form-label mt-3">SQL statement</label>
+        <textarea asp-for="Sql" class="sql-editor" spellcheck="false" readonly="@(!canExecute)"></textarea>
+        @if (canExecuteDestructive)
+        {
+            <div class="form-check mt-3">
+                <input asp-for="ConfirmDestructive" class="form-check-input" />
+                <label asp-for="ConfirmDestructive" class="form-check-label">I reviewed and approve destructive or privilege-changing statements</label>
+            </div>
+        }
+        else if (canExecute)
+        {
+            <div class="form-text mt-3">
+                <i class="bi bi-shield-lock"></i> This role cannot run destructive or privilege-changing statements.</div>
+        }
+    </section>
+    <aside class="panel safety-panel">
+        <i class="bi bi-shield-exclamation"></i>
+        <h2>Execution safeguards</h2>
+        <p>The console scans for destructive statements and enforces the RBAC permission assigned to your role. MySQL permissions still provide the final database-level boundary.</p>
+        <ul>
+            <li>Use a limited database account</li>
+            <li>Back up before schema changes</li>
+            <li>Review the selected database</li>
+            <li>Avoid storing root credentials</li>
+        </ul>
+    </aside>
+</form>
+@if (Model.Result != null)
+{
+    <section class="panel mt-4">
+        <div class="panel-header">
+            <div>
+                <span class="eyebrow">Query result</span>
+                <h2>@Model.Result.Message</h2>
+            </div>
+            <span class="badge text-bg-success">@Model.Result.DurationMilliseconds.ToString("N0") ms</span>
+        </div>
+        <div class="table-summary">
+            <span>Affected rows: <strong>@Model.Result.AffectedRows</strong></span>
+            <span>Returned rows: <strong>@Model.Result.Rows.Count</strong></span>
+        </div>
+    @if (Model.Result.Columns.Count>0)
+    {
+        <div class="data-table-wrap">
+            <table class="studio-table">
+                <thead>
+                    <tr>
+                        @foreach(string column in Model.Result.Columns)
+                        {
+                            <th>@column</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach(var row in Model.Result.Rows)
+                    {
+                        <tr>
+                            @foreach (string column in Model.Result.Columns)
+                            {
+                                row.TryGetValue(column, out object? value);
+                                <td>@(value ?? "NULL")</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    </section>
+}

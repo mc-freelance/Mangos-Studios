@@ -1,0 +1,155 @@
+@* Present the Profile workspace and its available actions. *@
+
+@model ProfileViewModel
+@{
+    ViewData["Title"] = "User Profile";
+    ViewData["Section"] = "Account / Profile";
+}
+<div class="profile-layout">
+    <section class="panel profile-card">
+        <div class="profile-hero">
+            <div class="profile-avatar profile-avatar-large">
+                @if (!string.IsNullOrWhiteSpace(Model.AvatarUrl))
+                {
+                    <img src="@Model.AvatarUrl" alt="@Model.Username avatar" referrerpolicy="no-referrer" />
+                }
+                else
+                {
+                    <span>@Model.Initials</span>
+                }
+            </div>
+            <div>
+                <span class="eyebrow">Signed-in account</span>
+                <h2>@Model.Username</h2>
+                <p>@AppRoles.GetDisplayName(Model.Role)</p>
+            </div>
+        </div>
+
+        <form asp-action="Update" method="post" enctype="multipart/form-data" class="profile-form">
+            <input asp-for="Id" type="hidden" />
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+            <div class="form-group">
+                <label asp-for="Email" class="form-label"></label>
+                <input asp-for="Email" class="form-control" autocomplete="email" placeholder="Used only when Gravatar is selected" />
+                <span asp-validation-for="Email" class="text-danger"></span>
+            </div>
+
+            <fieldset class="avatar-choice-grid">
+                <legend>Avatar source</legend>
+                <label class="avatar-choice">
+                    <input asp-for="AvatarMode" type="radio" value="@UserAvatarModes.Initials" />
+                    <span><i class="bi bi-fonts"></i><strong>Initials</strong><small>Generated from your username</small></span>
+                </label>
+                <label class="avatar-choice">
+                    <input asp-for="AvatarMode" type="radio" value="@UserAvatarModes.Gravatar" />
+                    <span><i class="bi bi-globe"></i><strong>Gravatar</strong><small>Uses the email above</small></span>
+                </label>
+                <label class="avatar-choice">
+                    <input asp-for="AvatarMode" type="radio" value="@UserAvatarModes.Upload" />
+                    <span><i class="bi bi-cloud-arrow-up"></i><strong>Upload</strong><small>PNG, JPEG, GIF, or WebP</small></span>
+                </label>
+            </fieldset>
+            <span asp-validation-for="AvatarMode" class="text-danger"></span>
+
+            <div class="form-group">
+                <label asp-for="AvatarFile" class="form-label"></label>
+                <input asp-for="AvatarFile" class="form-control" accept="image/png,image/jpeg,image/gif,image/webp" />
+                <span asp-validation-for="AvatarFile" class="text-danger"></span>
+                <div class="form-text">Maximum size: 3 MB. @(Model.HasUploadedAvatar ? "Leave blank to keep the current upload." : string.Empty)</div>
+            </div>
+
+            <div class="form-actions">
+                <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i> Save profile</button>
+            </div>
+        </form>
+    </section>
+
+    <div class="profile-side-stack">
+        @if (Model.DeviceIdentity != null)
+        {
+            <section class="panel device-identity-panel">
+                <div class="section-heading device-identity-heading">
+                    <div>
+                        <span class="eyebrow">Application security</span>
+                        <h2>Device identifier</h2>
+                        <p>Optional hardware identity for future application authorization.</p>
+                    </div>
+                    <span class="device-identity-status @(!Model.DeviceIdentity.IsEnabled ? "is-disabled" : Model.DeviceIdentity.IsAvailable ? "is-available" : "is-unavailable")">
+                        <i class="bi @(!Model.DeviceIdentity.IsEnabled ? "bi-shield-slash" : Model.DeviceIdentity.IsAvailable ? "bi-shield-check" : "bi-shield-exclamation")"></i>
+                        @(!Model.DeviceIdentity.IsEnabled ? "Disabled" : Model.DeviceIdentity.IsAvailable ? "Available" : "Unavailable")
+                    </span>
+                </div>
+
+                @if (!Model.DeviceIdentity.IsEnabled)
+                {
+                    <div class="device-identity-empty is-disabled">
+                        <i class="bi bi-shield-slash"></i>
+                        <div>
+                            <strong>Device Identity is disabled</strong>
+                        </div>
+                    </div>
+                }
+                else if (Model.DeviceIdentity.IsAvailable)
+                {
+                    <dl class="device-identity-grid">
+                        <div class="device-identity-primary">
+                            <dt>Hardware identifier</dt>
+                            <dd title="@Model.DeviceIdentity.Identifier">
+                                <code>@Model.DeviceIdentity.Identifier</code>
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>Identifier Source</dt>
+                            <dd>@(Model.DeviceIdentity.Source ?? "Unavailable")</dd>
+                        </div>
+                        <div>
+                            <dt>Platform</dt>
+                            <dd>@(Model.DeviceIdentity.Platform ?? "Unavailable")</dd>
+                        </div>
+                    </dl>
+                }
+                else
+                {
+                    <div class="device-identity-empty">
+                        <i class="bi bi-pc-display-horizontal"></i>
+                        <div>
+                            <strong>No hardware identifier is available</strong>
+                            <p>@(Model.DeviceIdentity.StatusMessage ?? "The device firmware did not expose a usable identifier.")</p>
+                        </div>
+                    </div>
+                }
+            </section>
+        }
+
+        <section class="panel">
+            <div class="section-heading">
+                <div>
+                    <span class="eyebrow">Security</span>
+                    <h2>Change password</h2>
+                    <p>Confirm your current password before replacing it.</p>
+                </div>
+                <i class="bi bi-shield-lock"></i>
+            </div>
+            <form asp-action="ChangePassword" method="post" class="profile-form">
+                <div class="form-group">
+                    <label for="CurrentPassword" class="form-label">Current password</label>
+                    <input id="CurrentPassword" name="CurrentPassword" type="password" class="form-control" autocomplete="current-password" required />
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="NewPassword" class="form-label">New password</label>
+                        <input id="NewPassword" name="NewPassword" type="password" class="form-control" autocomplete="new-password" minlength="12" required />
+                    </div>
+                    <div class="form-group">
+                        <label for="ConfirmPassword" class="form-label">Confirm new password</label>
+                        <input id="ConfirmPassword" name="ConfirmPassword" type="password" class="form-control" autocomplete="new-password" minlength="12" required />
+                    </div>
+                </div>
+                <div class="form-text">Passwords must contain between 12 and 128 characters.</div>
+                <div class="form-actions">
+                    <button class="btn btn-outline-primary" type="submit"><i class="bi bi-key"></i> Change password</button>
+                </div>
+            </form>
+        </section>
+    </div>
+</div>

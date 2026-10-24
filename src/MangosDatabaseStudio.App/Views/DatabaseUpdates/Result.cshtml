@@ -1,0 +1,78 @@
+@* Show the outcome of the DatabaseUpdates operation. *@
+
+@model DatabaseUpdateResultViewModel
+@{
+    ViewData["Title"] = Model.Result.Succeeded ? "Database Updates Complete" : "Database Updates Stopped";
+    ViewData["Section"] = "Database Administration / Updates";
+    ViewData["ContentClass"] = "database-updates-page";
+}
+
+<div class="form-shell database-update-result-shell">
+    <section class="panel result-panel @(Model.Result.Succeeded ? "success" : "danger")">
+        <i class="bi @(Model.Result.Succeeded ? "bi-check-circle" : "bi-x-octagon")"></i>
+        <h2>@Model.Result.Message</h2>
+        <p>Database: <strong>@Model.Database</strong> · Applied: <strong>@Model.Result.PatchResults.Count(result => result.Succeeded)</strong> of <strong>@Model.Result.PlannedPatchCount</strong>
+        </p>
+        @if (Model.Result.StartingVersion != null || Model.Result.FinalVersion != null)
+        {
+            <div class="database-update-result-transition">
+                <div>
+                    <span>Started</span>
+                    <strong>@(Model.Result.StartingVersion?.DisplayValue ?? "Unknown")</strong>
+                </div>
+                <i class="bi bi-arrow-right"></i>
+                <div>
+                    <span>Finished</span>
+                    <strong>@(Model.Result.FinalVersion?.DisplayValue ?? "Unknown")</strong>
+                </div>
+            </div>
+        }
+    </section>
+
+    @if (Model.Result.PatchResults.Count > 0)
+    {
+        <section class="panel">
+            <div class="section-heading">
+                <div>
+                    <span class="eyebrow">Execution log</span>
+                    <h2>Patch results</h2>
+                </div>
+                <i class="bi bi-list-check"></i>
+            </div>
+            <div class="database-update-result-list">
+                @for (int i = 0; i < Model.Result.PatchResults.Count; i++)
+                {
+                    var result = Model.Result.PatchResults[i];
+                    <details class="database-update-result-item @(result.Succeeded ? "success" : "danger")" open="@(!result.Succeeded)">
+                        <summary>
+                            <span class="database-update-result-icon"><i class="bi @(result.Succeeded ? "bi-check-lg" : "bi-x-lg")"></i></span>
+                            <span><strong>@(i + 1). @result.FileName</strong><small>@result.ExpectedVersion.DisplayValue → @result.NewVersion.DisplayValue</small></span>
+                            <span class="database-update-result-duration">@result.DurationMilliseconds.ToString("N0") ms</span>
+                        </summary>
+                        <div class="database-update-result-detail">
+                            <p>@result.Message</p>
+                            @if (!string.IsNullOrWhiteSpace(result.StandardOutput))
+                            {
+                                <h3>Output</h3>
+                                <pre>@result.StandardOutput</pre>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(result.StandardError))
+                            {
+                                <h3>Errors and warnings</h3>
+                                <pre>@result.StandardError</pre>
+                            }
+                        </div>
+                    </details>
+                }
+            </div>
+        </section>
+    }
+
+    <div class="form-actions">
+        <a class="btn btn-primary" asp-action="Index" asp-route-database="@Model.Database"><i class="bi bi-arrow-repeat"></i> Rescan updates</a>
+        @if (User.HasPermission(AppPermissions.DatabaseBrowse))
+        {
+            <a class="btn btn-outline-secondary" asp-controller="DatabaseAdmin" asp-action="Tables" asp-route-database="@Model.Database">View database</a>
+        }
+    </div>
+</div>

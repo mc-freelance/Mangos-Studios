@@ -1,0 +1,866 @@
+@* Present the WorldEditor NpcVendors workflow within the shared studio layout. *@
+
+@model NpcVendorViewModel
+@{
+    ViewData["Title"] = "Vendor Viewer";
+    ViewData["Section"] = Model.Database + " / " + Model.CatalogName;
+    ViewData["PageClass"] = "world-editor-page";
+    ViewData["ContentClass"] = "world-editor-content world-record-editor-content";
+
+    int[] pageSizes = new[] { 10, 20, 50, 100, 200 };
+    int firstPage = Math.Max(1, Model.Vendors.Page - 2);
+    int lastPage = Math.Min(Model.Vendors.TotalPages, Model.Vendors.Page + 2);
+    int itemFirstPage = Model.SelectedVendor == null
+        ? 1
+        : Math.Max(1, Model.SelectedVendor.Items.Page - 2);
+    int itemLastPage = Model.SelectedVendor == null
+        ? 1
+        : Math.Min(Model.SelectedVendor.Items.TotalPages, Model.SelectedVendor.Items.Page + 2);
+    bool canManageInventory = Model.CanAddVendorItems || Model.CanEditVendorItems || Model.CanDeleteVendorItems;
+    string itemLookupUrl = Url.Action("NpcVendorItems", "WorldEditor") ?? string.Empty;
+}
+
+<div class="world-record-editor viewer-page"
+     data-npc-vendor-item-search-url="@itemLookupUrl"
+     data-npc-vendor-database="@Model.Database">
+    <header class="record-editor-commandbar">
+        <div class="record-command-identity">
+            <a class="record-back-button"
+               asp-action="Index"
+               asp-route-database="@Model.Database"
+               aria-label="Back to World Editor">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <span class="record-command-icon"><i class="bi bi-shop"></i></span>
+            <div>
+                <span class="eyebrow">Structured world data viewer</span>
+                <h2>Vendor Viewer</h2>
+                <p>Browse vendors and their inventories.</p>
+            </div>
+        </div>
+
+        <div class="record-command-actions">
+            <span class="record-change-badge">
+                <i class="bi @(canManageInventory ? "bi-pencil-square" : "bi-shield-check")"></i>
+                @(canManageInventory ? "Inventory editor" : "Read-only")
+            </span>
+        </div>
+    </header>
+
+    <div class="viewer-flow">
+        <section class="panel viewer-search-panel" aria-labelledby="vendorDirectoryHeading">
+            <header class="panel-header viewer-search-heading">
+                <div>
+                    <span class="eyebrow">Vendor directory</span>
+                    <h2 id="vendorDirectoryHeading">Find an NPC vendor</h2>
+                    <p>Search the world catalog by NPC name or entry, then open a vendor to review and manage its linked inventory.</p>
+                </div>
+                <span class="viewer-catalog-badge"><i class="bi bi-database-check"></i> @Model.CatalogName @Model.CatalogVersion</span>
+            </header>
+
+            @if (!Model.IsAvailable)
+            {
+                <div class="alert alert-warning studio-inline-alert mb-0">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <div>
+                        <strong>Vendor viewer unavailable</strong>
+                        <span>The connected database is missing required vendor data.</span>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <form method="get" asp-action="NpcVendors" class="viewer-search-form">
+                    <input type="hidden" name="database" value="@Model.Database" />
+                    <input type="hidden" name="show" value="true" />
+                    <input type="hidden" name="pageSize" value="@Model.Vendors.PageSize" />
+
+                    <label class="viewer-search-field" for="vendorSearch">
+                        <span>NPC name or entry</span>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input id="vendorSearch"
+                                   type="search"
+                                   name="search"
+                                   class="form-control"
+                                   value="@Model.Search"
+                                   placeholder="Example: Innkeeper or 6740"
+                                   autocomplete="off" />
+                        </div>
+                        <small>Leave the search empty to browse every vendor in the current catalog.</small>
+                    </label>
+
+                    <div class="viewer-context-card">
+                        <span class="viewer-context-icon"><i class="bi bi-bezier2"></i></span>
+                        <div>
+                            <small>Vendor flag mask</small>
+                            <strong><code>@Model.VendorFlagMaskDisplay</code></strong>
+                            <span>NPC flag used to identify vendor-capable creatures.</span>
+                        </div>
+                    </div>
+
+                    <div class="viewer-context-card">
+                        <span class="viewer-context-icon"><i class="bi @(canManageInventory ? "bi-pencil-square" : "bi-shield-check")"></i></span>
+                        <div>
+                            <small>Workspace access</small>
+                            <strong>@(canManageInventory ? "Inventory editor" : "Read-only viewer")</strong>
+                            <span>@(canManageInventory ? "Linked items can be managed from the selected NPC workbench." : "Inventory data can be inspected without changing world records.")</span>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary viewer-search-button">
+                        <i class="bi bi-search"></i>
+                        Search vendors
+                    </button>
+                </form>
+            }
+        </section>
+
+        @if (Model.IsAvailable && Model.HasSearched)
+        {
+            <section class="viewer-summary-grid" aria-label="Vendor viewer summary">
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-people"></i></span>
+                    <div>
+                        <small>Matching vendors</small>
+                        <strong>@Model.Vendors.TotalCount.ToString("N0")</strong>
+                        <p>@(string.IsNullOrWhiteSpace(Model.Search) ? "All vendor NPCs" : "Filtered directory")</p>
+                    </div>
+                </article>
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-file-earmark-text"></i></span>
+                    <div>
+                        <small>Directory page</small>
+                        <strong>@Model.Vendors.Page / @Math.Max(Model.Vendors.TotalPages, 1)</strong>
+                        <p>@Model.Vendors.PageSize rows per page</p>
+                    </div>
+                </article>
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-person-vcard"></i></span>
+                    <div>
+                        <small>Current selection</small>
+                        @if (Model.SelectedVendor == null)
+                        {
+                            <strong>None</strong>
+                            <p>Select a vendor below</p>
+                        }
+                        else
+                        {
+                            <strong>Entry @Model.SelectedVendor.Vendor.Entry</strong>
+                            <p>@Model.SelectedVendor.Items.TotalCount.ToString("N0") linked item@(Model.SelectedVendor.Items.TotalCount == 1 ? string.Empty : "s")</p>
+                        }
+                    </div>
+                </article>
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi @(canManageInventory ? "bi-check2-circle" : "bi-shield-lock")"></i></span>
+                    <div>
+                        <small>Inventory access</small>
+                        <strong>@(canManageInventory ? "Editable" : "Read-only")</strong>
+                        <p>@Model.CatalogName @Model.CatalogVersion</p>
+                    </div>
+                </article>
+            </section>
+        }
+
+        <main class="viewer-detail-stack">
+            @if (!ViewData.ModelState.IsValid)
+            {
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+            }
+
+            @if (!Model.IsAvailable)
+            {
+                <section class="panel viewer-empty-state is-warning">
+                    <span><i class="bi bi-database-exclamation"></i></span>
+                    <h3>Required vendor data was not found</h3>
+                    <p>The selected database is missing required vendor data.</p>
+                </section>
+            }
+            else if (!Model.HasSearched)
+            {
+                <section class="panel viewer-empty-state">
+                    <span><i class="bi bi-shop-window"></i></span>
+                    <h3>Browse vendor inventories without editing raw rows</h3>
+                    <p>Search for a vendor to view its inventory.</p>
+                </section>
+            }
+            else if (Model.Vendors.Items.Count == 0)
+            {
+                <section class="panel viewer-empty-state">
+                    <span><i class="bi bi-search"></i></span>
+                    <h3>No matching vendor NPCs</h3>
+                    <p>Try another name, an entry ID, or an empty search.</p>
+                </section>
+            }
+            else if (Model.SelectedVendor == null)
+            {
+                <section class="panel viewer-panel-flush viewer-results-panel">
+                    <header class="viewer-results-header">
+                        <div>
+                            <span class="eyebrow">Vendor search results</span>
+                            <h3>Choose an NPC vendor</h3>
+                            <p>Select a vendor to view its inventory.</p>
+                        </div>
+                        <div class="viewer-results-count">
+                            <strong>@Model.Vendors.TotalCount.ToString("N0")</strong>
+                            <span>vendor@(Model.Vendors.TotalCount == 1 ? string.Empty : "s")</span>
+                        </div>
+                    </header>
+
+                    <form method="get" asp-action="NpcVendors" class="world-filter-bar viewer-results-toolbar">
+                        <input type="hidden" name="database" value="@Model.Database" />
+                        <input type="hidden" name="search" value="@Model.Search" />
+                        <input type="hidden" name="show" value="true" />
+                        <span class="world-filter-hint">Page @Model.Vendors.Page of @Math.Max(Model.Vendors.TotalPages, 1)</span>
+                        <label class="world-filter-select">
+                            <span>Rows per page</span>
+                            <select name="pageSize" class="form-select" onchange="this.form.submit()">
+                                @foreach (int pageSize in pageSizes)
+                                {
+                                    if (Model.Vendors.PageSize == pageSize)
+                                    {
+                                        <option value="@pageSize" selected>@pageSize</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@pageSize">@pageSize</option>
+                                    }
+                                }
+                            </select>
+                        </label>
+                    </form>
+
+                    <div class="world-record-table-wrap viewer-results-table-wrap">
+                        <table class="table studio-table viewer-results-table viewer-directory-table mb-0" aria-label="Vendor search results">
+                            <colgroup>
+                                <col class="viewer-directory-col" style="--viewer-col-width:48%" />
+                                <col class="viewer-directory-col" style="--viewer-col-width:29%" />
+                                <col class="viewer-directory-col" style="--viewer-col-width:15%" />
+                                <col class="viewer-directory-col" style="--viewer-col-width:8%" />
+                            </colgroup>
+                            <thead>
+                                <tr>
+                                    <th>NPC vendor</th>
+                                    <th>Subname</th>
+                                    <th class="viewer-directory-center">Linked items</th>
+                                    <th class="actions-column viewer-action-column viewer-directory-center">Open</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var vendor in Model.Vendors.Items)
+                                {
+                                    string vendorDisplayName = string.IsNullOrWhiteSpace(vendor.Name) ? "Unnamed NPC" : vendor.Name;
+                                    <tr>
+                                        <td class="viewer-directory-name-cell">
+                                            <div class="viewer-directory-identity">
+                                                <span class="viewer-directory-icon"><i class="bi bi-person-badge"></i></span>
+                                                <span><strong>@vendorDisplayName</strong><small>Entry @vendor.Entry</small></span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            @if (string.IsNullOrWhiteSpace(vendor.SubName))
+                                            {
+                                                <span class="text-muted">—</span>
+                                            }
+                                            else
+                                            {
+                                                <span>@vendor.SubName</span>
+                                            }
+                                        </td>
+                                        <td class="viewer-directory-center">
+                                            <span class="npc-vendor-item-count">@vendor.ItemCount.ToString("N0")</span>
+                                        </td>
+                                        <td class="actions-column viewer-action-column viewer-directory-center">
+                                            <a class="icon-button"
+                                               asp-action="NpcVendors"
+                                               asp-route-database="@Model.Database"
+                                               asp-route-search="@Model.Search"
+                                               asp-route-show="true"
+                                               asp-route-page="@Model.Vendors.Page"
+                                               asp-route-pageSize="@Model.Vendors.PageSize"
+                                               asp-route-entry="@vendor.Entry"
+                                               title="Open @vendorDisplayName"
+                                               aria-label="Open @vendorDisplayName">
+                                                <i class="bi bi-chevron-right"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    @if (Model.Vendors.TotalPages > 1)
+                    {
+                        <nav class="pagination-shell world-pagination viewer-results-pagination" aria-label="Vendor result pages">
+                            <div class="pagination-status">
+                                <strong>Page @Model.Vendors.Page</strong>
+                                <span>of @Model.Vendors.TotalPages · @Model.Vendors.TotalCount.ToString("N0") vendors</span>
+                            </div>
+                            <ul class="pagination mb-0">
+                                <li class="page-item pagination-direction @(Model.Vendors.Page == 1 ? "disabled" : string.Empty)">
+                                    <a class="page-link"
+                                       asp-action="NpcVendors"
+                                       asp-route-database="@Model.Database"
+                                       asp-route-search="@Model.Search"
+                                       asp-route-show="true"
+                                       asp-route-page="@(Model.Vendors.Page - 1)"
+                                       asp-route-pageSize="@Model.Vendors.PageSize"
+                                       aria-label="Previous page">
+                                        <i class="bi bi-chevron-left"></i>
+                                        <span>Previous</span>
+                                    </a>
+                                </li>
+                                @for (int vendorPage = firstPage; vendorPage <= lastPage; vendorPage++)
+                                {
+                                    <li class="page-item @(vendorPage == Model.Vendors.Page ? "active" : string.Empty)">
+                                        <a class="page-link"
+                                           asp-action="NpcVendors"
+                                           asp-route-database="@Model.Database"
+                                           asp-route-search="@Model.Search"
+                                           asp-route-show="true"
+                                           asp-route-page="@vendorPage"
+                                           asp-route-pageSize="@Model.Vendors.PageSize"
+                                           aria-current="@(vendorPage == Model.Vendors.Page ? "page" : null)">@vendorPage</a>
+                                    </li>
+                                }
+                                <li class="page-item pagination-direction @(Model.Vendors.Page == Model.Vendors.TotalPages ? "disabled" : string.Empty)">
+                                    <a class="page-link"
+                                       asp-action="NpcVendors"
+                                       asp-route-database="@Model.Database"
+                                       asp-route-search="@Model.Search"
+                                       asp-route-show="true"
+                                       asp-route-page="@(Model.Vendors.Page + 1)"
+                                       asp-route-pageSize="@Model.Vendors.PageSize"
+                                       aria-label="Next page">
+                                        <span>Next</span>
+                                        <i class="bi bi-chevron-right"></i>
+                                    </a>
+                                </li>
+                            </ul>
+                        </nav>
+                    }
+                </section>
+            }
+            else
+            {
+                var vendor = Model.SelectedVendor.Vendor;
+                <section class="panel viewer-panel-flush viewer-workbench">
+                    <header class="viewer-record-header">
+                        <span class="viewer-record-icon"><i class="bi bi-person-vcard"></i></span>
+                        <div>
+                            <span class="eyebrow">Selected NPC vendor</span>
+                            <h2>@(string.IsNullOrWhiteSpace(vendor.Name) ? "Unnamed NPC" : vendor.Name)</h2>
+                            <p>@(string.IsNullOrWhiteSpace(vendor.SubName) ? "No NPC subname" : vendor.SubName)</p>
+                        </div>
+                        <div class="viewer-record-actions">
+                            <a class="btn btn-outline-secondary btn-sm"
+                               asp-action="NpcVendors"
+                               asp-route-database="@Model.Database"
+                               asp-route-search="@Model.Search"
+                               asp-route-show="true"
+                               asp-route-page="@Model.Vendors.Page"
+                               asp-route-pageSize="@Model.Vendors.PageSize">
+                                <i class="bi bi-arrow-left"></i>
+                                Results
+                            </a>
+                            @if (Model.CanAddVendorItems)
+                            {
+                                <button type="button" class="btn btn-primary btn-sm" data-npc-vendor-add-open>
+                                    <i class="bi bi-plus-lg"></i>
+                                    Add vendor items
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-primary btn-sm" disabled title="Your role cannot add world records.">
+                                    <i class="bi bi-plus-lg"></i>
+                                    Add vendor items
+                                </button>
+                            }
+
+                            <partial name="_ViewerPendingRecordActions" />
+                        </div>
+                    </header>
+
+                    <div class="viewer-detail-metrics">
+                        <div>
+                            <small>NPC entry</small>
+                            <strong>@vendor.Entry</strong>
+                            <span>creature_template</span>
+                        </div>
+                        <div>
+                            <small>Linked items</small>
+                            <strong>@vendor.ItemCount.ToString("N0")</strong>
+                            <span>npc_vendor rows</span>
+                        </div>
+                        <div>
+                            <small>Inventory page</small>
+                            <strong>@Model.SelectedVendor.Items.Page / @Math.Max(Model.SelectedVendor.Items.TotalPages, 1)</strong>
+                            <span>@Model.SelectedVendor.Items.PageSize rows per page</span>
+                        </div>
+                        <div>
+                            <small>Vendor flag</small>
+                            <strong>@Model.VendorFlagMaskDisplay</strong>
+                            <span>vendor-capable NPC mask</span>
+                        </div>
+                    </div>
+
+                    <div class="viewer-record-section">
+                        <header class="viewer-record-section-header">
+                            <div>
+                                <span class="eyebrow">Linked vendor inventory</span>
+                                <h3>Items sold by this NPC</h3>
+                                <p>Review this vendor's items and values.</p>
+                            </div>
+                            <span class="badge rounded-pill">@Model.SelectedVendor.Items.TotalCount.ToString("N0") item@(Model.SelectedVendor.Items.TotalCount == 1 ? string.Empty : "s")</span>
+                        </header>
+
+                        @if (Model.SelectedVendor.Items.TotalCount == 0)
+                        {
+                            <div class="viewer-record-empty">
+                                <i class="bi bi-bag-x"></i>
+                                <strong>No linked items</strong>
+                                <p>This vendor has no items.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="viewer-record-table-wrap">
+                                <table class="table studio-table viewer-record-table viewer-workbench-table mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Item</th>
+                                            <th>Slot</th>
+                                            <th>Max stock</th>
+                                            <th>Restock</th>
+                                            <th>Extended cost</th>
+                                            <th>Condition</th>
+                                            <th class="actions-column viewer-action-column">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in Model.SelectedVendor.Items.Items)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <div class="npc-vendor-item-name">
+                                                        <span><i class="bi bi-box-seam"></i></span>
+                                                        <strong>@item.ItemName (Id: @item.ItemId)</strong>
+                                                    </div>
+                                                </td>
+                                                <td>@(item.Slot?.ToString(CultureInfo.InvariantCulture) ?? "—")</td>
+                                                <td>@(item.MaxCount?.ToString(CultureInfo.InvariantCulture) ?? "—")</td>
+                                                <td>
+                                                    @if (item.IncrementTime.HasValue)
+                                                    {
+                                                        <span>@item.IncrementTime.Value.ToString(CultureInfo.InvariantCulture)s</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span>—</span>
+                                                    }
+                                                </td>
+                                                <td>@(item.ExtendedCost?.ToString(CultureInfo.InvariantCulture) ?? "—")</td>
+                                                <td>@(item.ConditionId?.ToString(CultureInfo.InvariantCulture) ?? "—")</td>
+                                                <td class="actions-column viewer-action-column">
+                                                    <div class="row-actions row-actions-compact">
+                                                        <button type="button"
+                                                                class="icon-button"
+                                                                disabled="@(!Model.CanEditVendorItems)"
+                                                                title="@(Model.CanEditVendorItems ? "Edit vendor item" : "Your role cannot edit world records.")"
+                                                                aria-label="Edit @item.ItemName"
+                                                                data-npc-vendor-edit-open
+                                                                data-item-name="@item.ItemName"
+                                                                data-item-id="@item.ItemId"
+                                                                data-slot="@(item.Slot?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"
+                                                                data-max-count="@(item.MaxCount?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"
+                                                                data-increment-time="@(item.IncrementTime?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"
+                                                                data-extended-cost="@(item.ExtendedCost?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"
+                                                                data-condition-id="@(item.ConditionId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)">
+                                                            <i class="bi bi-pencil"></i>
+                                                        </button>
+                                                        <button type="button"
+                                                                class="icon-button danger"
+                                                                disabled="@(!Model.CanDeleteVendorItems)"
+                                                                title="@(Model.CanDeleteVendorItems ? "Remove vendor item" : "Your role cannot delete world records.")"
+                                                                aria-label="Remove @item.ItemName"
+                                                                data-npc-vendor-delete-open
+                                                                data-item-name="@item.ItemName"
+                                                                data-item-id="@item.ItemId"
+                                                                data-slot="@(item.Slot?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"
+                                                                data-max-count="@(item.MaxCount?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"
+                                                                data-increment-time="@(item.IncrementTime?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"
+                                                                data-extended-cost="@(item.ExtendedCost?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"
+                                                                data-condition-id="@(item.ConditionId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <footer class="viewer-record-footer">
+                                <div class="viewer-record-pagination-wrap">
+                                    <div class="pagination-status">
+                                        <strong>Page @Model.SelectedVendor.Items.Page</strong>
+                                        <span>of @Math.Max(Model.SelectedVendor.Items.TotalPages, 1) · @Model.SelectedVendor.Items.TotalCount.ToString("N0") items</span>
+                                    </div>
+
+                                    @if (Model.SelectedVendor.Items.TotalPages > 1)
+                                    {
+                                        <nav class="world-pagination viewer-record-pagination" aria-label="Vendor inventory pages">
+                                            <ul class="pagination mb-0">
+                                                <li class="page-item pagination-direction @(Model.SelectedVendor.Items.Page == 1 ? "disabled" : string.Empty)">
+                                                    <a class="page-link"
+                                                       asp-action="NpcVendors"
+                                                       asp-route-database="@Model.Database"
+                                                       asp-route-search="@Model.Search"
+                                                       asp-route-show="true"
+                                                       asp-route-page="@Model.Vendors.Page"
+                                                       asp-route-pageSize="@Model.Vendors.PageSize"
+                                                       asp-route-entry="@vendor.Entry"
+                                                       asp-route-itemPage="@(Model.SelectedVendor.Items.Page - 1)"
+                                                       asp-route-itemPageSize="@Model.SelectedVendor.Items.PageSize"
+                                                       aria-label="Previous inventory page">
+                                                        <i class="bi bi-chevron-left"></i>
+                                                        <span>Previous</span>
+                                                    </a>
+                                                </li>
+                                                @for (int itemPageNumber = itemFirstPage; itemPageNumber <= itemLastPage; itemPageNumber++)
+                                                {
+                                                    <li class="page-item @(itemPageNumber == Model.SelectedVendor.Items.Page ? "active" : string.Empty)">
+                                                        <a class="page-link"
+                                                           asp-action="NpcVendors"
+                                                           asp-route-database="@Model.Database"
+                                                           asp-route-search="@Model.Search"
+                                                           asp-route-show="true"
+                                                           asp-route-page="@Model.Vendors.Page"
+                                                           asp-route-pageSize="@Model.Vendors.PageSize"
+                                                           asp-route-entry="@vendor.Entry"
+                                                           asp-route-itemPage="@itemPageNumber"
+                                                           asp-route-itemPageSize="@Model.SelectedVendor.Items.PageSize"
+                                                           aria-current="@(itemPageNumber == Model.SelectedVendor.Items.Page ? "page" : null)">@itemPageNumber</a>
+                                                    </li>
+                                                }
+                                                <li class="page-item pagination-direction @(Model.SelectedVendor.Items.Page == Model.SelectedVendor.Items.TotalPages ? "disabled" : string.Empty)">
+                                                    <a class="page-link"
+                                                       asp-action="NpcVendors"
+                                                       asp-route-database="@Model.Database"
+                                                       asp-route-search="@Model.Search"
+                                                       asp-route-show="true"
+                                                       asp-route-page="@Model.Vendors.Page"
+                                                       asp-route-pageSize="@Model.Vendors.PageSize"
+                                                       asp-route-entry="@vendor.Entry"
+                                                       asp-route-itemPage="@(Model.SelectedVendor.Items.Page + 1)"
+                                                       asp-route-itemPageSize="@Model.SelectedVendor.Items.PageSize"
+                                                       aria-label="Next inventory page">
+                                                        <span>Next</span>
+                                                        <i class="bi bi-chevron-right"></i>
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </nav>
+                                    }
+                                </div>
+
+                                <form method="get" asp-action="NpcVendors" class="viewer-record-page-size">
+                                    <input type="hidden" name="database" value="@Model.Database" />
+                                    <input type="hidden" name="search" value="@Model.Search" />
+                                    <input type="hidden" name="show" value="true" />
+                                    <input type="hidden" name="page" value="@Model.Vendors.Page" />
+                                    <input type="hidden" name="pageSize" value="@Model.Vendors.PageSize" />
+                                    <input type="hidden" name="entry" value="@vendor.Entry" />
+                                    <input type="hidden" name="itemPage" value="1" />
+                                    <label class="world-filter-select">
+                                        <span>Rows per page</span>
+                                        <select name="itemPageSize" class="form-select" onchange="this.form.submit()">
+                                            @foreach (int pageSize in pageSizes)
+                                            {
+                                                if (Model.SelectedVendor.Items.PageSize == pageSize)
+                                                {
+                                                    <option value="@pageSize" selected>@pageSize</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@pageSize">@pageSize</option>
+                                                }
+                                            }
+                                        </select>
+                                    </label>
+                                </form>
+                            </footer>
+                        }
+                    </div>
+                </section>
+            }
+        </main>
+    </div>
+</div>
+
+@if (Model.SelectedVendor != null && canManageInventory)
+{
+    var selectedVendor = Model.SelectedVendor.Vendor;
+    var caps = Model.EditorCapabilities;
+
+    @if (Model.CanAddVendorItems)
+    {
+        <div class="modal fade npc-vendor-editor-modal" id="npcVendorAddModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content">
+                    <form method="post"
+                          asp-action="NpcVendorAddItems"
+                          data-npc-vendor-add-form>
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="Database" value="@Model.Database" />
+                        <input type="hidden" name="Search" value="@Model.Search" />
+                        <input type="hidden" name="Entry" value="@selectedVendor.Entry" />
+                        <input type="hidden" name="Page" value="@Model.Vendors.Page" />
+                        <input type="hidden" name="PageSize" value="@Model.Vendors.PageSize" />
+                        <input type="hidden" name="ItemPage" value="@Model.SelectedVendor.Items.Page" />
+                        <input type="hidden" name="ItemPageSize" value="@Model.SelectedVendor.Items.PageSize" />
+
+                        <div class="modal-header">
+                            <div>
+                                <span class="eyebrow">Vendor inventory editor</span>
+                                <h2 class="modal-title">Add vendor items to @selectedVendor.Name</h2>
+                                <p>Add one item or several rows together.</p>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="npc-vendor-batch-toolbar">
+                                <div>
+                                    <strong>Items to add</strong>
+                                    <span>All rows are validated before the transaction is committed.</span>
+                                </div>
+                                <button type="button" class="btn btn-outline-primary btn-sm" data-npc-vendor-add-row>
+                                    <i class="bi bi-plus-lg"></i> Add another row
+                                </button>
+                            </div>
+
+                            <div class="npc-vendor-batch-list" data-npc-vendor-add-rows>
+                                <div class="npc-vendor-batch-row" data-npc-vendor-add-row-item>
+                                    <div class="npc-vendor-batch-row-number" data-row-number>1</div>
+                                    <label class="npc-vendor-item-field">
+                                        <span>Item</span>
+                                        <div class="npc-vendor-item-picker" data-npc-vendor-item-picker>
+                                            <input type="hidden" name="Items[0].ItemId" data-field="ItemId" data-npc-vendor-item-id />
+                                            <button
+                                                type="button"
+                                                class="form-select npc-vendor-item-picker-toggle"
+                                                data-npc-vendor-item-picker-toggle
+                                                aria-haspopup="listbox"
+                                                aria-expanded="false">
+                                                <span data-npc-vendor-item-picker-label>Select an item...</span>
+                                            </button>
+                                        </div>
+                                    </label>
+                                    @if (caps.HasSlot)
+                                    {
+                                        <label>
+                                            <span>Slot</span>
+                                            <input class="form-control" type="number" min="0" name="Items[0].Slot" value="0" data-field="Slot" />
+                                        </label>
+                                    }
+                                    @if (caps.HasMaxCount)
+                                    {
+                                        <label>
+                                            <span>Max stock</span>
+                                            <input class="form-control" type="number" min="0" name="Items[0].MaxCount" value="0" data-field="MaxCount" />
+                                        </label>
+                                    }
+                                    @if (caps.HasIncrementTime)
+                                    {
+                                        <label>
+                                            <span>Restock (sec)</span>
+                                            <input class="form-control" type="number" min="0" name="Items[0].IncrementTime" value="0" data-field="IncrementTime" />
+                                        </label>
+                                    }
+                                    @if (caps.HasExtendedCost)
+                                    {
+                                        <label>
+                                            <span>Extended cost</span>
+                                            <input class="form-control" type="number" min="0" name="Items[0].ExtendedCost" value="0" data-field="ExtendedCost" />
+                                        </label>
+                                    }
+                                    @if (caps.HasConditionId)
+                                    {
+                                        <label>
+                                            <span>Condition</span>
+                                            <input class="form-control" type="number" min="0" name="Items[0].ConditionId" value="0" data-field="ConditionId" />
+                                        </label>
+                                    }
+                                    <button
+                                        type="button"
+                                        class="btn btn-outline-danger btn-sm npc-vendor-batch-remove"
+                                        data-npc-vendor-remove-row
+                                        disabled
+                                        title="Remove row"
+                                        aria-label="Remove row"><i class="bi bi-trash"></i></button>
+                                </div>
+                            </div>
+
+
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add selected items</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (Model.CanEditVendorItems)
+    {
+        <div class="modal fade npc-vendor-editor-modal" id="npcVendorEditModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content">
+                    <form method="post"
+                          asp-action="NpcVendorEditItem"
+                          data-npc-vendor-edit-form>
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="Database" value="@Model.Database" />
+                        <input type="hidden" name="Search" value="@Model.Search" />
+                        <input type="hidden" name="Entry" value="@selectedVendor.Entry" />
+                        <input type="hidden" name="Page" value="@Model.Vendors.Page" />
+                        <input type="hidden" name="PageSize" value="@Model.Vendors.PageSize" />
+                        <input type="hidden" name="ItemPage" value="@Model.SelectedVendor.Items.Page" />
+                        <input type="hidden" name="ItemPageSize" value="@Model.SelectedVendor.Items.PageSize" />
+                        <input type="hidden" name="Original.ItemId" data-original-field="ItemId" />
+                        <input type="hidden" name="Original.Slot" data-original-field="Slot" />
+                        <input type="hidden" name="Original.MaxCount" data-original-field="MaxCount" />
+                        <input type="hidden" name="Original.IncrementTime" data-original-field="IncrementTime" />
+                        <input type="hidden" name="Original.ExtendedCost" data-original-field="ExtendedCost" />
+                        <input type="hidden" name="Original.ConditionId" data-original-field="ConditionId" />
+
+                        <div class="modal-header">
+                            <div>
+                                <span class="eyebrow">Vendor inventory editor</span>
+                                <h2 class="modal-title">Edit vendor item</h2>
+                                <p data-npc-vendor-edit-title></p>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="npc-vendor-edit-grid">
+                                <label class="npc-vendor-item-field">
+                                    <span>Item</span>
+                                    <div class="npc-vendor-item-picker" data-npc-vendor-item-picker>
+                                        <input type="hidden" name="Replacement.ItemId" data-replacement-field="ItemId" data-npc-vendor-item-id />
+                                        <button
+                                            type="button"
+                                            class="form-select npc-vendor-item-picker-toggle"
+                                            data-npc-vendor-item-picker-toggle
+                                            aria-haspopup="listbox"
+                                            aria-expanded="false">
+                                            <span data-npc-vendor-item-picker-label>Select an item...</span>
+                                        </button>
+                                    </div>
+                                </label>
+                                @if (caps.HasSlot)
+                                {
+                                    <label>
+                                        <span>Slot</span>
+                                        <input class="form-control" type="number" min="0" name="Replacement.Slot" data-replacement-field="Slot" />
+                                    </label>
+                                }
+                                @if (caps.HasMaxCount)
+                                {
+                                    <label>
+                                        <span>Max stock</span>
+                                        <input class="form-control" type="number" min="0" name="Replacement.MaxCount" data-replacement-field="MaxCount" />
+                                    </label>
+                                }
+                                @if (caps.HasIncrementTime)
+                                {
+                                    <label>
+                                        <span>Restock (sec)</span>
+                                        <input class="form-control" type="number" min="0" name="Replacement.IncrementTime" data-replacement-field="IncrementTime" />
+                                    </label>
+                                }
+                                @if (caps.HasExtendedCost)
+                                {
+                                    <label>
+                                        <span>Extended cost</span>
+                                        <input class="form-control" type="number" min="0" name="Replacement.ExtendedCost" data-replacement-field="ExtendedCost" />
+                                    </label>
+                                }
+                                @if (caps.HasConditionId)
+                                {
+                                    <label>
+                                        <span>Condition</span>
+                                        <input class="form-control" type="number" min="0" name="Replacement.ConditionId" data-replacement-field="ConditionId" />
+                                    </label>
+                                }
+                            </div>
+
+
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary"><i class="bi bi-check2"></i> Save item changes</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (Model.CanDeleteVendorItems)
+    {
+        <div class="modal fade npc-vendor-editor-modal" id="npcVendorDeleteModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-md modal-dialog-centered">
+                <div class="modal-content">
+                    <form method="post" asp-action="NpcVendorDeleteItem" data-npc-vendor-delete-form>
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="Database" value="@Model.Database" />
+                        <input type="hidden" name="Search" value="@Model.Search" />
+                        <input type="hidden" name="Entry" value="@selectedVendor.Entry" />
+                        <input type="hidden" name="Page" value="@Model.Vendors.Page" />
+                        <input type="hidden" name="PageSize" value="@Model.Vendors.PageSize" />
+                        <input type="hidden" name="ItemPage" value="@Model.SelectedVendor.Items.Page" />
+                        <input type="hidden" name="ItemPageSize" value="@Model.SelectedVendor.Items.PageSize" />
+                        <input type="hidden" name="Original.ItemId" data-delete-field="ItemId" />
+                        <input type="hidden" name="Original.Slot" data-delete-field="Slot" />
+                        <input type="hidden" name="Original.MaxCount" data-delete-field="MaxCount" />
+                        <input type="hidden" name="Original.IncrementTime" data-delete-field="IncrementTime" />
+                        <input type="hidden" name="Original.ExtendedCost" data-delete-field="ExtendedCost" />
+                        <input type="hidden" name="Original.ConditionId" data-delete-field="ConditionId" />
+
+                        <div class="modal-header">
+                            <div>
+                                <span class="eyebrow">Remove vendor item</span>
+                                <h2 class="modal-title">Confirm removal</h2>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="npc-vendor-delete-confirmation">
+                                <span><i class="bi bi-trash3"></i></span>
+                                <div>
+                                    <strong data-npc-vendor-delete-title></strong>
+                                    <p>This removes the item from this NPC's vendor inventory. The item template itself is not deleted.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-danger"><i class="bi bi-trash"></i> Remove item</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@section Scripts {
+    <script src="~/js/npc-vendor-editor.js" asp-append-version="true"></script>
+}

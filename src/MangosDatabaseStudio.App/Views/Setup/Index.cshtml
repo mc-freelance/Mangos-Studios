@@ -1,0 +1,34 @@
+@* Present the Setup workspace and its available actions. *@
+
+@model SetupViewModel
+@{
+    Layout = "_AuthLayout";
+    ViewData["Title"] = "Set up Database Studio";
+}
+<div class="auth-card">
+    <div class="auth-card-header">
+        <span class="step-badge">First-time setup</span>
+        <h1>Create your administrator account</h1>
+        <p>This account manages Studio access, connections, world editing, and database tools.</p>
+    </div>
+    <form method="post" class="auth-form">
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger auth-validation-summary"></div>
+        <div class="form-group">
+            <label asp-for="Username" class="form-label"></label>
+            <input asp-for="Username" class="form-control form-control-lg" autocomplete="username" />
+            <span asp-validation-for="Username" class="text-danger"></span>
+        </div>
+        <div class="form-group">
+            <label asp-for="Password" class="form-label"></label>
+            <input asp-for="Password" class="form-control form-control-lg" autocomplete="new-password" />
+            <div class="form-text">Use at least 12 characters.</div>
+            <span asp-validation-for="Password" class="text-danger"></span>
+        </div>
+        <div class="form-group">
+            <label asp-for="ConfirmPassword" class="form-label"></label>
+            <input asp-for="ConfirmPassword" class="form-control form-control-lg" autocomplete="new-password" />
+            <span asp-validation-for="ConfirmPassword" class="text-danger"></span>
+        </div>
+        <button type="submit" class="btn btn-primary btn-lg w-100">Finish setup <i class="bi bi-arrow-right"></i></button>
+    </form>
+</div>

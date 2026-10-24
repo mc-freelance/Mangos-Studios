@@ -1,0 +1,23 @@
+# Repository-wide, machine-independent whitespace conventions.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.cs]
+csharp_new_line_before_open_brace = all
+csharp_preserve_single_line_blocks = false
+csharp_preserve_single_line_statements = false
+csharp_style_prefer_braces = true:warning
+csharp_style_allow_blank_lines_between_consecutive_braces_experimental = false
+
+# Verify with `dotnet format whitespace` and the project's Python style checker.
+dotnet_diagnostic.IDE0011.severity = warning
+
+[*.{yml,yaml}]
+indent_size = 2

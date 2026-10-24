@@ -1,0 +1,307 @@
+@* Present the DatabaseUpdates workspace and its available actions. *@
+
+@model DatabaseUpdatesViewModel
+@using MangosDatabaseStudio.Domain.DatabaseUpdates
+@{
+    ViewData["Title"] = "Database Updates";
+    ViewData["Section"] = "Database Administration";
+    ViewData["ContentClass"] = "database-updates-page";
+    MangosDatabaseUpdatePlan? plan = Model.Plan;
+}
+
+<div class="database-updates-header">
+    <div>
+        <p class="page-lead mb-1">Scan official MaNGOS SQL update folders, build the valid <code>db_version</code> chain, and apply patches in order.</p>
+        <p class="form-text mb-0">
+            <i class="bi bi-shield-check"></i> Database Studio verifies Version + Structure + Content before and after every executed patch.</p>
+    </div>
+    <form method="get" asp-action="Index" class="database-updates-database-picker">
+        <label for="databaseUpdatesDatabase">Database</label>
+        <select id="databaseUpdatesDatabase" asp-for="Database" class="form-select">
+            @foreach (var database in Model.Databases)
+            {
+                <option value="@database.Name">@database.Name</option>
+            }
+        </select>
+        <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-arrow-repeat"></i> Scan</button>
+    </form>
+</div>
+
+@if (Model.CanConfigure && !string.IsNullOrWhiteSpace(Model.Database))
+{
+    <section class="panel database-update-source-panel">
+        <div class="section-heading">
+            <div>
+                <span class="eyebrow">Update source</span>
+                <h2>SQL update folder</h2>
+                <p>Configure the root folder that contains MaNGOS update files. Subfolders are scanned recursively.</p>
+            </div>
+            <i class="bi bi-folder2-open"></i>
+        </div>
+        <form asp-action="Configure" method="post" class="database-update-source-form">
+            <input type="hidden" name="Database" value="@Model.Database" />
+            <div class="form-group">
+                <label class="form-label" for="databaseUpdatesSourceDirectory">Update folder on this computer</label>
+                <input id="databaseUpdatesSourceDirectory"
+                       name="SourceDirectory"
+                       value="@Model.SourceDirectory"
+                       class="form-control"
+                       maxlength="2048"
+                       placeholder="/home/mangos/database/World/Updates or C:\Mangos\database\World\Updates" />
+                <div class="form-text">Database Studio reads this folder directly from the local computer. Subfolders are scanned recursively.</div>
+            </div>
+            <button class="btn btn-primary" type="submit"><i class="bi bi-floppy"></i> Save update source</button>
+        </form>
+    </section>
+}
+else if (!string.IsNullOrWhiteSpace(Model.SourceDirectory))
+{
+    <div class="database-update-source-readonly">
+        <i class="bi bi-folder-check"></i>
+        <span>Update source configured for <strong>@Model.Database</strong> on @Model.ConnectionName.</span>
+    </div>
+}
+
+@if (!Model.CanScan)
+{
+    <div class="empty-state compact">
+        <i class="bi bi-info-circle-fill"></i>
+        <h2>Scan permission required</h2>
+        <p>An administrator can grant <code>@AppPermissions.DatabaseUpdatesScan</code> to this role.</p>
+    </div>
+}
+else if (plan == null)
+{
+    <div class="empty-state compact">
+        <i class="bi bi-database-exclamation"></i>
+        <h2>No update plan available</h2>
+        <p>Select a database and scan again.</p>
+    </div>
+}
+else
+{
+    @foreach (string error in plan.Errors)
+    {
+        <div class="alert alert-danger studio-inline-alert">
+            <i class="bi bi-exclamation-octagon-fill"></i>
+            <div>
+                <strong>Update plan error</strong>
+                <span>@error</span>
+            </div>
+        </div>
+    }
+    @foreach (string warning in plan.Warnings)
+    {
+        <div class="alert alert-warning studio-inline-alert">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <div>
+                <strong>Review warning</strong>
+                <span>@warning</span>
+            </div>
+        </div>
+    }
+
+    <div class="database-update-version-grid">
+        <section class="panel database-update-version-card">
+            <span class="eyebrow">Installed database</span>
+            @if (plan.CurrentVersion != null)
+            {
+                <strong class="database-update-version-number">@plan.CurrentVersion.DisplayValue</strong>
+                <dl>
+                    <div>
+                        <dt>Version</dt>
+                        <dd>@plan.CurrentVersion.Version</dd>
+                    </div>
+                    <div>
+                        <dt>Structure</dt>
+                        <dd>@plan.CurrentVersion.Structure</dd>
+                    </div>
+                    <div>
+                        <dt>Content</dt>
+                        <dd>@plan.CurrentVersion.Content</dd>
+                    </div>
+                    <div class="span-all">
+                        <dt>Description</dt>
+                        <dd>@(string.IsNullOrWhiteSpace(plan.CurrentVersion.Description) ? "—" : plan.CurrentVersion.Description)</dd>
+                    </div>
+                </dl>
+            }
+            else
+            {
+                <strong>Unavailable</strong>
+            }
+        </section>
+
+        <section class="panel database-update-version-card target">
+            <span class="eyebrow">Latest reachable version</span>
+            @if (plan.TargetVersion != null)
+            {
+                <strong class="database-update-version-number">@plan.TargetVersion.DisplayValue</strong>
+                <dl>
+                    <div>
+                        <dt>Version</dt>
+                        <dd>@plan.TargetVersion.Version</dd>
+                    </div>
+                    <div>
+                        <dt>Structure</dt>
+                        <dd>@plan.TargetVersion.Structure</dd>
+                    </div>
+                    <div>
+                        <dt>Content</dt>
+                        <dd>@plan.TargetVersion.Content</dd>
+                    </div>
+                    <div class="span-all">
+                        <dt>Description</dt>
+                        <dd>@(string.IsNullOrWhiteSpace(plan.TargetVersion.Description) ? "—" : plan.TargetVersion.Description)</dd>
+                    </div>
+                </dl>
+            }
+            else
+            {
+                <strong>Unavailable</strong>
+            }
+        </section>
+
+        <section class="panel database-update-summary-card">
+            <span class="eyebrow">Update plan</span>
+            <strong class="database-update-count">@plan.PendingPatches.Count</strong>
+            <span>@(plan.PendingPatches.Count == 1 ? "patch required" : "patches required")</span>
+            <div class="database-update-file-stats">
+                <span><b>@plan.FilesDiscovered</b> SQL files</span>
+                <span><b>@plan.RecognizedFiles</b> recognized</span>
+                <span><b>@plan.AppliedFiles</b> historical</span>
+                @if (plan.UnrecognizedFiles > 0)
+                {
+                    <span><b>@plan.UnrecognizedFiles</b> unrecognized</span>
+                }
+            </div>
+        </section>
+    </div>
+
+    <section class="panel database-update-plan-panel">
+        <div class="section-heading">
+            <div>
+                <span class="eyebrow">Validated chain</span>
+                <h2>@(plan.PendingPatches.Count == 0 ? "No pending patches" : "Patches to apply")</h2>
+                <p>Only files whose Expected Version + Structure + Content match the previous database state are included.</p>
+            </div>
+            <i class="bi bi-diagram-3"></i>
+        </div>
+
+        @if (plan.PendingPatches.Count > 0)
+        {
+            <div class="database-update-patch-list">
+                @for (int i = 0; i < plan.PendingPatches.Count; i++)
+                {
+                    MangosDatabaseUpdatePatch patch = plan.PendingPatches[i];
+                    <article class="database-update-patch @(patch.Status == MangosDatabaseUpdatePatchStatus.Next ? "next" : string.Empty)">
+                        <div class="database-update-patch-index">@(i + 1)</div>
+                        <div class="database-update-patch-copy">
+                            <div class="database-update-patch-title">
+                                <strong title="@patch.RelativePath">@patch.FileName</strong>
+                                <span class="database-update-status @(patch.Status.ToString().ToLowerInvariant())">@patch.Status</span>
+                            </div>
+                            <div class="database-update-transition">
+                                <code>@patch.ExpectedVersion.DisplayValue</code>
+                                <i class="bi bi-arrow-right"></i>
+                                <code>@patch.NewVersion.DisplayValue</code>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(patch.Description) || !string.IsNullOrWhiteSpace(patch.Comment))
+                            {
+                                <div class="database-update-patch-meta">
+                                    @if (!string.IsNullOrWhiteSpace(patch.Description))
+                                    {
+                                        <span>@patch.Description</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(patch.Comment))
+                                    {
+                                        <span>@patch.Comment</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+        else if (plan.Errors.Count == 0)
+        {
+            <div class="database-update-current-state">
+                <i class="bi bi-check-circle"></i>
+                <div>
+                    <strong>No applicable updates found.</strong>
+                    <span>The installed <code>db_version</code> is not the Expected version of any recognized patch in this source.</span>
+                </div>
+            </div>
+        }
+
+        @if (plan.Patches.Any(patch => patch.Status == MangosDatabaseUpdatePatchStatus.Ambiguous || patch.Status == MangosDatabaseUpdatePatchStatus.Invalid))
+        {
+            <div class="database-update-problems">
+                @foreach (MangosDatabaseUpdatePatch patch in plan.Patches.Where(patch => patch.Status == MangosDatabaseUpdatePatchStatus.Ambiguous || patch.Status == MangosDatabaseUpdatePatchStatus.Invalid))
+                {
+                    <div>
+                        <i class="bi bi-exclamation-octagon"></i>
+                        <strong>@patch.FileName</strong>
+                        <span>@patch.StatusDetail</span>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (plan.UnrelatedFiles > 0 || plan.UnrecognizedFiles > 0)
+        {
+            <details class="database-update-other-files">
+                <summary>Other scanned SQL files (@(plan.UnrelatedFiles + plan.UnrecognizedFiles))</summary>
+                <div class="database-update-other-list">
+                    @foreach (MangosDatabaseUpdatePatch patch in plan.Patches.Where(patch => patch.Status == MangosDatabaseUpdatePatchStatus.Unrelated || patch.Status == MangosDatabaseUpdatePatchStatus.Unrecognized).Take(100))
+                    {
+                        <div>
+                            <span>@patch.RelativePath</span>
+                            <small>@(patch.Status == MangosDatabaseUpdatePatchStatus.Unrecognized ? "No MaNGOS version metadata" : "Not part of the current chain")</small>
+                        </div>
+                    }
+                    @if ((plan.UnrelatedFiles + plan.UnrecognizedFiles) > 100)
+                    {
+                        <p class="form-text mb-0">Only the first 100 unrelated/unrecognized files are shown.</p>
+                    }
+                </div>
+            </details>
+        }
+    </section>
+
+    @if (plan.CanExecute && Model.CanExecute)
+    {
+        <section class="panel database-update-apply-panel">
+            <div class="database-update-apply-copy">
+                <span class="eyebrow">Ready to update</span>
+                <h2>Apply @plan.PendingPatches.Count validated @(plan.PendingPatches.Count == 1 ? "patch" : "patches")</h2>
+                <p>Each file is executed separately. Database Studio re-reads <code>db_version</code> after every patch and stops immediately on an error or unexpected version.</p>
+            </div>
+            <form asp-action="Execute"
+                  method="post"
+                  class="database-update-apply-form"
+                  data-processing-form
+                  data-processing-title="Applying MaNGOS database updates"
+                  data-processing-message="Database Studio is applying the validated SQL chain one patch at a time and verifying db_version after each patch. Keep this window open."
+                  data-processing-label="Applying updates...">
+                <input type="hidden" name="Database" value="@Model.Database" />
+                <label class="confirmation-box database-update-confirm">
+                    <input class="form-check-input" type="checkbox" name="Confirm" value="true" required />
+                    <span>I reviewed the update plan for <strong>@Model.Database</strong> and approve applying all @plan.PendingPatches.Count patches in order.</span>
+                </label>
+                <button class="btn btn-danger btn-lg" type="submit" data-processing-submit><i class="bi bi-play-fill"></i><span>Apply updates</span></button>
+            </form>
+        </section>
+    }
+    else if (plan.CanExecute && !Model.CanExecute)
+    {
+        <div class="alert alert-info studio-inline-alert">
+            <i class="bi bi-info-circle-fill"></i>
+            <div>
+                <strong>Read-only access</strong>
+                <span>You can scan and review this update chain, but this role cannot apply it.</span>
+            </div>
+        </div>
+    }
+}

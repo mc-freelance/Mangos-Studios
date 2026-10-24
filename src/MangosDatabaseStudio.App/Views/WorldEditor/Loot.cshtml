@@ -1,0 +1,1311 @@
+@* Present the WorldEditor Loot workflow within the shared studio layout. *@
+
+@using System.Globalization
+@using MangosDatabaseStudio.Domain.World
+@model LootViewerViewModel
+@{
+    ViewData["Title"] = "Loot Viewer";
+    ViewData["Section"] = Model.Database + " / " + Model.CatalogName;
+    ViewData["PageClass"] = "world-editor-page";
+    ViewData["ContentClass"] = "world-editor-content world-record-editor-content";
+
+    int[] pageSizes = new[] { 10, 20, 50, 100, 200 };
+    int firstPage = Model.Mode == LootViewerModes.Sources ? Math.Max(1, Model.Sources.Page - 2) : Math.Max(1, Model.Templates.Page - 2);
+    int totalPages = Model.Mode == LootViewerModes.Sources ? Model.Sources.TotalPages : Model.Templates.TotalPages;
+    int currentPage = Model.Mode == LootViewerModes.Sources ? Model.Sources.Page : Model.Templates.Page;
+    int lastPage = Math.Min(totalPages, currentPage + 2);
+    int rowFirstPage = Model.SelectedTemplate == null ? 1 : Math.Max(1, Model.SelectedTemplate.Rows.Page - 2);
+    int rowLastPage = Model.SelectedTemplate == null ? 1 : Math.Min(Model.SelectedTemplate.Rows.TotalPages, Model.SelectedTemplate.Rows.Page + 2);
+    long currentTotal = Model.Mode == LootViewerModes.Sources ? Model.Sources.TotalCount : Model.Templates.TotalCount;
+    int currentPageSize = Model.Mode == LootViewerModes.Sources ? Model.Sources.PageSize : Model.Templates.PageSize;
+    IReadOnlyList<LootEditorCapabilities> editableLootTables = Model.EditorTables.Where(capability => capability.CanMutate).ToArray();
+    LootEditorCapabilities? selectedEditor = Model.SelectedTemplate == null
+        ? null
+        : Model.EditorTables.FirstOrDefault(capability => string.Equals(capability.TableName, Model.SelectedTemplate.Template.TableName, StringComparison.OrdinalIgnoreCase));
+    bool showLootRowActions = selectedEditor?.CanMutate == true && (Model.CanEditRows || Model.CanRemoveRows);
+    string templateResultsUrl = Url.Action("Loot", "WorldEditor", new
+    {
+        database = Model.Database,
+        mode = LootViewerModes.Templates,
+        search = Model.Search,
+        tableFilter = Model.TableFilter,
+        show = true,
+        page = Math.Max(1, Model.Templates.Page),
+        pageSize = Model.Templates.PageSize
+    }) ?? "#";
+    string sourceResultsUrl = Url.Action("Loot", "WorldEditor", new
+    {
+        database = Model.Database,
+        mode = LootViewerModes.Sources,
+        search = Model.Search,
+        sourceFilter = Model.SourceFilter,
+        show = true,
+        page = Math.Max(1, Model.Sources.Page),
+        pageSize = Model.Sources.PageSize
+    }) ?? "#";
+    string currentResultsUrl = Model.Mode == LootViewerModes.Sources ? sourceResultsUrl : templateResultsUrl;
+    string selectedReturnUrl = !string.IsNullOrWhiteSpace(Model.ReturnUrl) ? Model.ReturnUrl : templateResultsUrl;
+    string itemLookupUrl = Url.Action("NpcVendorItems", "WorldEditor") ?? string.Empty;
+}
+
+<div class="world-record-editor viewer-page loot-viewer" data-loot-viewer>
+    <header class="record-editor-commandbar">
+        <div class="record-command-identity">
+            <a class="record-back-button" asp-action="Index" asp-route-database="@Model.Database" aria-label="Back to World Editor"><i class="bi bi-arrow-left"></i></a>
+            <span class="record-command-icon"><i class="bi bi-gift"></i></span>
+            <div>
+                <span class="eyebrow">Structured world data viewer</span>
+                <h2>Loot Viewer</h2>
+                <p>Browse every detected loot-template family and trace creature or GameObject loot references back to their definitions.</p>
+            </div>
+        </div>
+        <div class="record-command-actions">
+            @if (Model.CanAddRows || Model.CanEditRows || Model.CanRemoveRows)
+            {
+                <span class="record-change-badge"><i class="bi bi-pencil-square"></i> Loot editor</span>
+            }
+            <span class="record-change-badge"><i class="bi bi-table"></i> @Model.LootTables.Count loot table@(Model.LootTables.Count == 1 ? string.Empty : "s")</span>
+            @if (Model.CanAddRows && editableLootTables.Count > 0)
+            {
+                <button
+                    type="button"
+                    class="btn btn-primary btn-sm"
+                    data-bs-toggle="modal"
+                    data-bs-target="#lootAddRowModal"
+                    data-loot-add-open
+                    data-table="@(Model.SelectedTemplate?.Template.TableName ?? string.Empty)"
+                    data-entry="@(Model.SelectedTemplate?.Template.Entry.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"><i class="bi bi-plus-lg"></i> Add loot row</button>
+            }
+        </div>
+    </header>
+
+    <div class="viewer-flow">
+        <section class="panel viewer-search-panel" aria-labelledby="lootDirectoryHeading">
+            <header class="panel-header viewer-search-heading">
+                <div>
+                    <span class="eyebrow">Loot system directory</span>
+                    <h2 id="lootDirectoryHeading">Explore loot definitions and world sources</h2>
+                    <p>Switch between loot templates and the creature/GameObject templates that reference them without opening raw database tables.</p>
+                </div>
+                <span class="viewer-catalog-badge"><i class="bi bi-database-check"></i> @Model.CatalogName @Model.CatalogVersion</span>
+            </header>
+
+            @if (!Model.IsAvailable)
+            {
+                <div class="alert alert-warning studio-inline-alert mb-0">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <div>
+                        <strong>Loot Viewer unavailable</strong>
+                        <span>No *_loot_template tables were detected in the connected world database.</span>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <nav class="viewer-mode-switch" aria-label="Loot Viewer mode">
+                    <a
+                        class="@(Model.Mode == LootViewerModes.Templates ? "active" : string.Empty)"
+                        asp-action="Loot"
+                        asp-route-database="@Model.Database"
+                        asp-route-mode="@LootViewerModes.Templates"
+                        asp-route-show="true"
+                        asp-route-pageSize="@currentPageSize">
+                        <i class="bi bi-table"></i><span><strong>Loot templates</strong><small>Definitions across all loot tables</small></span>
+                    </a>
+                    <a
+                        class="@(Model.Mode == LootViewerModes.Sources ? "active" : string.Empty)"
+                        asp-action="Loot"
+                        asp-route-database="@Model.Database"
+                        asp-route-mode="@LootViewerModes.Sources"
+                        asp-route-show="true"
+                        asp-route-pageSize="@currentPageSize">
+                        <i class="bi bi-link-45deg"></i><span><strong>Loot sources</strong><small>Creatures and GameObjects with loot</small></span>
+                    </a>
+                </nav>
+
+                <form method="get" asp-action="Loot" class="viewer-search-form loot-viewer-search-form">
+                    <input type="hidden" name="database" value="@Model.Database" />
+                    <input type="hidden" name="mode" value="@Model.Mode" />
+                    <input type="hidden" name="show" value="true" />
+                    <input type="hidden" name="pageSize" value="@currentPageSize" />
+
+                    <label class="viewer-search-field" for="lootSearch">
+                        <span>@(Model.Mode == LootViewerModes.Sources ? "Creature, GameObject, or loot ID" : "Loot entry or table name")</span>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input id="lootSearch" type="search" name="search" class="form-control" value="@Model.Search"
+                                   placeholder="@(Model.Mode == LootViewerModes.Sources ? "Example: Ragnaros or 12345" : "Example: 100 or creature")" autocomplete="off" />
+                            @if (Model.Mode == LootViewerModes.Templates)
+                            {
+                                <select name="tableFilter" class="form-select loot-table-filter" aria-label="Loot table filter">
+                                    @if (Model.TableFilter == "all")
+                                    {
+                                        <option value="all" selected>All loot tables</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="all">All loot tables</option>
+                                    }
+                                    @foreach (LootTableDescriptor lootTable in Model.LootTables)
+                                    {
+                                        if (string.Equals(Model.TableFilter, lootTable.TableName, StringComparison.OrdinalIgnoreCase)) { <option value="@lootTable.TableName" selected>@lootTable.Label</option> }
+                                        else { <option value="@lootTable.TableName">@lootTable.Label</option> }
+                                    }
+                                </select>
+                            }
+                            else
+                            {
+                                <select name="sourceFilter" class="form-select loot-source-filter" aria-label="Loot source filter">
+                                    @if (Model.SourceFilter == LootSourceFilters.All)
+                                    {
+                                        <option value="@LootSourceFilters.All" selected>All sources</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@LootSourceFilters.All">All sources</option>
+                                    }
+                                    @if (Model.SourceFilter == LootSourceFilters.Creatures)
+                                    {
+                                        <option value="@LootSourceFilters.Creatures" selected>Creatures</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@LootSourceFilters.Creatures">Creatures</option>
+                                    }
+                                    @if (Model.SourceFilter == LootSourceFilters.GameObjects)
+                                    {
+                                        <option value="@LootSourceFilters.GameObjects" selected>GameObjects</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@LootSourceFilters.GameObjects">GameObjects</option>
+                                    }
+                                </select>
+                            }
+                        </div>
+                        <small>@(Model.Mode == LootViewerModes.Templates ? "The table filter controls which loot families participate in the unified directory." : "Creature loot includes corpse, pickpocket, and skinning links. GameObject loot includes chest and fishing-hole definitions.")</small>
+                    </label>
+
+                    <div class="viewer-context-card">
+                        <span class="viewer-context-icon"><i class="bi bi-collection"></i></span>
+                        <div>
+                            <small>Detected loot system</small>
+                            <strong>@Model.LootTables.Count table@(Model.LootTables.Count == 1 ? string.Empty : "s")</strong>
+                            <span>@Model.LootTables.Sum(table => table.ApproximateRows).ToString("N0") approximate loot rows across the detected tables.</span>
+                        </div>
+                    </div>
+
+                    <div class="viewer-context-card">
+                        <span class="viewer-context-icon"><i class="bi bi-diagram-3"></i></span>
+                        <div>
+                            <small>Source tracing</small>
+                            <strong>Schema-aware</strong>
+                            <span>Only known creature loot fields and loot-bearing GameObject types are treated as world-source links.</span>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary viewer-search-button"><i class="bi bi-search"></i> @(Model.Mode == LootViewerModes.Templates ? "Search loot" : "Search sources")</button>
+                </form>
+            }
+        </section>
+
+        @if (Model.IsAvailable && Model.HasSearched)
+        {
+            <section class="viewer-summary-grid" aria-label="Loot Viewer summary">
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi @(Model.Mode == LootViewerModes.Templates ? "bi-table" : "bi-link-45deg")"></i></span>
+                    <div>
+                        <small>@(Model.Mode == LootViewerModes.Templates ? "Matching templates" : "Matching source links")</small>
+                        <strong>@currentTotal.ToString("N0")</strong>
+                        <p>@(string.IsNullOrWhiteSpace(Model.Search) ? "No text filter" : "Search applied")</p>
+                    </div>
+                </article>
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-file-earmark-text"></i></span>
+                    <div>
+                        <small>Directory page</small>
+                        <strong>@currentPage / @Math.Max(totalPages, 1)</strong>
+                        <p>@currentPageSize rows per page</p>
+                    </div>
+                </article>
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-collection"></i></span>
+                    <div>
+                        <small>Loot families</small>
+                        <strong>@Model.LootTables.Count</strong>
+                        <p>Detected from this database</p>
+                    </div>
+                </article>
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-bounding-box-circles"></i></span>
+                    <div>
+                        <small>Current selection</small>
+                        @if (Model.SelectedTemplate == null)
+                        {
+                            <strong>None</strong>
+                            <p>Open a loot template below</p>
+                        }
+                        else
+                        {
+                            <strong>@Model.SelectedTemplate.Template.Entry</strong>
+                            <p>@Model.SelectedTemplate.Template.TableLabel</p>
+                        }
+                    </div>
+                </article>
+            </section>
+        }
+
+        <main class="viewer-detail-stack">
+            @if (!ViewData.ModelState.IsValid)
+            {
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+            }
+
+            @if (!Model.IsAvailable)
+            {
+                <section class="panel viewer-empty-state is-warning">
+                    <span><i class="bi bi-database-exclamation"></i></span>
+                    <h3>No loot-template tables detected</h3>
+                    <p>The viewer discovers tables ending in <code>_loot_template</code> from the active world database.</p>
+                </section>
+            }
+            else if (!Model.HasSearched)
+            {
+                <section class="panel viewer-empty-state">
+                    <span><i class="bi bi-gift"></i></span>
+                    <h3>One workspace for the world loot system</h3>
+                    <p>Search loot templates directly or switch to Loot Sources to find creatures and GameObjects that reference loot.</p>
+                </section>
+            }
+            else if (Model.Mode == LootViewerModes.Sources)
+            {
+                if (Model.Sources.Items.Count == 0)
+                {
+                    <section class="panel viewer-empty-state">
+                        <span><i class="bi bi-search"></i></span>
+                        <h3>No loot sources matched</h3>
+                        <p>Try another name, template entry, loot ID, or source type.</p>
+                    </section>
+                }
+                else
+                {
+                    <section class="panel viewer-panel-flush viewer-results-panel">
+                        <header class="viewer-results-header">
+                            <div>
+                                <span class="eyebrow">World references</span>
+                                <h3>Creatures and GameObjects with loot</h3>
+                                <p>Each row is one explicit world-template → loot-template relationship.</p>
+                            </div>
+                            <div class="viewer-results-count">
+                                <strong>@Model.Sources.TotalCount.ToString("N0")</strong>
+                                <span>link@(Model.Sources.TotalCount == 1 ? string.Empty : "s")</span>
+                            </div>
+                        </header>
+                        <form method="get" asp-action="Loot" class="world-filter-bar viewer-results-toolbar">
+                            <input type="hidden" name="database" value="@Model.Database" /><input type="hidden" name="mode" value="@LootViewerModes.Sources" /><input type="hidden" name="search" value="@Model.Search" /><input type="hidden" name="sourceFilter" value="@Model.SourceFilter" /><input type="hidden" name="show" value="true" />
+                            <span class="world-filter-hint">Page @Model.Sources.Page of @Math.Max(Model.Sources.TotalPages, 1)</span>
+                            <label class="world-filter-select">
+                                <span>Rows per page</span>
+                                <select name="pageSize" class="form-select" onchange="this.form.submit()">
+                                    @foreach (int size in pageSizes)
+                                    {
+                                        if(Model.Sources.PageSize==size)
+                                        {
+                                            <option value="@size" selected>@size</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@size">@size</option>
+                                        }
+                                    }
+                                </select>
+                            </label>
+                        </form>
+                        <div class="world-record-table-wrap viewer-results-table-wrap">
+                            <table class="table studio-table viewer-results-table viewer-directory-table mb-0" aria-label="Loot source search results">
+                                <colgroup><col class="viewer-directory-col" style="--viewer-col-width:34%" /><col class="viewer-directory-col" style="--viewer-col-width:17%" /><col class="viewer-directory-col" style="--viewer-col-width:29%" /><col class="viewer-directory-col" style="--viewer-col-width:13%" /><col class="viewer-directory-col" style="--viewer-col-width:7%" /></colgroup>
+                                <thead>
+                                    <tr>
+                                        <th>World entity</th>
+                                        <th>Loot use</th>
+                                        <th>Loot definition</th>
+                                        <th class="viewer-directory-center">Status</th>
+                                        <th class="actions-column viewer-action-column viewer-directory-center">Open</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                        @foreach (LootSourceSummary source in Model.Sources.Items)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="viewer-directory-identity">
+                                        <span class="viewer-directory-icon"><i class="bi @(source.EntityType == "Creature" ? "bi-person-standing" : "bi-box")"></i></span>
+                                        <span><strong>@(string.IsNullOrWhiteSpace(source.EntityName) ? source.EntityType + " " + source.EntityEntry : source.EntityName)</strong><small>@source.EntityType entry @source.EntityEntry</small></span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="loot-kind-badge">@source.LootKind</span>
+                                </td>
+                                <td>
+                                    <strong>@source.LootTableLabel</strong>
+                                    <small class="d-block">Loot entry @source.LootEntry · @source.LootTableName</small>
+                                </td>
+                                <td class="viewer-directory-center">
+                                    @if (!source.TargetTableAvailable)
+                                    {
+                                        <span class="loot-link-status is-missing"><i class="bi bi-x-circle"></i> Table missing</span>
+                                    }
+                                    else if (!source.TargetExists){<span class="loot-link-status is-broken"><i class="bi bi-exclamation-triangle"></i> Missing definition</span>}
+                                    else{<span class="loot-link-status is-valid"><i class="bi bi-check-circle"></i> @source.LootRowCount row@(source.LootRowCount == 1 ? string.Empty : "s")</span>}
+                                </td>
+                                <td class="actions-column viewer-action-column viewer-directory-center">
+                                    @if (source.TargetExists)
+                                    {
+                                        <a
+                                            class="icon-button"
+                                            asp-action="Loot"
+                                            asp-route-database="@Model.Database"
+                                            asp-route-mode="@LootViewerModes.Templates"
+                                            asp-route-tableFilter="@source.LootTableName"
+                                            asp-route-show="true"
+                                            asp-route-lootTable="@source.LootTableName"
+                                            asp-route-entry="@source.LootEntry"
+                                            asp-route-returnUrl="@sourceResultsUrl"
+                                            title="Open loot entry @source.LootEntry"
+                                            aria-label="Open loot entry @source.LootEntry"><i class="bi bi-chevron-right"></i></a>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                        </table>
+                        </div>
+                        @if (Model.Sources.TotalPages > 1)
+                        {
+                            <nav class="pagination-shell world-pagination viewer-results-pagination" aria-label="Loot source result pages">
+                                <div class="pagination-status">
+                                    <strong>Page @Model.Sources.Page</strong>
+                                    <span>of @Model.Sources.TotalPages · @Model.Sources.TotalCount.ToString("N0") links</span>
+                                </div>
+                                <ul class="pagination mb-0">
+                                <li class="page-item pagination-direction @(Model.Sources.Page == 1 ? "disabled" : string.Empty)">
+                                    <a
+                                        class="page-link"
+                                        asp-action="Loot"
+                                        asp-route-database="@Model.Database"
+                                        asp-route-mode="@Model.Mode"
+                                        asp-route-search="@Model.Search"
+                                        asp-route-sourceFilter="@Model.SourceFilter"
+                                        asp-route-show="true"
+                                        asp-route-page="@(Model.Sources.Page - 1)"
+                                        asp-route-pageSize="@Model.Sources.PageSize"><i class="bi bi-chevron-left"></i><span>Previous</span></a>
+                                </li>
+                                @for (int pageNumber = firstPage; pageNumber <= lastPage; pageNumber++)
+                                {
+                                    <li class="page-item @(pageNumber == Model.Sources.Page ? "active" : string.Empty)"><a class="page-link" asp-action="Loot" asp-route-database="@Model.Database" asp-route-mode="@Model.Mode" asp-route-search="@Model.Search" asp-route-sourceFilter="@Model.SourceFilter" asp-route-show="true" asp-route-page="@pageNumber" asp-route-pageSize="@Model.Sources.PageSize">@pageNumber</a></li>
+                                }
+                                <li class="page-item pagination-direction @(Model.Sources.Page == Model.Sources.TotalPages ? "disabled" : string.Empty)">
+                                    <a
+                                        class="page-link"
+                                        asp-action="Loot"
+                                        asp-route-database="@Model.Database"
+                                        asp-route-mode="@Model.Mode"
+                                        asp-route-search="@Model.Search"
+                                        asp-route-sourceFilter="@Model.SourceFilter"
+                                        asp-route-show="true"
+                                        asp-route-page="@(Model.Sources.Page + 1)"
+                                        asp-route-pageSize="@Model.Sources.PageSize"><span>Next</span><i class="bi bi-chevron-right"></i></a>
+                                </li>
+                            </ul>
+                            </nav>
+                        }
+                    </section>
+                }
+            }
+            else if (Model.SelectedTemplate == null)
+            {
+                if (Model.Templates.Items.Count == 0)
+                {
+                    <section class="panel viewer-empty-state">
+                        <span><i class="bi bi-search"></i></span>
+                        <h3>No loot templates matched</h3>
+                        <p>Try a different loot entry or table filter.</p>
+                    </section>
+                }
+                else
+                {
+                    <section class="panel viewer-panel-flush viewer-results-panel">
+                        <header class="viewer-results-header">
+                            <div>
+                                <span class="eyebrow">Unified loot directory</span>
+                                <h3>Loot templates</h3>
+                                <p>Every row represents one loot entry inside one detected loot-template family.</p>
+                            </div>
+                            <div class="viewer-results-count">
+                                <strong>@Model.Templates.TotalCount.ToString("N0")</strong>
+                                <span>template@(Model.Templates.TotalCount == 1 ? string.Empty : "s")</span>
+                            </div>
+                        </header>
+                        <form method="get" asp-action="Loot" class="world-filter-bar viewer-results-toolbar">
+                            <input type="hidden" name="database" value="@Model.Database" /><input type="hidden" name="mode" value="@LootViewerModes.Templates" /><input type="hidden" name="search" value="@Model.Search" /><input type="hidden" name="tableFilter" value="@Model.TableFilter" /><input type="hidden" name="show" value="true" />
+                            <span class="world-filter-hint">Page @Model.Templates.Page of @Math.Max(Model.Templates.TotalPages, 1)</span>
+                            <label class="world-filter-select">
+                                <span>Rows per page</span>
+                                <select name="pageSize" class="form-select" onchange="this.form.submit()">
+                                    @foreach (int size in pageSizes)
+                                    {
+                                        if(Model.Templates.PageSize==size)
+                                        {
+                                            <option value="@size" selected>@size</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@size">@size</option>
+                                        }
+                                    }
+                                </select>
+                            </label>
+                        </form>
+                        <div class="world-record-table-wrap viewer-results-table-wrap">
+                            <table class="table studio-table viewer-results-table viewer-directory-table mb-0" aria-label="Loot template search results">
+                                <colgroup><col class="viewer-directory-col" style="--viewer-col-width:48%" /><col class="viewer-directory-col" style="--viewer-col-width:12%" /><col class="viewer-directory-col" style="--viewer-col-width:14%" /><col class="viewer-directory-col" style="--viewer-col-width:14%" /><col class="viewer-directory-col" style="--viewer-col-width:12%" /></colgroup>
+                                <thead>
+                                    <tr>
+                                        <th>Loot definition</th>
+                                        <th class="viewer-directory-center">Rows</th>
+                                        <th class="viewer-directory-center">Direct items</th>
+                                        <th class="viewer-directory-center">References</th>
+                                        <th class="actions-column viewer-action-column viewer-directory-center">Open</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                        @foreach (LootTemplateSummary template in Model.Templates.Items)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="viewer-directory-identity">
+                                        <span class="viewer-directory-icon"><i class="bi bi-table"></i></span>
+                                        <span><strong>@template.TableLabel</strong><small>Entry @template.Entry · @template.TableName</small></span>
+                                    </div>
+                                </td>
+                                <td class="viewer-directory-center">
+                                    <strong>@template.RowCount.ToString("N0")</strong>
+                                </td>
+                                <td class="viewer-directory-center">@template.DirectItemCount.ToString("N0")</td>
+                                <td class="viewer-directory-center">
+                                    @if (template.ReferenceCount>0)
+                                    {
+                                        <span class="loot-reference-count"><i class="bi bi-arrow-repeat"></i> @template.ReferenceCount</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">0</span>
+                                    }
+                                </td>
+                                <td class="actions-column viewer-action-column viewer-directory-center">
+                                    <a
+                                        class="icon-button"
+                                        asp-action="Loot"
+                                        asp-route-database="@Model.Database"
+                                        asp-route-mode="@LootViewerModes.Templates"
+                                        asp-route-search="@Model.Search"
+                                        asp-route-tableFilter="@Model.TableFilter"
+                                        asp-route-show="true"
+                                        asp-route-page="@Model.Templates.Page"
+                                        asp-route-pageSize="@Model.Templates.PageSize"
+                                        asp-route-lootTable="@template.TableName"
+                                        asp-route-entry="@template.Entry"
+                                        asp-route-returnUrl="@templateResultsUrl"
+                                        title="Open loot entry @template.Entry"
+                                        aria-label="Open loot entry @template.Entry"><i class="bi bi-chevron-right"></i></a>
+                                </td>
+                                </tr>
+                        }
+                        </tbody>
+                        </table>
+                        </div>
+                        @if (Model.Templates.TotalPages > 1)
+                        {
+                            <nav class="pagination-shell world-pagination viewer-results-pagination" aria-label="Loot template result pages">
+                                <div class="pagination-status">
+                                    <strong>Page @Model.Templates.Page</strong>
+                                    <span>of @Model.Templates.TotalPages · @Model.Templates.TotalCount.ToString("N0") templates</span>
+                                </div>
+                                <ul class="pagination mb-0">
+                                <li class="page-item pagination-direction @(Model.Templates.Page == 1 ? "disabled" : string.Empty)">
+                                    <a
+                                        class="page-link"
+                                        asp-action="Loot"
+                                        asp-route-database="@Model.Database"
+                                        asp-route-mode="@Model.Mode"
+                                        asp-route-search="@Model.Search"
+                                        asp-route-tableFilter="@Model.TableFilter"
+                                        asp-route-show="true"
+                                        asp-route-page="@(Model.Templates.Page - 1)"
+                                        asp-route-pageSize="@Model.Templates.PageSize"><i class="bi bi-chevron-left"></i><span>Previous</span></a>
+                                </li>
+                                @for (int pageNumber = firstPage; pageNumber <= lastPage; pageNumber++)
+                                {
+                                    <li class="page-item @(pageNumber == Model.Templates.Page ? "active" : string.Empty)"><a class="page-link" asp-action="Loot" asp-route-database="@Model.Database" asp-route-mode="@Model.Mode" asp-route-search="@Model.Search" asp-route-tableFilter="@Model.TableFilter" asp-route-show="true" asp-route-page="@pageNumber" asp-route-pageSize="@Model.Templates.PageSize">@pageNumber</a></li>
+                                }
+                                <li class="page-item pagination-direction @(Model.Templates.Page == Model.Templates.TotalPages ? "disabled" : string.Empty)">
+                                    <a
+                                        class="page-link"
+                                        asp-action="Loot"
+                                        asp-route-database="@Model.Database"
+                                        asp-route-mode="@Model.Mode"
+                                        asp-route-search="@Model.Search"
+                                        asp-route-tableFilter="@Model.TableFilter"
+                                        asp-route-show="true"
+                                        asp-route-page="@(Model.Templates.Page + 1)"
+                                        asp-route-pageSize="@Model.Templates.PageSize"><span>Next</span><i class="bi bi-chevron-right"></i></a>
+                                </li>
+                            </ul>
+                            </nav>
+                        }
+                    </section>
+                }
+            }
+            else
+            {
+                LootTemplateDetail selected = Model.SelectedTemplate;
+                LootTemplateSummary template = selected.Template;
+                <section class="panel viewer-panel-flush viewer-workbench">
+                    <header class="viewer-record-header">
+                        <span class="viewer-record-icon"><i class="bi bi-gift"></i></span>
+                        <div>
+                            <span class="eyebrow">Selected loot definition</span>
+                            <h2>@template.TableLabel · Entry @template.Entry</h2>
+                            <p>@template.TableName</p>
+                        </div>
+                        <div class="viewer-record-actions">
+                            <a class="btn btn-outline-secondary btn-sm" href="@selectedReturnUrl"><i class="bi bi-arrow-left"></i> Results</a>
+                            @if (Model.CanAddRows && selectedEditor?.CanMutate == true)
+                            {
+                                <button
+                                    type="button"
+                                    class="btn btn-primary btn-sm"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#lootAddRowModal"
+                                    data-loot-add-open
+                                    data-table="@template.TableName"
+                                    data-entry="@template.Entry"><i class="bi bi-plus-lg"></i> Add loot row</button>
+                            }
+                            @if ((Model.CanEditRows || Model.CanRemoveRows) && selectedEditor?.CanMutate != true)
+                            {
+                                <span class="badge rounded-pill text-bg-warning"><i class="bi bi-lock"></i> Read-only schema</span>
+                            }
+
+                            <partial name="_ViewerPendingRecordActions" />
+                        </div>
+                    </header>
+
+                    <div class="viewer-detail-metrics">
+                        <div>
+                            <small>Loot rows</small>
+                            <strong>@template.RowCount.ToString("N0")</strong>
+                            <span>definition records</span>
+                        </div>
+                        <div>
+                            <small>Direct items</small>
+                            <strong>@template.DirectItemCount.ToString("N0")</strong>
+                            <span>non-reference rows</span>
+                        </div>
+                        <div>
+                            <small>References</small>
+                            <strong>@template.ReferenceCount.ToString("N0")</strong>
+                            <span>reference_loot links</span>
+                        </div>
+                        <div>
+                            <small>World sources</small>
+                            <strong>@selected.TotalSourceCount.ToString("N0")</strong>
+                            <span>creature / GameObject links</span>
+                        </div>
+                    </div>
+
+                    @if (selected.TotalSourceCount > 0)
+                    {
+                        <section class="loot-used-by-section">
+                            <header>
+                                <div>
+                                    <span class="eyebrow">World usage</span>
+                                    <h3>Used by creatures or GameObjects</h3>
+                                    <p>Showing up to 24 direct world-template references for this loot definition.</p>
+                                </div>
+                                <a
+                                    class="btn btn-outline-secondary btn-sm"
+                                    asp-action="Loot"
+                                    asp-route-database="@Model.Database"
+                                    asp-route-mode="@LootViewerModes.Sources"
+                                    asp-route-search="@template.Entry"
+                                    asp-route-show="true"><i class="bi bi-link-45deg"></i> View source directory</a>
+                            </header>
+                            <div class="loot-used-by-list">
+                            @foreach (LootSourceSummary source in selected.Sources)
+                            {
+                                <article>
+                                    <span><i class="bi @(source.EntityType == "Creature" ? "bi-person-standing" : "bi-box")"></i></span>
+                                    <div>
+                                        <strong>@(string.IsNullOrWhiteSpace(source.EntityName) ? source.EntityType + " " + source.EntityEntry : source.EntityName)</strong>
+                                        <small>@source.EntityType entry @source.EntityEntry · @source.LootKind</small>
+                                    </div>
+                                </article>
+                            }
+                        </div>
+                        </section>
+                    }
+
+                    <section class="viewer-record-section">
+                        <header class="viewer-record-section-header">
+                            <div>
+                                <span class="eyebrow">Loot contents</span>
+                                <h3>Rows in this definition</h3>
+                                <p>Item names resolve through item_template. Negative minimum/reference values are displayed as reference-loot links.</p>
+                            </div>
+                            <span class="badge rounded-pill">@selected.Rows.TotalCount.ToString("N0") rows</span>
+                        </header>
+                        <div class="viewer-record-table-wrap">
+                            <table class="table studio-table viewer-record-table viewer-workbench-table loot-row-table @(showLootRowActions ? "has-actions" : string.Empty) mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Item / reference</th>
+                                        <th>Chance</th>
+                                        <th>Group</th>
+                                        <th>Minimum / reference</th>
+                                        <th>Maximum</th>
+                                        <th>Condition</th>
+                                        @if ((Model.CanEditRows || Model.CanRemoveRows) && selectedEditor?.CanMutate == true)
+                                        {
+                                            <th class="actions-column viewer-action-column">Actions</th>
+                                        }
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                        @foreach (LootItemRow row in selected.Rows.Items)
+                        {
+                            string rowName = row.IsReference ? "Reference loot " + row.ReferenceEntry : (row.IsItemResolved ? row.ItemName : "Unresolved item " + row.ItemId);
+                            <tr class="@(row.IsReference ? "is-reference" : string.Empty)">
+                                <td>
+                                    @if (row.IsReference)
+                                    {
+                                        <div class="loot-item-cell">
+                                            <span class="loot-item-icon is-reference"><i class="bi bi-arrow-repeat"></i></span>
+                                            <div>
+                                                <strong>Reference loot @row.ReferenceEntry</strong>
+                                                <small>Row key @row.ItemId · @(row.ReferenceExists ? "Resolved in reference_loot_template" : "Reference definition not found")</small>
+                                            </div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="loot-item-cell">
+                                            <span class="loot-item-icon"><i class="bi bi-box-seam"></i></span>
+                                            <div>
+                                                <strong>@(row.IsItemResolved ? row.ItemName : "Unresolved item")</strong>
+                                                <small>Item entry @row.ItemId</small>
+                                            </div>
+                                        </div>
+                                    }
+                                </td>
+                                <td>
+                                    <strong>@(row.Chance?.ToString("0.###", CultureInfo.InvariantCulture) ?? "—")@(row.Chance.HasValue ? "%" : string.Empty)</strong>
+                                </td>
+                                <td>@(row.GroupId?.ToString(CultureInfo.InvariantCulture) ?? "—")</td>
+                                <td>
+                                    @if (row.IsReference)
+                                    {
+                                        <span class="loot-reference-value">@row.MinCountOrReference</span>
+                                    }
+                                    else
+                                    {
+                                        @(row.MinCountOrReference?.ToString(CultureInfo.InvariantCulture) ?? "—")
+                                    }
+                                </td>
+                                <td>@(row.MaxCount?.ToString(CultureInfo.InvariantCulture) ?? "—")</td>
+                                <td>
+                                    @if (row.ConditionId.HasValue && row.ConditionId.Value != 0)
+                                    {
+                                        <span class="loot-condition-badge">@row.ConditionId</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                </td>
+                                @if ((Model.CanEditRows || Model.CanRemoveRows) && selectedEditor?.CanMutate == true)
+                                {
+                                    <td class="actions-column viewer-action-column">
+                                        <div class="row-actions row-actions-compact">
+                                            @if (Model.CanEditRows)
+                                            {
+                                                <button type="button" class="icon-button" title="Edit loot row" data-loot-edit-open
+                                                        data-name="@rowName"
+                                                        data-item="@row.ItemId"
+                                                        data-item-name="@(row.IsReference ? string.Empty : row.ItemName)"
+                                                        data-chance="@(row.Chance?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"
+                                                        data-group="@(row.GroupId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"
+                                                        data-min="@(row.IsReference ? string.Empty : row.MinCountOrReference?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"
+                                                        data-reference="@(row.ReferenceEntry?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"
+                                                        data-kind="@(row.IsReference ? "reference" : "item")"
+                                                        data-max="@(row.MaxCount?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"
+                                                        data-condition="@(row.ConditionId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"><i class="bi bi-pencil"></i></button>
+                                            }
+                                            @if (Model.CanRemoveRows)
+                                            {
+                                                <button type="button" class="icon-button danger" title="Remove loot row" data-loot-delete-open
+                                                        data-name="@rowName"
+                                                        data-item="@row.ItemId"
+                                                        data-chance="@(row.Chance?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"
+                                                        data-group="@(row.GroupId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"
+                                                        data-min="@(row.IsReference ? string.Empty : row.MinCountOrReference?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"
+                                                        data-reference="@(row.ReferenceEntry?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"
+                                                        data-kind="@(row.IsReference ? "reference" : "item")"
+                                                        data-max="@(row.MaxCount?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"
+                                                        data-condition="@(row.ConditionId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"><i class="bi bi-trash"></i></button>
+                                            }
+
+                                        </div>
+                                    </td>
+                                }
+                            </tr>
+                        }
+                        </tbody>
+                        </table>
+                        </div>
+                        <footer class="viewer-record-footer">
+                            <div class="viewer-record-pagination-wrap">
+                                <div class="pagination-status">
+                                    <strong>Page @selected.Rows.Page</strong>
+                                    <span>of @Math.Max(selected.Rows.TotalPages, 1) · @selected.Rows.TotalCount.ToString("N0") rows</span>
+                                </div>
+                                @if (selected.Rows.TotalPages > 1)
+                                {
+                                    <nav class="world-pagination viewer-record-pagination" aria-label="Loot row pages">
+                                        <ul class="pagination mb-0">
+                                        <li class="page-item pagination-direction @(selected.Rows.Page == 1 ? "disabled" : string.Empty)">
+                                            <a
+                                                class="page-link"
+                                                asp-action="Loot"
+                                                asp-route-database="@Model.Database"
+                                                asp-route-mode="@LootViewerModes.Templates"
+                                                asp-route-search="@Model.Search"
+                                                asp-route-tableFilter="@Model.TableFilter"
+                                                asp-route-show="true"
+                                                asp-route-page="@Model.Templates.Page"
+                                                asp-route-pageSize="@Model.Templates.PageSize"
+                                                asp-route-lootTable="@template.TableName"
+                                                asp-route-entry="@template.Entry"
+                                                asp-route-rowPage="@(selected.Rows.Page - 1)"
+                                                asp-route-rowPageSize="@selected.Rows.PageSize"
+                                                asp-route-returnUrl="@selectedReturnUrl"><i class="bi bi-chevron-left"></i><span>Previous</span></a>
+                                        </li>
+                                        @for (int pageNumber = rowFirstPage; pageNumber <= rowLastPage; pageNumber++)
+                                        {
+                                            <li class="page-item @(pageNumber == selected.Rows.Page ? "active" : string.Empty)">
+                                                <a
+                                                    class="page-link"
+                                                    asp-action="Loot"
+                                                    asp-route-database="@Model.Database"
+                                                    asp-route-mode="@LootViewerModes.Templates"
+                                                    asp-route-search="@Model.Search"
+                                                    asp-route-tableFilter="@Model.TableFilter"
+                                                    asp-route-show="true"
+                                                    asp-route-page="@Model.Templates.Page"
+                                                    asp-route-pageSize="@Model.Templates.PageSize"
+                                                    asp-route-lootTable="@template.TableName"
+                                                    asp-route-entry="@template.Entry"
+                                                    asp-route-rowPage="@pageNumber"
+                                                    asp-route-rowPageSize="@selected.Rows.PageSize"
+                                                    asp-route-returnUrl="@selectedReturnUrl">@pageNumber</a>
+                                            </li>
+                                        }
+                                        <li class="page-item pagination-direction @(selected.Rows.Page == selected.Rows.TotalPages ? "disabled" : string.Empty)">
+                                            <a
+                                                class="page-link"
+                                                asp-action="Loot"
+                                                asp-route-database="@Model.Database"
+                                                asp-route-mode="@LootViewerModes.Templates"
+                                                asp-route-search="@Model.Search"
+                                                asp-route-tableFilter="@Model.TableFilter"
+                                                asp-route-show="true"
+                                                asp-route-page="@Model.Templates.Page"
+                                                asp-route-pageSize="@Model.Templates.PageSize"
+                                                asp-route-lootTable="@template.TableName"
+                                                asp-route-entry="@template.Entry"
+                                                asp-route-rowPage="@(selected.Rows.Page + 1)"
+                                                asp-route-rowPageSize="@selected.Rows.PageSize"
+                                                asp-route-returnUrl="@selectedReturnUrl"><span>Next</span><i class="bi bi-chevron-right"></i></a>
+                                        </li>
+                                    </ul>
+                                    </nav>
+                                }
+                            </div>
+                            <form method="get" asp-action="Loot" class="viewer-record-page-size">
+                                <input type="hidden" name="database" value="@Model.Database" />
+                                <input type="hidden" name="mode" value="@LootViewerModes.Templates" />
+                                <input type="hidden" name="search" value="@Model.Search" />
+                                <input type="hidden" name="tableFilter" value="@Model.TableFilter" />
+                                <input type="hidden" name="show" value="true" />
+                                <input type="hidden" name="page" value="@Model.Templates.Page" />
+                                <input type="hidden" name="pageSize" value="@Model.Templates.PageSize" />
+                                <input type="hidden" name="lootTable" value="@template.TableName" />
+                                <input type="hidden" name="entry" value="@template.Entry" />
+                                <input type="hidden" name="returnUrl" value="@selectedReturnUrl" />
+                                <input type="hidden" name="rowPage" value="1" />
+                                <label class="world-filter-select">
+                                    <span>Rows per page</span>
+                                    <select name="rowPageSize" class="form-select" onchange="this.form.submit()">
+                                        @foreach (int size in pageSizes)
+                                        {
+                                            if (selected.Rows.PageSize == size)
+                                            {
+                                                <option value="@size" selected>@size</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@size">@size</option>
+                                            }
+                                        }
+                                    </select>
+                                </label>
+                            </form>
+                        </footer>
+                    </section>
+                </section>
+            }
+        </main>
+    </div>
+</div>
+
+@if (Model.IsAvailable && Model.CanAddRows && editableLootTables.Count > 0)
+{
+    <div class="modal fade viewer-editor-modal loot-editor-modal" id="lootAddRowModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+            <form method="post" asp-action="LootAddRow" data-loot-add-form>
+                <div class="modal-header">
+                    <div>
+                        <span class="eyebrow">Loot template row</span>
+                        <h2 class="modal-title fs-5">Add loot row</h2>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body viewer-editor-form-grid">
+                    <input type="hidden" name="Database" value="@Model.Database" />
+                    <input type="hidden" name="Search" value="@Model.Search" />
+                    <input type="hidden" name="TableFilter" value="@Model.TableFilter" />
+                    <input type="hidden" name="ReturnUrl" value="@(Model.SelectedTemplate != null ? selectedReturnUrl : currentResultsUrl)" />
+                    <input type="hidden" name="Page" value="@Model.Templates.Page" />
+                    <input type="hidden" name="PageSize" value="@Model.Templates.PageSize" />
+                    <input type="hidden" name="RowPage" value="@(Model.SelectedTemplate?.Rows.Page ?? 1)" />
+                    <input type="hidden" name="RowPageSize" value="@(Model.SelectedTemplate?.Rows.PageSize ?? Model.Templates.PageSize)" />
+
+                    <label class="viewer-editor-wide">
+                        <span>Loot table</span>
+                        <select class="form-select" name="LootTable" required data-loot-add-table>
+                            @foreach (LootEditorCapabilities capability in editableLootTables)
+                            {
+                                <option value="@capability.TableName"
+                                        data-has-chance="@capability.HasChance.ToString().ToLowerInvariant()"
+                                        data-has-group="@capability.HasGroupId.ToString().ToLowerInvariant()"
+                                        data-has-min="@capability.HasMinCountOrReference.ToString().ToLowerInvariant()"
+                                        data-supports-reference="@capability.SupportsReferences.ToString().ToLowerInvariant()"
+                                        data-has-max="@capability.HasMaxCount.ToString().ToLowerInvariant()"
+                                        data-has-condition="@capability.HasConditionId.ToString().ToLowerInvariant()">@capability.TableLabel — @capability.TableName</option>
+                            }
+                        </select>
+                    </label>
+                    <label>
+                        <span>Loot entry</span>
+                        <input class="form-control" type="number" name="Entry" min="1" required data-loot-add-entry />
+                    </label>
+                    <label data-loot-row-kind-field>
+                        <span>Row type</span>
+                        <select class="form-select" name="Row.RowKind" data-loot-add-kind><option value="item">Direct item</option><option value="reference">Reference loot</option></select>
+                    </label>
+                    <label data-loot-item-picker-field>
+                        <span>Item</span>
+                        <div class="npc-vendor-item-picker"
+                             data-world-lookup-picker
+                             data-world-lookup-required="true"
+                             data-world-lookup-url="@itemLookupUrl"
+                             data-world-lookup-database="@Model.Database"
+                             data-world-lookup-singular="Item"
+                             data-world-lookup-plural="items"
+                             data-world-lookup-placeholder="Select an item..."
+                             data-world-lookup-search-placeholder="Search item name or ID">
+                            <input type="hidden" name="Row.ItemId" data-loot-add-item data-world-lookup-value />
+                            <button type="button" class="form-select npc-vendor-item-picker-toggle is-placeholder" data-world-lookup-toggle aria-haspopup="listbox" aria-expanded="false">
+                                <span data-world-lookup-label>Select an item...</span>
+                            </button>
+                        </div>
+                    </label>
+                    <label data-loot-row-key-field hidden>
+                        <span>Reference row key</span>
+                        <input class="form-control" type="number" name="Row.ItemId" min="0" required data-loot-add-row-key disabled />
+                    </label>
+                    <label data-loot-chance-field>
+                        <span>Chance (%)</span>
+                        <input class="form-control" type="number" name="Row.Chance" min="-100" max="100" step="0.001" value="100" />
+                    </label>
+                    <label data-loot-group-field>
+                        <span>Group ID</span>
+                        <input class="form-control" type="number" name="Row.GroupId" min="0" value="0" />
+                    </label>
+                    <label data-loot-min-field>
+                        <span>Minimum count</span>
+                        <input class="form-control" type="number" name="Row.MinCount" min="1" value="1" required />
+                    </label>
+                    <label data-loot-reference-field hidden>
+                        <span>Reference loot entry</span>
+                        <input class="form-control" type="number" name="Row.ReferenceEntry" min="1" required />
+                    </label>
+                    <label data-loot-max-field>
+                        <span data-loot-max-label>Maximum count</span>
+                        <input class="form-control" type="number" name="Row.MaxCount" min="1" value="1" />
+                    </label>
+                    <label data-loot-condition-field>
+                        <span>Condition ID</span>
+                        <input class="form-control" type="number" name="Row.ConditionId" min="0" value="0" />
+                    </label>
+                    <div class="viewer-editor-help viewer-editor-wide">
+                        <i class="bi bi-info-circle"></i>
+                        <span data-loot-row-help>Direct rows resolve the item entry through item_template. Entering a new loot entry creates a new definition with this as its first row. Negative MaNGOS quest chances are supported.</span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add loot row</button>
+                </div>
+            </form>
+        </div>
+        </div>
+    </div>
+}
+
+@if (Model.SelectedTemplate != null && selectedEditor?.CanMutate == true)
+{
+    LootTemplateSummary selectedTemplateForEditor = Model.SelectedTemplate.Template;
+    @if (Model.CanEditRows)
+    {
+        <div class="modal fade viewer-editor-modal loot-editor-modal" id="lootEditRowModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                <form method="post" asp-action="LootEditRow" data-loot-edit-form>
+                    <div class="modal-header">
+                        <div>
+                            <span class="eyebrow">@selectedTemplateForEditor.TableLabel · @selectedTemplateForEditor.Entry</span>
+                            <h2 class="modal-title fs-5">Edit loot row</h2>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body viewer-editor-form-grid">
+                        <input type="hidden" name="Database" value="@Model.Database" /><input type="hidden" name="Search" value="@Model.Search" /><input type="hidden" name="TableFilter" value="@Model.TableFilter" /><input type="hidden" name="ReturnUrl" value="@selectedReturnUrl" /><input type="hidden" name="LootTable" value="@selectedTemplateForEditor.TableName" /><input type="hidden" name="Entry" value="@selectedTemplateForEditor.Entry" /><input type="hidden" name="Page" value="@Model.Templates.Page" /><input type="hidden" name="PageSize" value="@Model.Templates.PageSize" /><input type="hidden" name="RowPage" value="@Model.SelectedTemplate.Rows.Page" /><input type="hidden" name="RowPageSize" value="@Model.SelectedTemplate.Rows.PageSize" />
+                        <input type="hidden" name="Original.ItemId" data-loot-edit-original-item /><input type="hidden" name="Original.Chance" data-loot-edit-original-chance /><input type="hidden" name="Original.GroupId" data-loot-edit-original-group /><input type="hidden" name="Original.RowKind" data-loot-edit-original-kind /><input type="hidden" name="Original.MinCount" data-loot-edit-original-min /><input type="hidden" name="Original.ReferenceEntry" data-loot-edit-original-reference /><input type="hidden" name="Original.MaxCount" data-loot-edit-original-max /><input type="hidden" name="Original.ConditionId" data-loot-edit-original-condition />
+                        <div class="viewer-edit-member-context viewer-editor-wide">
+                            <span><i class="bi bi-gift"></i></span>
+                            <div>
+                                <small>Current loot row</small>
+                                <strong data-loot-edit-name>Loot row</strong>
+                                <code>@selectedTemplateForEditor.TableName · entry @selectedTemplateForEditor.Entry</code>
+                            </div>
+                        </div>
+                        @if (selectedEditor.SupportsReferences)
+                        {
+                            <label>
+                                <span>Row type</span>
+                                <select class="form-select" name="Replacement.RowKind" data-loot-edit-kind><option value="item">Direct item</option><option value="reference">Reference loot</option></select>
+                            </label>
+                        }
+                        else
+                        {
+                            <input type="hidden" name="Replacement.RowKind" value="item" />
+                        }
+                        <label data-loot-edit-item-picker-field>
+                            <span>Item</span>
+                            <div class="npc-vendor-item-picker"
+                                 data-world-lookup-picker
+                                 data-world-lookup-required="true"
+                                 data-world-lookup-url="@itemLookupUrl"
+                                 data-world-lookup-database="@Model.Database"
+                                 data-world-lookup-singular="Item"
+                                 data-world-lookup-plural="items"
+                                 data-world-lookup-placeholder="Select an item..."
+                                 data-world-lookup-search-placeholder="Search item name or ID">
+                                <input type="hidden" name="Replacement.ItemId" data-loot-edit-item data-world-lookup-value />
+                                <button
+                                    type="button"
+                                    class="form-select npc-vendor-item-picker-toggle is-placeholder"
+                                    data-world-lookup-toggle
+                                    aria-haspopup="listbox"
+                                    aria-expanded="false">
+                                    <span data-world-lookup-label>Select an item...</span>
+                                </button>
+                            </div>
+                        </label>
+                        <label data-loot-edit-row-key-field hidden>
+                            <span>Reference row key</span>
+                            <input class="form-control" type="number" name="Replacement.ItemId" min="0" required data-loot-edit-row-key disabled />
+                        </label>
+                        @if (selectedEditor.HasChance)
+                        {
+                            <label>
+                                <span>Chance (%)</span>
+                                <input class="form-control" type="number" name="Replacement.Chance" min="-100" max="100" step="0.001" data-loot-edit-chance />
+                            </label>
+                        }
+                        @if (selectedEditor.HasGroupId)
+                        {
+                            <label>
+                                <span>Group ID</span>
+                                <input class="form-control" type="number" name="Replacement.GroupId" min="0" data-loot-edit-group />
+                            </label>
+                        }
+                        @if (selectedEditor.HasMinCountOrReference)
+                        {
+                            <label data-loot-edit-min-field>
+                                <span>Minimum count</span>
+                                <input class="form-control" type="number" name="Replacement.MinCount" min="1" required data-loot-edit-min />
+                            </label>
+                        }
+                        @if (selectedEditor.SupportsReferences)
+                        {
+                            <label data-loot-edit-reference-field hidden>
+                                <span>Reference loot entry</span>
+                                <input class="form-control" type="number" name="Replacement.ReferenceEntry" min="1" required data-loot-edit-reference />
+                            </label>
+                        }
+                        @if (selectedEditor.HasMaxCount)
+                        {
+                            <label>
+                                <span data-loot-edit-max-label>Maximum count</span>
+                                <input class="form-control" type="number" name="Replacement.MaxCount" min="1" data-loot-edit-max />
+                            </label>
+                        }
+                        @if (selectedEditor.HasConditionId)
+                        {
+                            <label>
+                                <span>Condition ID</span>
+                                <input class="form-control" type="number" name="Replacement.ConditionId" min="0" data-loot-edit-condition />
+                            </label>
+                        }
+                        <div class="viewer-editor-help viewer-editor-wide">
+                            <i class="bi bi-info-circle"></i>
+                            <span data-loot-edit-help>The loot table and definition entry stay fixed. Editing changes the existing row directly and records a reversible SQL change.</span>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-check2"></i> Save loot row changes</button>
+                    </div>
+                </form>
+            </div>
+            </div>
+        </div>
+    }
+
+    @if (Model.CanRemoveRows)
+    {
+        <div class="modal fade viewer-editor-modal loot-editor-modal" id="lootDeleteRowModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                <form method="post" asp-action="LootDeleteRow" data-loot-delete-form>
+                    <div class="modal-header">
+                        <div>
+                            <span class="eyebrow">Loot row</span>
+                            <h2 class="modal-title fs-5">Remove loot row?</h2>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="Database" value="@Model.Database" /><input type="hidden" name="Search" value="@Model.Search" /><input type="hidden" name="TableFilter" value="@Model.TableFilter" /><input type="hidden" name="ReturnUrl" value="@selectedReturnUrl" /><input type="hidden" name="LootTable" value="@selectedTemplateForEditor.TableName" /><input type="hidden" name="Entry" value="@selectedTemplateForEditor.Entry" /><input type="hidden" name="Page" value="@Model.Templates.Page" /><input type="hidden" name="PageSize" value="@Model.Templates.PageSize" /><input type="hidden" name="RowPage" value="@Model.SelectedTemplate.Rows.Page" /><input type="hidden" name="RowPageSize" value="@Model.SelectedTemplate.Rows.PageSize" />
+                        <input type="hidden" name="Original.ItemId" data-loot-delete-item /><input type="hidden" name="Original.Chance" data-loot-delete-chance /><input type="hidden" name="Original.GroupId" data-loot-delete-group /><input type="hidden" name="Original.RowKind" data-loot-delete-kind /><input type="hidden" name="Original.MinCount" data-loot-delete-min /><input type="hidden" name="Original.ReferenceEntry" data-loot-delete-reference /><input type="hidden" name="Original.MaxCount" data-loot-delete-max /><input type="hidden" name="Original.ConditionId" data-loot-delete-condition />
+                        <div class="viewer-remove-confirmation">
+                            <span><i class="bi bi-trash"></i></span>
+                            <div>
+                                <small>Loot row to remove</small>
+                                <strong data-loot-delete-name>Selected loot row</strong>
+                                <p>This removes only the selected row from @selectedTemplateForEditor.TableName. If it is the final row, the loot definition will disappear from the directory.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger"><i class="bi bi-trash"></i> Remove loot row</button>
+                    </div>
+                </form>
+            </div>
+            </div>
+        </div>
+    }
+}
+
+@section Scripts {
+<script src="~/js/world-lookup-picker.js" asp-append-version="true"></script>
+<script>
+(() => {
+    const root = document.querySelector('[data-loot-viewer]');
+    if (!root)
+    {
+        return;
+    }
+
+    const setFieldVisible = (field, visible) => {
+        if (!field)
+        {
+            return;
+        }
+        field.hidden = !visible;
+        field.querySelectorAll('input, select, textarea').forEach(control => { control.disabled = !visible; });
+    };
+
+    const addTable = document.querySelector('[data-loot-add-table]');
+    const addKind = document.querySelector('[data-loot-add-kind]');
+    const addEntry = document.querySelector('[data-loot-add-entry]');
+    const addKindField = document.querySelector('[data-loot-row-kind-field]');
+    const addItemPickerField = document.querySelector('[data-loot-item-picker-field]');
+    const addRowKeyField = document.querySelector('[data-loot-row-key-field]');
+    const addChanceField = document.querySelector('[data-loot-chance-field]');
+    const addGroupField = document.querySelector('[data-loot-group-field]');
+    const addMinField = document.querySelector('[data-loot-min-field]');
+    const addReferenceField = document.querySelector('[data-loot-reference-field]');
+    const addMaxField = document.querySelector('[data-loot-max-field]');
+    const addConditionField = document.querySelector('[data-loot-condition-field]');
+    const addMaxLabel = document.querySelector('[data-loot-max-label]');
+    const addHelp = document.querySelector('[data-loot-row-help]');
+
+    const syncAddFields = () => {
+        const option = addTable?.selectedOptions?.[0];
+        if (!option)
+        {
+            return;
+        }
+        const supportsReference = option.dataset.supportsReference === 'true';
+        const isReference = supportsReference && addKind?.value === 'reference';
+        setFieldVisible(addKindField, supportsReference);
+        setFieldVisible(addItemPickerField, !isReference);
+        setFieldVisible(addRowKeyField, isReference);
+        setFieldVisible(addChanceField, option.dataset.hasChance === 'true');
+        setFieldVisible(addGroupField, option.dataset.hasGroup === 'true');
+        setFieldVisible(addMinField, option.dataset.hasMin === 'true' && !isReference);
+        setFieldVisible(addReferenceField, supportsReference && isReference);
+        setFieldVisible(addMaxField, option.dataset.hasMax === 'true');
+        setFieldVisible(addConditionField, option.dataset.hasCondition === 'true');
+        if (addMaxLabel)
+        {
+            addMaxLabel.textContent = isReference ? 'Reference repetitions' : 'Maximum count';
+        }
+        if (addHelp) addHelp.textContent = isReference
+            ? 'Reference rows point to reference_loot_template through the reference entry. The row key still must be unique within this loot definition. Entering a new loot entry creates a new definition with this as its first row.'
+            : 'Direct rows resolve the item entry through item_template. Entering a new loot entry creates a new definition with this as its first row. Negative MaNGOS quest chances are supported.';
+    };
+    addTable?.addEventListener('change', syncAddFields);
+    addKind?.addEventListener('change', syncAddFields);
+    document.querySelectorAll('[data-loot-add-open]').forEach(button => {
+        button.addEventListener('click', () => {
+            if (addTable && button.dataset.table)
+            {
+                addTable.value = button.dataset.table;
+            }
+            if (addEntry)
+            {
+                addEntry.value = button.dataset.entry || '';
+            }
+            syncAddFields();
+        });
+    });
+    syncAddFields();
+
+    const editModalElement = document.getElementById('lootEditRowModal');
+    const editModal = editModalElement && window.bootstrap ? bootstrap.Modal.getOrCreateInstance(editModalElement) : null;
+    const syncEditKind = () => {
+        const kind = document.querySelector('[data-loot-edit-kind]');
+        const isReference = kind?.value === 'reference';
+        setFieldVisible(document.querySelector('[data-loot-edit-item-picker-field]'), !isReference);
+        setFieldVisible(document.querySelector('[data-loot-edit-row-key-field]'), isReference);
+        setFieldVisible(document.querySelector('[data-loot-edit-min-field]'), !isReference);
+        setFieldVisible(document.querySelector('[data-loot-edit-reference-field]'), isReference);
+        const maxLabel = document.querySelector('[data-loot-edit-max-label]');
+        const help = document.querySelector('[data-loot-edit-help]');
+        if (maxLabel)
+        {
+            maxLabel.textContent = isReference ? 'Reference repetitions' : 'Maximum count';
+        }
+        if (help) help.textContent = isReference
+            ? 'This row resolves through reference_loot_template. The row key remains part of the loot table primary key even though it is not the referenced loot entry.'
+            : 'The loot table and definition entry stay fixed. Editing changes this existing row directly and records a reversible SQL change.';
+    };
+    document.querySelector('[data-loot-edit-kind]')?.addEventListener('change', syncEditKind);
+
+    document.querySelectorAll('[data-loot-edit-open]').forEach(button => {
+        button.addEventListener('click', () => {
+            const value = key => button.dataset[key] || '';
+            const assign = (selector, v) =>
+            {
+                const el = document.querySelector(selector);
+                if (el)
+                {
+                    el.value = v;
+                }
+            };
+            const originalKind = value('kind') || 'item';
+            assign('[data-loot-edit-original-item]', value('item'));
+            assign('[data-loot-edit-original-chance]', value('chance'));
+            assign('[data-loot-edit-original-group]', value('group'));
+            assign('[data-loot-edit-original-kind]', originalKind);
+            assign('[data-loot-edit-original-min]', value('min'));
+            assign('[data-loot-edit-original-reference]', value('reference'));
+            assign('[data-loot-edit-original-max]', value('max'));
+            assign('[data-loot-edit-original-condition]', value('condition'));
+            const itemPicker = document.querySelector('[data-loot-edit-item-picker-field] [data-world-lookup-picker]');
+            if (originalKind === 'reference')
+            {
+                assign('[data-loot-edit-row-key]', value('item'));
+                window.WorldLookupPicker?.reset(itemPicker);
+            }
+            else
+            {
+                window.WorldLookupPicker?.setValue(itemPicker, value('item'), button.dataset.itemName || value('name') || 'Item');
+                assign('[data-loot-edit-row-key]', '');
+            }
+            assign('[data-loot-edit-chance]', value('chance'));
+            assign('[data-loot-edit-group]', value('group'));
+            assign('[data-loot-edit-min]', value('min'));
+            assign('[data-loot-edit-reference]', value('reference'));
+            assign('[data-loot-edit-max]', value('max'));
+            assign('[data-loot-edit-condition]', value('condition'));
+            assign('[data-loot-edit-kind]', originalKind);
+            const name = document.querySelector('[data-loot-edit-name]'); if (name) name.textContent = value('name') || 'Loot row';
+            syncEditKind();
+            editModal?.show();
+        });
+    });
+
+    const deleteModalElement = document.getElementById('lootDeleteRowModal');
+    const deleteModal = deleteModalElement && window.bootstrap ? bootstrap.Modal.getOrCreateInstance(deleteModalElement) : null;
+    document.querySelectorAll('[data-loot-delete-open]').forEach(button => {
+        button.addEventListener('click', () => {
+            const value = key => button.dataset[key] || '';
+            const assign = (selector, v) =>
+            {
+                const el = document.querySelector(selector);
+                if (el)
+                {
+                    el.value = v;
+                }
+            };
+            assign('[data-loot-delete-item]', value('item'));
+            assign('[data-loot-delete-chance]', value('chance'));
+            assign('[data-loot-delete-group]', value('group'));
+            assign('[data-loot-delete-kind]', value('kind') || 'item');
+            assign('[data-loot-delete-min]', value('min'));
+            assign('[data-loot-delete-reference]', value('reference'));
+            assign('[data-loot-delete-max]', value('max'));
+            assign('[data-loot-delete-condition]', value('condition'));
+            const name = document.querySelector('[data-loot-delete-name]'); if (name) name.textContent = value('name') || 'Selected loot row';
+            deleteModal?.show();
+        });
+    });
+})();
+</script>
+}

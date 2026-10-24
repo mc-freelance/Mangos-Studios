@@ -1,0 +1,106 @@
+@* Present the Connections workspace and its available actions. *@
+
+@model ConnectionsIndexViewModel
+@{
+    ViewData["Title"] = "Connections";
+    ViewData["Section"] = "System";
+}
+<div class="page-actions">
+    <div>
+        <p class="page-lead">Choose the MySQL or MariaDB connection profile for your current session.</p>
+    </div>
+    @if (Model.CanManage)
+    {
+        <a class="btn btn-primary" asp-action="Create"><i class="bi bi-plus-lg"></i> Add connection</a>
+    }
+</div>
+@if (Model.Profiles.Count == 0)
+{
+    <div class="empty-state">
+        <i class="bi bi-hdd-network"></i>
+        <h2>No saved connection profiles</h2>
+        <p>An administrator must add the MySQL or MariaDB server that hosts the getMaNGOS databases.</p>
+        @if (Model.CanManage)
+        {
+            <a class="btn btn-primary" asp-action="Create">Create first connection profile</a>
+        }
+    </div>
+}
+else
+{
+    <div class="card-grid">
+    @foreach (var profile in Model.Profiles)
+    {
+        bool active = Model.ActiveId == profile.Id;
+        <article class="connection-card @(active ? "active" : "")">
+            <div class="connection-card-header">
+                <div class="connection-icon">
+                    <i class="bi bi-database-check"></i>
+                </div>
+                <div>
+                    <h2>@profile.Name</h2>
+                    <p>@profile.Host:@profile.Port</p>
+                </div>
+                @if (active)
+                {
+                    <span class="badge text-bg-success"><i class="bi bi-plug-fill"></i> Connected</span>
+                }
+            </div>
+            <dl>
+                <div>
+                    <dt>User</dt>
+                    <dd>@profile.Username</dd>
+                </div>
+                <div>
+                    <dt>Default database</dt>
+                    <dd>@profile.DefaultDatabase</dd>
+                </div>
+                <div>
+                    <dt>SSL</dt>
+                    <dd>@profile.SslMode</dd>
+                </div>
+            </dl>
+            <div class="connection-actions">
+                @if (active && Model.CanSelect)
+                {
+                    <form asp-action="Disconnect" method="post">
+                        <button class="btn btn-outline-danger btn-sm" type="submit"><i class="bi bi-plug"></i> Disconnect</button>
+                    </form>
+                }
+                else if (!active && Model.CanSelect)
+                {
+                    <form asp-action="Select" method="post">
+                        <input type="hidden" name="id" value="@profile.Id" /><button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-plug-fill"></i> Use connection</button>
+                    </form>
+                }
+                @if (Model.CanTest)
+                {
+                    <form asp-action="Test" method="post">
+                        <input type="hidden" name="id" value="@profile.Id" /><button class="btn btn-outline-secondary btn-sm" type="submit"><i class="bi bi-activity"></i> Test</button>
+                    </form>
+                }
+                @if (Model.CanManage && !active)
+                {
+                    <a class="btn btn-outline-secondary btn-sm" asp-action="Edit" asp-route-id="@profile.Id" title="Edit connection"><i class="bi bi-pencil"></i></a>
+                    <form asp-action="Delete" method="post" data-confirm="Delete this saved connection profile?">
+                        <input type="hidden" name="id" value="@profile.Id" /><button class="btn btn-outline-danger btn-sm" type="submit" title="Delete connection"><i class="bi bi-trash"></i></button>
+                    </form>
+                }
+                else if (Model.CanManage && active)
+                {
+                    <button class="btn btn-outline-secondary btn-sm" type="button" disabled title="Disconnect this profile before editing it."><i class="bi bi-lock"></i> Editing locked</button>
+                }
+                @if (!Model.CanSelect && !Model.CanTest && !Model.CanManage)
+                {
+                    <span class="read-only-pill"><i class="bi bi-eye"></i> View only</span>
+                }
+            </div>
+            @if (active)
+            {
+                <p class="connection-active-note">
+                    <i class="bi bi-info-circle"></i> Disconnect from this profile before editing or deleting it.</p>
+            }
+        </article>
+    }
+    </div>
+}

@@ -1,0 +1,358 @@
+@* Present the WorldEditor Browse workflow within the shared studio layout. *@
+
+@model TableBrowseViewModel
+@{
+    ViewData["Title"] = Model.DisplayName;
+    ViewData["Section"] = "World Editor / " + Model.CategoryName;
+    ViewData["PageClass"] = "world-editor-page";
+    ViewData["ContentClass"] = "world-editor-content";
+    var visibleColumns = Model.Table.Columns.OrderBy(column => column.OrdinalPosition).Take(Model.VisibleColumnCount).ToList();
+    int[] pageSizes = new[] { 10, 20, 50, 100, 200 };
+}
+
+<div class="world-table-workspace">
+    <aside class="world-table-rail">
+        <a class="world-back-link" asp-action="Index" asp-route-database="@Model.Table.DatabaseName">
+            <i class="bi bi-arrow-left"></i>
+            All world modules
+        </a>
+
+        <div class="world-table-identity">
+            <div class="world-table-identity-main">
+                <span class="world-table-identity-icon"><i class="bi @Model.CategoryIcon"></i></span>
+                <div class="world-table-identity-copy">
+                    <span class="eyebrow">World table</span>
+                    <h2>@Model.DisplayName</h2>
+                    <code title="@Model.Table.Name">@Model.Table.Name</code>
+                </div>
+            </div>
+            <div class="world-table-database" title="Database: @Model.Table.DatabaseName">
+                <span><i class="bi bi-database"></i> Database</span>
+                <strong>@Model.Table.DatabaseName</strong>
+            </div>
+        </div>
+
+        <nav class="world-table-nav" aria-label="Table actions">
+            <a class="active" asp-action="Browse" asp-route-database="@Model.Table.DatabaseName" asp-route-table="@Model.Table.Name">
+                <i class="bi bi-list-ul"></i>
+                Browse records
+            </a>
+            @if (Model.CanBrowseDatabaseStructure)
+            {
+                <a asp-controller="DatabaseAdmin" asp-action="Structure" asp-route-database="@Model.Table.DatabaseName" asp-route-table="@Model.Table.Name">
+                    <i class="bi bi-diagram-3"></i>
+                    Table structure
+                </a>
+            }
+            @if (Model.Table.CanEdit && Model.CanCreate)
+            {
+                <a asp-action="Create" asp-route-database="@Model.Table.DatabaseName" asp-route-table="@Model.Table.Name">
+                    <i class="bi bi-plus-circle"></i>
+                    Add new entry
+                </a>
+            }
+        </nav>
+
+        <dl class="world-table-facts">
+            <div>
+                <dt>
+                    <i class="bi bi-list-ol"></i> Rows</dt>
+                <dd>@Model.Page.TotalCount.ToString("N0")</dd>
+            </div>
+            <div>
+                <dt>
+                    <i class="bi bi-layout-three-columns"></i> Columns</dt>
+                <dd>@Model.Table.Columns.Count</dd>
+            </div>
+            <div>
+                <dt>
+                    <i class="bi bi-database"></i> Engine</dt>
+                <dd>@Model.Table.Engine</dd>
+            </div>
+            <div>
+                <dt>
+                    <i class="bi bi-key"></i> Primary key</dt>
+                <dd>@(Model.Table.CanEdit ? string.Join(", ", Model.Table.PrimaryKeyColumns.Select(column => column.Name)) : "None")</dd>
+            </div>
+        </dl>
+
+        @if (!Model.Table.CanEdit)
+        {
+            <div class="world-rail-note warning">
+                <i class="bi bi-lock"></i>
+                <p>No primary key. This table is read-only.</p>
+            </div>
+        }
+    </aside>
+
+    <main class="world-table-main">
+        <section class="world-record-surface world-record-workbench">
+            <div class="world-command-card world-command-card-merged">
+                <div class="world-command-heading">
+                    <div>
+                        <span class="eyebrow">Record browser</span>
+                        <h2>@Model.DisplayName</h2>
+                        <p>Search, sort, and manage records.</p>
+                    </div>
+                    <div class="toolbar-actions">
+                        @if (Model.CanBrowseDatabaseStructure)
+                        {
+                            <a
+                                class="btn btn-outline-secondary"
+                                asp-controller="DatabaseAdmin"
+                                asp-action="Structure"
+                                asp-route-database="@Model.Table.DatabaseName"
+                                asp-route-table="@Model.Table.Name">
+                                <i class="bi bi-diagram-3"></i>
+                                Structure
+                            </a>
+                        }
+                        @if (Model.Table.CanEdit && Model.CanCreate)
+                        {
+                            <a class="btn btn-primary" asp-action="Create" asp-route-database="@Model.Table.DatabaseName" asp-route-table="@Model.Table.Name">
+                                <i class="bi bi-plus-lg"></i>
+                                Add entry
+                            </a>
+                        }
+                    </div>
+                </div>
+
+                <form method="get" class="world-filter-bar world-filter-bar-premium">
+                    <input type="hidden" name="database" value="@Model.Table.DatabaseName" />
+                    <input type="hidden" name="table" value="@Model.Table.Name" />
+                    <input type="hidden" name="sort" value="@Model.Sort" />
+                    <input type="hidden" name="descending" value="@(Model.Descending ? "true" : "false")" />
+
+                    <div class="world-filter-primary">
+                        <label class="world-filter-search">
+                            <i class="bi bi-search"></i>
+                            <input name="search" value="@Model.Search" placeholder="Search by ID, GUID, name, or title…" />
+                        </label>
+                        <button class="btn btn-primary" type="submit"><i class="bi bi-search"></i> Search</button>
+                        @if (!string.IsNullOrWhiteSpace(Model.Search))
+                        {
+                            <a
+                                class="btn btn-light"
+                                asp-action="Browse"
+                                asp-route-database="@Model.Table.DatabaseName"
+                                asp-route-table="@Model.Table.Name"
+                                asp-route-pageSize="@Model.Page.PageSize"
+                                asp-route-sort="@Model.Sort"
+                                asp-route-descending="@Model.Descending">
+                                <i class="bi bi-x-lg"></i>
+                                Clear
+                            </a>
+                        }
+                    </div>
+
+                    <div class="world-filter-secondary">
+                        <span class="world-filter-hint">
+                            <i class="bi bi-info-circle"></i>
+                            IDs use exact matching; text fields support partial matches.
+                        </span>
+                        <label class="world-filter-select">
+                            <span>Rows per page</span>
+                            <select name="pageSize" class="form-select" onchange="this.form.submit()">
+                                @foreach (int pageSize in pageSizes)
+                                {
+                                    if (Model.Page.PageSize == pageSize)
+                                    {
+                                        <option value="@pageSize" selected>@pageSize</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@pageSize">@pageSize</option>
+                                    }
+                                }
+                            </select>
+                        </label>
+                    </div>
+                </form>
+            </div>
+
+            <div class="world-record-content">
+                <header class="world-record-surface-header">
+                    <div class="world-view-tabs">
+                        <span class="active"><i class="bi bi-table"></i> Records</span>
+                    </div>
+                </header>
+
+                <div class="data-table-wrap world-record-table-wrap">
+                    <table class="studio-table world-record-table responsive-table">
+                        <thead>
+                            <tr>
+                                @foreach (var column in visibleColumns)
+                                {
+                                    bool nextDescending = string.Equals(Model.Sort, column.Name, StringComparison.OrdinalIgnoreCase) && !Model.Descending;
+                                    <th class="@(column.IsPrimaryKey ? "key-column" : string.Empty)">
+                                        <a asp-action="Browse"
+                                           asp-route-database="@Model.Table.DatabaseName"
+                                           asp-route-table="@Model.Table.Name"
+                                           asp-route-page="1"
+                                           asp-route-pageSize="@Model.Page.PageSize"
+                                           asp-route-search="@Model.Search"
+                                           asp-route-sort="@column.Name"
+                                           asp-route-descending="@nextDescending">
+                                            <span>@WorldEditorPresentation.Humanize(column.Name)</span>
+                                            @if (column.IsPrimaryKey)
+                                            {
+                                                <i class="bi bi-key-fill" title="Primary key"></i>
+                                            }
+                                            @if (string.Equals(Model.Sort, column.Name, StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                <i class="bi @(Model.Descending ? "bi-sort-down" : "bi-sort-up")"></i>
+                                            }
+                                        </a>
+                                        @if (Model.ShowTechnicalColumnNames)
+                                        {
+                                            <code>@column.Name</code>
+                                        }
+                                    </th>
+                                }
+                                <th class="actions-column">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Model.Page.Items.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="@(visibleColumns.Count + 1)" class="empty-cell">No records match the current search and filters.</td>
+                                </tr>
+                            }
+                            @foreach (var row in Model.Page.Items)
+                            {
+                                <tr>
+                                    @foreach (var column in visibleColumns)
+                                    {
+                                        row.Values.TryGetValue(column.Name, out object? value);
+                                        <td class="@(column.IsPrimaryKey ? "key-cell" : string.Empty)" data-label="@WorldEditorPresentation.Humanize(column.Name)" title="@(value?.ToString() ?? "NULL")">
+                                            @if (value == null)
+                                            {
+                                                <span class="null-value">NULL</span>
+                                            }
+                                            else
+                                            {
+                                                @FormatCell(value, Model.CellPreviewLength)
+                                            }
+                                        </td>
+                                    }
+                                    <td class="actions-column" data-label="Actions">
+                                        @if (Model.Table.CanEdit && (Model.CanEdit || Model.CanDelete))
+                                        {
+                                            <div class="row-actions row-actions-compact">
+                                                @if (Model.CanEdit)
+                                                {
+                                                    <a
+                                                        class="icon-button"
+                                                        title="Edit record"
+                                                        aria-label="Edit record"
+                                                        asp-action="Edit"
+                                                        asp-route-database="@Model.Table.DatabaseName"
+                                                        asp-route-table="@Model.Table.Name"
+                                                        asp-route-key="@row.KeyToken">
+                                                        <i class="bi bi-pencil" aria-hidden="true"></i>
+                                                    </a>
+                                                }
+                                                @if (Model.CanDelete)
+                                                {
+                                                    <form asp-action="Delete" method="post" data-confirm="Delete this row from @Model.Table.Name?">
+                                                        <input type="hidden" name="database" value="@Model.Table.DatabaseName" />
+                                                        <input type="hidden" name="table" value="@Model.Table.Name" />
+                                                        <input type="hidden" name="key" value="@row.KeyToken" />
+                                                        <button class="icon-button danger" type="submit" title="Delete record" aria-label="Delete record">
+                                                            <i class="bi bi-trash" aria-hidden="true"></i>
+                                                        </button>
+                                                    </form>
+                                                }
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="read-only-pill"><i class="bi bi-lock"></i> Read only</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @if (Model.Page.TotalPages > 1)
+                {
+                    int start = Math.Max(1, Model.Page.Page - 2);
+                    int end = Math.Min(Model.Page.TotalPages, Model.Page.Page + 2);
+                    <nav class="pagination-shell world-pagination" aria-label="Record pages">
+                        <div class="pagination-status">
+                            <strong>Page @Model.Page.Page</strong>
+                            <span>of @Model.Page.TotalPages · @Model.Page.TotalCount.ToString("N0") records</span>
+                        </div>
+                        <ul class="pagination mb-0">
+                            <li class="page-item pagination-direction @(Model.Page.Page == 1 ? "disabled" : string.Empty)">
+                                <a
+                                    class="page-link"
+                                    asp-action="Browse"
+                                    asp-route-database="@Model.Table.DatabaseName"
+                                    asp-route-table="@Model.Table.Name"
+                                    asp-route-page="@(Model.Page.Page - 1)"
+                                    asp-route-pageSize="@Model.Page.PageSize"
+                                    asp-route-search="@Model.Search"
+                                    asp-route-sort="@Model.Sort"
+                                    asp-route-descending="@Model.Descending"
+                                    aria-label="Previous page">
+                                    <i class="bi bi-chevron-left"></i>
+                                    <span>Previous</span>
+                                </a>
+                            </li>
+                            @for (int i = start; i <= end; i++)
+                            {
+                                <li class="page-item @(i == Model.Page.Page ? "active" : string.Empty)">
+                                    <a
+                                        class="page-link"
+                                        asp-action="Browse"
+                                        asp-route-database="@Model.Table.DatabaseName"
+                                        asp-route-table="@Model.Table.Name"
+                                        asp-route-page="@i"
+                                        asp-route-pageSize="@Model.Page.PageSize"
+                                        asp-route-search="@Model.Search"
+                                        asp-route-sort="@Model.Sort"
+                                        asp-route-descending="@Model.Descending"
+                                        aria-current="@(i == Model.Page.Page ? "page" : null)">@i</a>
+                                </li>
+                            }
+                            <li class="page-item pagination-direction @(Model.Page.Page == Model.Page.TotalPages ? "disabled" : string.Empty)">
+                                <a
+                                    class="page-link"
+                                    asp-action="Browse"
+                                    asp-route-database="@Model.Table.DatabaseName"
+                                    asp-route-table="@Model.Table.Name"
+                                    asp-route-page="@(Model.Page.Page + 1)"
+                                    asp-route-pageSize="@Model.Page.PageSize"
+                                    asp-route-search="@Model.Search"
+                                    asp-route-sort="@Model.Sort"
+                                    asp-route-descending="@Model.Descending"
+                                    aria-label="Next page">
+                                    <span>Next</span>
+                                    <i class="bi bi-chevron-right"></i>
+                                </a>
+                            </li>
+                        </ul>
+                    </nav>
+                }
+            </div>
+        </section>
+    </main>
+</div>
+
+@functions {
+    private static string FormatCell(object? value, int maximumLength)
+    {
+        if (value == null)
+        {
+            return "NULL";
+        }
+
+        string text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+        int safeLength = Math.Max(10, maximumLength);
+        return text.Length > safeLength ? text.Substring(0, safeLength - 3) + "..." : text;
+    }
+}

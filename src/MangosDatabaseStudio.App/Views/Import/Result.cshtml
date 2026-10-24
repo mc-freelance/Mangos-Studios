@@ -1,0 +1,35 @@
+@* Show the outcome of the Import operation. *@
+
+@model SqlImportResultViewModel
+@{
+    ViewData["Title"] = Model.Result.Succeeded ? "Import Complete" : "Import Failed";
+    ViewData["Section"] = "Database Administration / Import";
+}
+<div class="form-shell narrow">
+    <section class="panel result-panel @(Model.Result.Succeeded ? "success" : "danger")">
+        <i class="bi @(Model.Result.Succeeded ? "bi-check-circle" : "bi-x-octagon")"></i>
+        <h2>@(Model.Result.Succeeded ? "SQL import completed" : "The SQL client reported an error")</h2>
+        <p>Database: <strong>@Model.Database</strong> · Exit code: <strong>@Model.Result.ExitCode</strong> · Duration: <strong>@Model.Result.DurationMilliseconds.ToString("N0") ms</strong>
+        </p>
+@if (!string.IsNullOrWhiteSpace(Model.Result.StandardOutput))
+{
+    <h3>Output</h3>
+    <pre>@Model.Result.StandardOutput</pre>
+}
+@if (!string.IsNullOrWhiteSpace(Model.Result.StandardError))
+{
+    <h3>Errors and warnings</h3>
+    <pre>@Model.Result.StandardError</pre>
+}
+<div class="form-actions">
+@if (User.HasPermission(AppPermissions.DatabaseBrowse))
+{
+    <a class="btn btn-outline-secondary" asp-controller="DatabaseAdmin" asp-action="Tables" asp-route-database="@Model.Database">View database</a>
+}
+@if (User.HasPermission(AppPermissions.SqlImportUpload))
+{
+    <a class="btn btn-primary" asp-action="Index" asp-route-database="@Model.Database">Import another file</a>
+}
+</div>
+</section>
+</div>

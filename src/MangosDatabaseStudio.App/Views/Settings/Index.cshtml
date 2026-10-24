@@ -1,0 +1,119 @@
+@* Present the Settings workspace and its available actions. *@
+
+@model UserSettingsViewModel
+@{
+    ViewData["Title"] = "User Settings";
+    ViewData["Section"] = "Account / Preferences";
+}
+<div class="form-shell settings-shell">
+    <form method="post" class="panel">
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+        <div class="section-heading">
+            <div>
+                <span class="eyebrow">Personal preferences</span>
+                <h2>Record browser and appearance</h2>
+                <p>These settings apply only to your user account on every configured database connection.</p>
+            </div>
+            <i class="bi bi-sliders"></i>
+        </div>
+
+        <div class="settings-section">
+            <h3>
+                <i class="bi bi-table"></i> Record browser</h3>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label asp-for="DefaultPageSize" class="form-label"></label>
+                    <select asp-for="DefaultPageSize" class="form-select">
+                        <option value="10">10 rows</option>
+                        <option value="20">20 rows</option>
+                        <option value="50">50 rows</option>
+                        <option value="100">100 rows</option>
+                        <option value="200">200 rows</option>
+                    </select>
+                    <span asp-validation-for="DefaultPageSize" class="text-danger"></span>
+                </div>
+                <div class="form-group">
+                    <label asp-for="BrowserColumnCount" class="form-label"></label>
+                    <select asp-for="BrowserColumnCount" class="form-select">
+                        @for (int count = 5; count <= 9; count++)
+                        {
+                            <option value="@count">@count columns</option>
+                        }
+                    </select>
+                    <span asp-validation-for="BrowserColumnCount" class="text-danger"></span>
+                    <div class="form-text">The browser never displays more than the first nine schema columns.</div>
+                </div>
+                <div class="form-group">
+                    <label asp-for="CellPreviewLength" class="form-label"></label>
+                    <select asp-for="CellPreviewLength" class="form-select">
+                        <option value="40">40 characters</option>
+                        <option value="80">80 characters</option>
+                        <option value="120">120 characters</option>
+                    </select>
+                    <span asp-validation-for="CellPreviewLength" class="text-danger"></span>
+                </div>
+                <div class="form-group settings-checkbox">
+                    <label class="form-check">
+                        <input asp-for="ShowTechnicalColumnNames" class="form-check-input" />
+                        <span class="form-check-label">Show raw column names below friendly headings</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h3>
+                <i class="bi bi-circle-half"></i> Appearance</h3>
+            <div class="theme-choice-grid">
+                <label class="theme-choice">
+                    <input asp-for="Theme" type="radio" value="@UserThemeModes.System" />
+                    <span><i class="bi bi-display"></i><strong>System</strong><small>Follow the operating-system setting</small></span>
+                </label>
+                <label class="theme-choice">
+                    <input asp-for="Theme" type="radio" value="@UserThemeModes.Light" />
+                    <span><i class="bi bi-sun"></i><strong>Light</strong><small>Always use the light interface</small></span>
+                </label>
+                <label class="theme-choice">
+                    <input asp-for="Theme" type="radio" value="@UserThemeModes.Dark" />
+                    <span><i class="bi bi-moon-stars"></i><strong>Dark</strong><small>Always use the dark interface</small></span>
+                </label>
+            </div>
+            <span asp-validation-for="Theme" class="text-danger"></span>
+        </div>
+
+        <div class="settings-section desktop-settings-section">
+            <h3>
+                <i class="bi bi-arrows-angle-contract"></i> Application size</h3>
+            <p class="settings-section-intro">Control the scale of the Database Studio interface and automatic fitting for smaller screens or windows.</p>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label asp-for="DesktopZoomPercent" class="form-label"></label>
+                    <select asp-for="DesktopZoomPercent" class="form-select">
+                        @for (int zoom = DesktopZoomPreferences.MinimumPercent; zoom <= DesktopZoomPreferences.MaximumPercent; zoom += DesktopZoomPreferences.Step)
+                        {
+                            <option value="@zoom">@zoom%</option>
+                        }
+                    </select>
+                    <span asp-validation-for="DesktopZoomPercent" class="text-danger"></span>
+                    <div class="form-text">Your preferred interface scale. You can also use the zoom controls in the application title bar.</div>
+                </div>
+                <div class="form-group settings-checkbox desktop-auto-scale-setting">
+                    <label class="form-check">
+                        <input asp-for="DesktopAutoScale" class="form-check-input" />
+                        <span class="form-check-label">Automatically reduce the zoom when the desktop window or available screen is smaller</span>
+                    </label>
+                    <div class="form-text">Automatic fitting never enlarges the interface beyond your preferred zoom.</div>
+                </div>
+            </div>
+            <div class="desktop-zoom-shortcuts">
+                <span><kbd>Ctrl</kbd> + <kbd>+</kbd> Zoom in</span>
+                <span><kbd>Ctrl</kbd> + <kbd>-</kbd> Zoom out</span>
+                <span><kbd>Ctrl</kbd> + <kbd>0</kbd> Reset to 100%</span>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i> Save settings</button>
+        </div>
+    </form>
+</div>

@@ -1,0 +1,74 @@
+@* Display status, warning, and validation feedback in the shared layout. *@
+
+@if (TempData["Success"] is string success)
+{
+    <div class="alert studio-notice studio-notice-success fade show"
+         role="status"
+         data-studio-alert
+         data-alert-level="success"
+         data-auto-dismiss="5000">
+        <span class="studio-notice-icon" aria-hidden="true"><i class="bi bi-check-circle-fill"></i></span>
+        <div class="studio-notice-copy">
+            <strong>Success</strong>
+            <p>@success</p>
+        </div>
+        <button type="button" class="studio-notice-dismiss" data-bs-dismiss="alert" aria-label="Dismiss success message">
+            <i class="bi bi-x-lg"></i>
+        </button>
+        <span class="studio-notice-timer" aria-hidden="true"><span></span></span>
+    </div>
+}
+@if (TempData["Info"] is string info)
+{
+    <div class="alert studio-notice studio-notice-info fade show"
+         role="status"
+         data-studio-alert
+         data-alert-level="info"
+         data-auto-dismiss="5000">
+        <span class="studio-notice-icon" aria-hidden="true"><i class="bi bi-info-circle-fill"></i></span>
+        <div class="studio-notice-copy">
+            <strong>Information</strong>
+            <p>@info</p>
+        </div>
+        <button type="button" class="studio-notice-dismiss" data-bs-dismiss="alert" aria-label="Dismiss information message">
+            <i class="bi bi-x-lg"></i>
+        </button>
+        <span class="studio-notice-timer" aria-hidden="true"><span></span></span>
+    </div>
+}
+@if (TempData["Warning"] is string warning)
+{
+    <div class="alert studio-notice studio-notice-warning fade show"
+         role="alert"
+         data-studio-alert
+         data-alert-level="warning"
+         data-auto-dismiss="10000">
+        <span class="studio-notice-icon" aria-hidden="true"><i class="bi bi-exclamation-triangle-fill"></i></span>
+        <div class="studio-notice-copy">
+            <strong>Warning</strong>
+            <p>@warning</p>
+        </div>
+        <button type="button" class="studio-notice-dismiss" data-bs-dismiss="alert" aria-label="Dismiss warning message">
+            <i class="bi bi-x-lg"></i>
+        </button>
+        <span class="studio-notice-timer" aria-hidden="true"><span></span></span>
+    </div>
+}
+@if (TempData["Error"] is string error)
+{
+    <div class="alert studio-notice studio-notice-danger fade show"
+         role="alert"
+         data-studio-alert
+         data-alert-level="danger"
+         data-auto-dismiss="10000">
+        <span class="studio-notice-icon" aria-hidden="true"><i class="bi bi-exclamation-octagon-fill"></i></span>
+        <div class="studio-notice-copy">
+            <strong>Error</strong>
+            <p>@error</p>
+        </div>
+        <button type="button" class="studio-notice-dismiss" data-bs-dismiss="alert" aria-label="Dismiss error message">
+            <i class="bi bi-x-lg"></i>
+        </button>
+        <span class="studio-notice-timer" aria-hidden="true"><span></span></span>
+    </div>
+}

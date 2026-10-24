@@ -1,0 +1,80 @@
+@* Present the Account Login workflow within the shared studio layout. *@
+
+@model LoginViewModel
+@{
+    Layout = "_AuthLayout";
+    ViewData["Title"] = "Sign in";
+    ViewData["AuthShellClass"] = "auth-shell-login";
+}
+
+<div class="auth-card auth-card-login">
+    <section class="auth-login-intro">
+        <span class="auth-login-kicker"><i class="bi bi-stars"></i> Database workspace</span>
+        <h1>Keep your MaNGOS data organized.</h1>
+        <p>Use one workspace to edit world content, review stored changes, and manage database operations.</p>
+
+        <div class="auth-login-features" aria-label="Application features">
+            <span><i class="bi bi-grid-1x2"></i> Structured world editors</span>
+            <span><i class="bi bi-clock-history"></i> Change review and contribution tools</span>
+            <span><i class="bi bi-shield-check"></i> Role-based database access</span>
+        </div>
+    </section>
+
+    <section class="auth-login-form-panel">
+        <div class="auth-card-header">
+            <span class="step-badge">Welcome back</span>
+            <h2>Sign in to Database Studio</h2>
+            <p>Enter your Studio account credentials to continue.</p>
+        </div>
+
+        <form method="post" class="auth-form">
+            <input asp-for="ReturnUrl" type="hidden" />
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger auth-validation-summary"></div>
+
+            <div class="form-group">
+                <label asp-for="Username" class="form-label">Username</label>
+                <div class="auth-input">
+                    <i class="bi bi-person"></i>
+                    <input asp-for="Username"
+                           class="form-control form-control-lg"
+                           autocomplete="username"
+                           placeholder="Enter your username"
+                           autofocus />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label asp-for="Password" class="form-label">Password</label>
+                <div class="auth-input">
+                    <i class="bi bi-lock"></i>
+                    <input asp-for="Password"
+                           class="form-control form-control-lg"
+                           autocomplete="current-password"
+                           placeholder="Enter your password" />
+                </div>
+            </div>
+
+            <div class="auth-form-options">
+                <div class="form-check">
+                    <input asp-for="RememberMe" class="form-check-input" />
+                    <label asp-for="RememberMe" class="form-check-label">Keep me signed in on this device</label>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-lg w-100">
+                Continue to Studio
+                <i class="bi bi-arrow-right"></i>
+            </button>
+        </form>
+
+        <p class="auth-login-footnote">
+            <i class="bi bi-lock-fill"></i>
+            Access is limited to accounts configured in this Studio installation.
+        </p>
+    </section>
+</div>
+
+<p class="auth-login-credit auth-login-credit-outside">
+    Application designed and written by
+    <a href="https://github.com/Meltie2013" target="_blank" rel="noopener noreferrer">Meltie2013</a>.
+</p>

@@ -1,0 +1,1098 @@
+@* Present the WorldEditor Quests workflow within the shared studio layout. *@
+
+@using System.Globalization
+@using MangosDatabaseStudio.Domain.World
+@model QuestViewerViewModel
+@{
+    ViewData["Title"] = "Quest Viewer";
+    ViewData["Section"] = Model.Database + " / " + Model.CatalogName;
+    ViewData["PageClass"] = "world-editor-page";
+    ViewData["ContentClass"] = "world-editor-content world-record-editor-content";
+
+    int[] pageSizes = new[] { 10, 20, 50, 100, 200 };
+    int firstPage = Math.Max(1, Model.Quests.Page - 2);
+    int lastPage = Math.Min(Model.Quests.TotalPages, Model.Quests.Page + 2);
+    int relationFirstPage = Model.SelectedQuest == null ? 1 : Math.Max(1, Model.SelectedQuest.Relations.Page - 2);
+    int relationLastPage = Model.SelectedQuest == null ? 1 : Math.Min(Model.SelectedQuest.Relations.TotalPages, Model.SelectedQuest.Relations.Page + 2);
+    bool canManage = Model.CanEditQuests || Model.CanDeleteQuests || Model.CanAddRelations || Model.CanEditRelations || Model.CanRemoveRelations;
+    string questLookupUrl = Url.Action("QuestOptions", "WorldEditor") ?? string.Empty;
+}
+
+<div class="world-record-editor viewer-page" data-quest-viewer>
+    <header class="record-editor-commandbar">
+        <div class="record-command-identity">
+            <a class="record-back-button" asp-action="Index" asp-route-database="@Model.Database" aria-label="Back to World Editor"><i class="bi bi-arrow-left"></i></a>
+            <span class="record-command-icon"><i class="bi bi-journal-text"></i></span>
+            <div>
+                <span class="eyebrow">Structured world data viewer</span>
+                <h2>Quest Viewer</h2>
+                <p>Inspect quest definitions, chain relationships, and the creatures or GameObjects that start and end them.</p>
+            </div>
+        </div>
+        <div class="record-command-actions">
+            <span class="record-change-badge"><i class="bi @(canManage ? "bi-pencil-square" : "bi-shield-check")"></i> @(canManage ? "Quest editor" : "Read-only")</span>
+            @if (Model.IsAvailable && Model.CanAddRelations && Model.EditorCapabilities.RelationKinds.Count > 0)
+            {
+                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#questAddExistingModal">
+                    <i class="bi bi-plus-lg"></i> Add existing quest
+                </button>
+            }
+        </div>
+    </header>
+
+    <div class="viewer-flow">
+        <section class="panel viewer-search-panel" aria-labelledby="questDirectoryHeading">
+            <header class="panel-header viewer-search-heading">
+                <div>
+                    <span class="eyebrow">Quest directory</span>
+                    <h2 id="questDirectoryHeading">Find a quest</h2>
+                    <p>Search by quest entry or title, then open it to inspect its chain and world relationships.</p>
+                </div>
+                <span class="viewer-catalog-badge"><i class="bi bi-database-check"></i> @Model.CatalogName @Model.CatalogVersion</span>
+            </header>
+
+            @if (!Model.IsAvailable)
+            {
+                <div class="alert alert-warning studio-inline-alert mb-0">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <div>
+                        <strong>Quest Viewer unavailable</strong>
+                        <span>The connected world database does not expose quest_template.</span>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <form method="get" asp-action="Quests" class="viewer-search-form">
+                    <input type="hidden" name="database" value="@Model.Database" />
+                    <input type="hidden" name="show" value="true" />
+                    <input type="hidden" name="pageSize" value="@Model.Quests.PageSize" />
+                    <label class="viewer-search-field" for="questSearch">
+                        <span>Quest entry or title</span>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input id="questSearch" type="search" name="search" class="form-control" value="@Model.Search" placeholder="Example: 783 or A Threat Within" autocomplete="off" />
+                        </div>
+                        <small>The directory query searches quest_template first; relation counts are loaded only for the current page.</small>
+                    </label>
+                    <div class="viewer-context-card">
+                        <span class="viewer-context-icon"><i class="bi bi-diagram-3"></i></span>
+                        <div>
+                            <small>Relationship storage</small>
+                            <strong>@Model.EditorCapabilities.RelationStorageLabel</strong>
+                            <span>@Model.EditorCapabilities.RelationKinds.Count supported creature/GameObject role@(Model.EditorCapabilities.RelationKinds.Count == 1 ? string.Empty : "s") detected.</span>
+                        </div>
+                    </div>
+                    <div class="viewer-context-card">
+                        <span class="viewer-context-icon"><i class="bi @(canManage ? "bi-pencil-square" : "bi-shield-check")"></i></span>
+                        <div>
+                            <small>Workspace access</small>
+                            <strong>@(canManage ? "Quest management enabled" : "Read-only viewer")</strong>
+                            <span>Quest rows and their starter/ender relationships follow your World Editor permissions.</span>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary viewer-search-button"><i class="bi bi-search"></i> Search quests</button>
+                </form>
+            }
+        </section>
+
+        @if (Model.IsAvailable && Model.HasSearched)
+        {
+            <section class="viewer-summary-grid" aria-label="Quest viewer summary">
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-journal-text"></i></span>
+                    <div>
+                        <small>Matching quests</small>
+                        <strong>@Model.Quests.TotalCount.ToString("N0")</strong>
+                        <p>@(string.IsNullOrWhiteSpace(Model.Search) ? "All quest templates" : "Search applied")</p>
+                    </div>
+                </article>
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-file-earmark-text"></i></span>
+                    <div>
+                        <small>Directory page</small>
+                        <strong>@Model.Quests.Page / @Math.Max(Model.Quests.TotalPages, 1)</strong>
+                        <p>@Model.Quests.PageSize rows per page</p>
+                    </div>
+                </article>
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-signpost-split"></i></span>
+                    <div>
+                        <small>Current selection</small>
+                        @if (Model.SelectedQuest == null)
+                        {
+                            <strong>None</strong>
+                            <p>Select a quest below</p>
+                        }
+                        else { <strong>Quest @Model.SelectedQuest.Quest.Entry</strong><p>@Model.SelectedQuest.Quest.TotalRelationCount.ToString("N0") world relationship@(Model.SelectedQuest.Quest.TotalRelationCount == 1 ? string.Empty : "s")</p> }
+                    </div>
+                </article>
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-link-45deg"></i></span>
+                    <div>
+                        <small>Relation schema</small>
+                        <strong>@Model.EditorCapabilities.RelationKinds.Count role@(Model.EditorCapabilities.RelationKinds.Count == 1 ? string.Empty : "s")</strong>
+                        <p>@Model.EditorCapabilities.RelationStorageLabel</p>
+                    </div>
+                </article>
+            </section>
+        }
+
+        <main class="viewer-detail-stack">
+            @if (!ViewData.ModelState.IsValid)
+            {
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+            }
+
+            @if (!Model.IsAvailable)
+            {
+                <section class="panel viewer-empty-state is-warning">
+                    <span><i class="bi bi-database-exclamation"></i></span>
+                    <h3>quest_template was not found</h3>
+                    <p>The Quest Viewer requires quest_template. Starter and ender relation tables are detected independently when available.</p>
+                </section>
+            }
+            else if (!Model.HasSearched)
+            {
+                <section class="panel viewer-empty-state">
+                    <span><i class="bi bi-journal-text"></i></span>
+                    <h3>Trace a quest from definition to world source</h3>
+                    <p>Search the quest directory to inspect chain fields, related quests, creature starters/enders, and GameObject starters/enders.</p>
+                </section>
+            }
+            else if (Model.Quests.Items.Count == 0)
+            {
+                <section class="panel viewer-empty-state">
+                    <span><i class="bi bi-search"></i></span>
+                    <h3>No matching quests</h3>
+                    <p>No quest_template rows match the current entry or title search.</p>
+                </section>
+            }
+            else if (Model.SelectedQuest == null)
+            {
+                <section class="panel viewer-panel-flush viewer-results-panel">
+                    <header class="viewer-results-header">
+                        <div>
+                            <span class="eyebrow">Quest search results</span>
+                            <h3>Choose a quest</h3>
+                            <p>Each row summarizes levels, direct chain references, and world starter/ender relationships before you open it.</p>
+                        </div>
+                        <div class="viewer-results-count">
+                            <strong>@Model.Quests.TotalCount.ToString("N0")</strong>
+                            <span>quest@(Model.Quests.TotalCount == 1 ? string.Empty : "s")</span>
+                        </div>
+                    </header>
+
+                    <form method="get" asp-action="Quests" class="world-filter-bar viewer-results-toolbar">
+                        <input type="hidden" name="database" value="@Model.Database" />
+                        <input type="hidden" name="search" value="@Model.Search" />
+                        <input type="hidden" name="show" value="true" />
+                        <span class="world-filter-hint">Page @Model.Quests.Page of @Math.Max(Model.Quests.TotalPages, 1)</span>
+                        <label class="world-filter-select">
+                            <span>Rows per page</span>
+                            <select name="pageSize" class="form-select" onchange="this.form.submit()">
+                                @foreach (int size in pageSizes)
+                                {
+                                    if (Model.Quests.PageSize == size) { <option value="@size" selected>@size</option> }
+                                    else { <option value="@size">@size</option> }
+                                }
+                            </select>
+                        </label>
+                    </form>
+
+                    <div class="world-record-table-wrap viewer-results-table-wrap">
+                        <table class="table studio-table viewer-results-table viewer-directory-table mb-0" aria-label="Quest search results">
+                            <colgroup>
+                                <col class="viewer-directory-col" style="--viewer-col-width:34%" />
+                                <col class="viewer-directory-col" style="--viewer-col-width:10%" />
+                                <col class="viewer-directory-col" style="--viewer-col-width:18%" />
+                                <col class="viewer-directory-col" style="--viewer-col-width:15%" />
+                                <col class="viewer-directory-col" style="--viewer-col-width:15%" />
+                                <col class="viewer-directory-col" style="--viewer-col-width:8%" />
+                            </colgroup>
+                            <thead>
+                                <tr>
+                                    <th>Quest</th>
+                                    <th class="viewer-directory-center">Level</th>
+                                    <th class="viewer-directory-center">Chain</th>
+                                    <th class="viewer-directory-center">Starters</th>
+                                    <th class="viewer-directory-center">Enders</th>
+                                    <th class="actions-column viewer-action-column viewer-directory-center">Open</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            @foreach (QuestSummary quest in Model.Quests.Items)
+                            {
+                                string title = string.IsNullOrWhiteSpace(quest.Title) ? "Unnamed quest" : quest.Title;
+                                <tr>
+                                    <td class="viewer-directory-name-cell">
+                                        <div class="viewer-directory-identity">
+                                            <span class="viewer-directory-icon"><i class="bi bi-journal-text"></i></span>
+                                            <span>
+                                                <strong>@title</strong>
+                                                <small>Entry @quest.Entry</small>
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td class="viewer-directory-center">
+                                        <div class="viewer-resolved-entity">
+                                            <strong>@(quest.QuestLevel?.ToString(CultureInfo.InvariantCulture) ?? "—")</strong>
+                                            <small>Minimum @(quest.MinLevel?.ToString(CultureInfo.InvariantCulture) ?? "—")</small>
+                                        </div>
+                                    </td>
+                                    <td class="viewer-directory-center">
+                                        <div class="viewer-composition-chips">
+                                            @if (quest.PrevQuestId != 0)
+                                            {
+                                                <span><i class="bi bi-arrow-left"></i> @quest.PrevQuestId</span>
+                                            }
+                                            @if (quest.NextQuestId != 0 || quest.NextQuestInChain != 0)
+                                            {
+                                                <span><i class="bi bi-arrow-right"></i> @(quest.NextQuestInChain != 0 ? quest.NextQuestInChain : quest.NextQuestId)</span>
+                                            }
+                                            @if (quest.PrevQuestId == 0 && quest.NextQuestId == 0 && quest.NextQuestInChain == 0)
+                                            {
+                                                <span class="is-empty">No direct chain</span>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td class="viewer-directory-center">
+                                        <div class="viewer-resolved-entity">
+                                            <strong>@quest.StarterCount.ToString("N0")</strong>
+                                            <small>@quest.CreatureStarterCount C / @quest.GameObjectStarterCount GO</small>
+                                        </div>
+                                    </td>
+                                    <td class="viewer-directory-center">
+                                        <div class="viewer-resolved-entity">
+                                            <strong>@quest.EnderCount.ToString("N0")</strong>
+                                            <small>@quest.CreatureEnderCount C / @quest.GameObjectEnderCount GO</small>
+                                        </div>
+                                    </td>
+                                    <td class="actions-column viewer-action-column viewer-directory-center">
+                                        <a class="icon-button"
+                                           asp-action="Quests"
+                                           asp-route-database="@Model.Database"
+                                           asp-route-search="@Model.Search"
+                                           asp-route-show="true"
+                                           asp-route-entry="@quest.Entry"
+                                           asp-route-page="@Model.Quests.Page"
+                                           asp-route-pageSize="@Model.Quests.PageSize"
+                                           title="Open quest @quest.Entry"
+                                           aria-label="Open quest @quest.Entry">
+                                            <i class="bi bi-chevron-right"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    @if (Model.Quests.TotalPages > 1)
+                    {
+                        <nav class="pagination-shell world-pagination viewer-results-pagination" aria-label="Quest result pages">
+                            <div class="pagination-status">
+                                <strong>Page @Model.Quests.Page</strong>
+                                <span>of @Model.Quests.TotalPages · @Model.Quests.TotalCount.ToString("N0") quests</span>
+                            </div>
+                            <ul class="pagination mb-0">
+                                <li class="page-item pagination-direction @(Model.Quests.Page == 1 ? "disabled" : string.Empty)">
+                                    <a class="page-link"
+                                       asp-action="Quests"
+                                       asp-route-database="@Model.Database"
+                                       asp-route-search="@Model.Search"
+                                       asp-route-show="true"
+                                       asp-route-page="@(Model.Quests.Page - 1)"
+                                       asp-route-pageSize="@Model.Quests.PageSize">
+                                        <i class="bi bi-chevron-left"></i><span>Previous</span>
+                                    </a>
+                                </li>
+                                @for (int pageNumber = firstPage; pageNumber <= lastPage; pageNumber++)
+                                {
+                                    <li class="page-item @(pageNumber == Model.Quests.Page ? "active" : string.Empty)">
+                                        <a class="page-link"
+                                           asp-action="Quests"
+                                           asp-route-database="@Model.Database"
+                                           asp-route-search="@Model.Search"
+                                           asp-route-show="true"
+                                           asp-route-page="@pageNumber"
+                                           asp-route-pageSize="@Model.Quests.PageSize">@pageNumber</a>
+                                    </li>
+                                }
+                                <li class="page-item pagination-direction @(Model.Quests.Page == Model.Quests.TotalPages ? "disabled" : string.Empty)">
+                                    <a class="page-link"
+                                       asp-action="Quests"
+                                       asp-route-database="@Model.Database"
+                                       asp-route-search="@Model.Search"
+                                       asp-route-show="true"
+                                       asp-route-page="@(Model.Quests.Page + 1)"
+                                       asp-route-pageSize="@Model.Quests.PageSize">
+                                        <span>Next</span><i class="bi bi-chevron-right"></i>
+                                    </a>
+                                </li>
+                            </ul>
+                        </nav>
+                    }
+                </section>
+            }
+            else
+            {
+                QuestDetail detail = Model.SelectedQuest;
+                QuestSummary quest = detail.Quest;
+                bool hasBlockingRelationships = detail.Relations.TotalCount > 0 || detail.ChainLinks.Any(link => link.IsIncoming);
+                string questTitle = string.IsNullOrWhiteSpace(quest.Title) ? "Unnamed quest" : quest.Title;
+
+                <section class="panel viewer-panel-flush viewer-workbench">
+                    <header class="viewer-record-header">
+                        <span class="viewer-record-icon"><i class="bi bi-journal-text"></i></span>
+                        <div>
+                            <span class="eyebrow">Selected quest</span>
+                            <h2>@questTitle</h2>
+                            <p>Entry @quest.Entry · @quest.TotalRelationCount.ToString("N0") world relationship@(quest.TotalRelationCount == 1 ? string.Empty : "s") · @detail.ChainLinks.Count chain link@(detail.ChainLinks.Count == 1 ? string.Empty : "s")</p>
+                        </div>
+                        <div class="viewer-record-actions">
+                            <a class="btn btn-outline-secondary btn-sm"
+                               asp-action="Quests"
+                               asp-route-database="@Model.Database"
+                               asp-route-search="@Model.Search"
+                               asp-route-show="true"
+                               asp-route-page="@Model.Quests.Page"
+                               asp-route-pageSize="@Model.Quests.PageSize">
+                                <i class="bi bi-arrow-left"></i> Results
+                            </a>
+                            @if (Model.CanAddRelations)
+                            {
+                                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#questAddRelationModal"><i class="bi bi-plus-lg"></i> Add world relationship</button>
+                            }
+                            @if (Model.CanEditQuests)
+                            {
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#questEditModal"><i class="bi bi-pencil"></i> Edit quest</button>
+                            }
+                            @if (Model.CanDeleteQuests)
+                            {
+                                <button type="button"
+                                        class="btn btn-outline-danger btn-sm"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#questDeleteModal"
+                                        disabled="@hasBlockingRelationships"
+                                        title="@(hasBlockingRelationships ? "Remove world relationships and incoming chain links before deleting this quest." : "Delete quest")">
+                                    <i class="bi bi-trash"></i> Delete quest
+                                </button>
+                            }
+
+                            <partial name="_ViewerPendingRecordActions" />
+                        </div>
+                    </header>
+
+                    <div class="viewer-detail-metrics">
+                        <div>
+                            <small>Quest level</small>
+                            <strong>@(quest.QuestLevel?.ToString(CultureInfo.InvariantCulture) ?? "—")</strong>
+                            <span>minimum @(quest.MinLevel?.ToString(CultureInfo.InvariantCulture) ?? "—")</span>
+                        </div>
+                        <div>
+                            <small>World starters</small>
+                            <strong>@quest.StarterCount.ToString("N0")</strong>
+                            <span>@quest.CreatureStarterCount creature / @quest.GameObjectStarterCount GameObject</span>
+                        </div>
+                        <div>
+                            <small>World enders</small>
+                            <strong>@quest.EnderCount.ToString("N0")</strong>
+                            <span>@quest.CreatureEnderCount creature / @quest.GameObjectEnderCount GameObject</span>
+                        </div>
+                        <div>
+                            <small>Chain links</small>
+                            <strong>@detail.ChainLinks.Count.ToString("N0")</strong>
+                            <span>direct, incoming, and group relationships</span>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(detail.Details) || !string.IsNullOrWhiteSpace(detail.Objectives))
+                    {
+                        <section class="viewer-record-section" aria-labelledby="questTextHeading">
+                            <header class="viewer-record-section-header">
+                                <div>
+                                    <span class="eyebrow">Quest content</span>
+                                    <h3 id="questTextHeading">Details &amp; objectives</h3>
+                                    <p>Quest text is shown with the same shared workbench table used throughout the other viewers.</p>
+                                </div>
+                                <span class="badge rounded-pill">@((string.IsNullOrWhiteSpace(detail.Details) ? 0 : 1) + (string.IsNullOrWhiteSpace(detail.Objectives) ? 0 : 1)) field@(((string.IsNullOrWhiteSpace(detail.Details) ? 0 : 1) + (string.IsNullOrWhiteSpace(detail.Objectives) ? 0 : 1)) == 1 ? string.Empty : "s")</span>
+                            </header>
+                            <div class="viewer-record-table-wrap">
+                                <table class="table studio-table viewer-record-table viewer-workbench-table mb-0">
+                                    <colgroup><col class="viewer-table-col-label" /><col class="viewer-table-col-content" /></colgroup>
+                                    <thead>
+                                        <tr>
+                                            <th>Field</th>
+                                            <th>Content</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @if (!string.IsNullOrWhiteSpace(detail.Details))
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <strong>Details</strong>
+                                                </td>
+                                                <td>@detail.Details</td>
+                                            </tr>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(detail.Objectives))
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <strong>Objectives</strong>
+                                                </td>
+                                                <td>@detail.Objectives</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    }
+
+                    <section class="viewer-record-section" aria-labelledby="questChainHeading">
+                        <header class="viewer-record-section-header">
+                            <div>
+                                <span class="eyebrow">Quest relationships</span>
+                                <h3 id="questChainHeading">Quest chain</h3>
+                                <p>Direct chain fields, incoming references, and exclusive-group peers are resolved back to quest_template.</p>
+                            </div>
+                            <span class="badge rounded-pill">@detail.ChainLinks.Count.ToString("N0") link@(detail.ChainLinks.Count == 1 ? string.Empty : "s")</span>
+                        </header>
+
+                        @if (detail.ChainLinks.Count == 0)
+                        {
+                            <div class="viewer-record-empty">
+                                <i class="bi bi-signpost"></i>
+                                <strong>No chain relationships detected</strong>
+                                <p>This quest has no direct or incoming references in the supported quest_template chain fields.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="viewer-record-table-wrap">
+                                <table class="table studio-table viewer-record-table viewer-workbench-table mb-0">
+                                    <colgroup>
+                                        <col class="viewer-table-col-kind" />
+                                        <col class="viewer-table-col-entity" />
+                                        <col class="viewer-table-col-reference" />
+                                        <col class="viewer-table-col-actions" />
+                                    </colgroup>
+                                    <thead>
+                                        <tr>
+                                            <th>Relationship</th>
+                                            <th>Quest</th>
+                                            <th class="viewer-table-center">Stored reference</th>
+                                            <th class="actions-column viewer-action-column viewer-table-center">Open</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    @foreach (QuestChainLink link in detail.ChainLinks)
+                                    {
+                                        string linkedTitle = link.Exists
+                                            ? (string.IsNullOrWhiteSpace(link.Title) ? "Quest " + link.Entry : link.Title)
+                                            : "Missing quest " + link.Entry;
+                                        <tr>
+                                            <td>
+                                                <div class="viewer-member-type">
+                                                    <span><i class="bi @(link.IsIncoming ? "bi-box-arrow-in-left" : "bi-signpost-split")"></i></span>
+                                                    <div>
+                                                        <strong>@link.RelationLabel</strong>
+                                                        <code>@link.RelationCode</code>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="viewer-resolved-entity @(link.Exists ? "is-resolved" : "is-unresolved")">
+                                                    <strong>@linkedTitle</strong>
+                                                    <small>Entry @link.Entry</small>
+                                                    <span>@(link.Exists ? "Resolved quest" : "Missing quest")</span>
+                                                </div>
+                                            </td>
+                                            <td class="viewer-table-center">
+                                                <code>@link.RelationCode = @link.RawValue</code>
+                                            </td>
+                                            <td class="actions-column viewer-action-column viewer-table-center">
+                                                @if (link.Exists)
+                                                {
+                                                    <a class="icon-button"
+                                                       asp-action="Quests"
+                                                       asp-route-database="@Model.Database"
+                                                       asp-route-search="@Model.Search"
+                                                       asp-route-show="true"
+                                                       asp-route-entry="@link.Entry"
+                                                       asp-route-page="@Model.Quests.Page"
+                                                       asp-route-pageSize="@Model.Quests.PageSize"
+                                                       title="Open quest @link.Entry"
+                                                       aria-label="Open quest @link.Entry">
+                                                        <i class="bi bi-chevron-right"></i>
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">—</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </section>
+
+                    <section class="viewer-record-section" aria-labelledby="questRelationsHeading">
+                        <header class="viewer-record-section-header">
+                            <div>
+                                <span class="eyebrow">World links</span>
+                                <h3 id="questRelationsHeading">Creature &amp; GameObject relationships</h3>
+                                <p>Quest starters and enders are shown together while preserving the table and role used by the database.</p>
+                            </div>
+                            <span class="badge rounded-pill">@detail.Relations.TotalCount.ToString("N0") relationship@(detail.Relations.TotalCount == 1 ? string.Empty : "s")</span>
+                        </header>
+
+                        @if (detail.Relations.TotalCount == 0)
+                        {
+                            <div class="viewer-record-empty">
+                                <i class="bi bi-link-45deg"></i>
+                                <strong>No creature or GameObject relationships</strong>
+                                <p>No supported quest starter/ender rows point at this quest.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="viewer-record-table-wrap">
+                                <table class="table studio-table viewer-record-table viewer-workbench-table mb-0">
+                                    <colgroup>
+                                        <col class="viewer-table-col-kind" />
+                                        <col class="viewer-table-col-entity" />
+                                        <col class="viewer-table-col-role" />
+                                        <col class="viewer-table-col-storage" />
+                                        <col class="viewer-table-col-actions" />
+                                    </colgroup>
+                                    <thead>
+                                        <tr>
+                                            <th>Type</th>
+                                            <th>Resolved entity</th>
+                                            <th class="viewer-table-center">Role</th>
+                                            <th class="viewer-table-center">Storage</th>
+                                            <th class="actions-column viewer-action-column viewer-table-center">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    @foreach (QuestRelationRow relation in detail.Relations.Items)
+                                    {
+                                        bool startsQuest = relation.RoleLabel.StartsWith("Starts", StringComparison.Ordinal);
+                                        <tr>
+                                            <td>
+                                                <div class="viewer-member-type">
+                                                    <span><i class="bi @(relation.EntityType == "Creature" ? "bi-person-standing" : "bi-box")"></i></span>
+                                                    <div>
+                                                        <strong>@relation.EntityType</strong>
+                                                        <code>@relation.Kind</code>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="viewer-resolved-entity @(relation.IsResolved ? "is-resolved" : "is-unresolved")">
+                                                    <strong>@(relation.IsResolved ? relation.EntityName : "Unresolved entry")</strong>
+                                                    <small>Entry @relation.EntityEntry</small>
+                                                    <span>@(relation.IsResolved ? "Resolved template" : "Missing template")</span>
+                                                </div>
+                                            </td>
+                                            <td class="viewer-table-center">
+                                                <div class="viewer-composition-chips">
+                                                    <span><i class="bi @(startsQuest ? "bi-play-circle" : "bi-check-circle")"></i> @relation.RoleLabel</span>
+                                                </div>
+                                            </td>
+                                            <td class="viewer-table-center">
+                                                <code>@relation.StorageTable</code>
+                                            </td>
+                                            <td class="actions-column viewer-action-column viewer-table-center">
+                                                <div class="row-actions row-actions-compact">
+                                                    @if (Model.CanEditRelations)
+                                                    {
+                                                        <button type="button"
+                                                                class="icon-button"
+                                                                title="Edit relationship"
+                                                                aria-label="Edit relationship"
+                                                                data-bs-toggle="modal"
+                                                                data-bs-target="#questEditRelationModal"
+                                                                data-quest-edit-relation
+                                                                data-kind="@relation.Kind"
+                                                                data-entry="@relation.EntityEntry"
+                                                                data-name="@(relation.IsResolved ? relation.EntityName : relation.EntityType + " " + relation.EntityEntry)">
+                                                            <i class="bi bi-pencil"></i>
+                                                        </button>
+                                                    }
+                                                    @if (Model.CanRemoveRelations)
+                                                    {
+                                                        <button type="button"
+                                                                class="icon-button danger"
+                                                                title="Remove relationship"
+                                                                aria-label="Remove relationship"
+                                                                data-bs-toggle="modal"
+                                                                data-bs-target="#questRemoveRelationModal"
+                                                                data-quest-remove-relation
+                                                                data-kind="@relation.Kind"
+                                                                data-entry="@relation.EntityEntry"
+                                                                data-name="@(relation.IsResolved ? relation.EntityName : relation.EntityType + " " + relation.EntityEntry)">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    }
+
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <footer class="viewer-record-footer">
+                                <div class="viewer-record-pagination-wrap">
+                                    <div class="pagination-status">
+                                        <strong>Page @detail.Relations.Page</strong>
+                                        <span>of @Math.Max(detail.Relations.TotalPages, 1) · @detail.Relations.TotalCount.ToString("N0") relationships</span>
+                                    </div>
+                                    @if (detail.Relations.TotalPages > 1)
+                                    {
+                                        <nav class="world-pagination viewer-record-pagination" aria-label="Quest relationship pages">
+                                            <ul class="pagination mb-0">
+                                                <li class="page-item pagination-direction @(detail.Relations.Page == 1 ? "disabled" : string.Empty)">
+                                                    <a class="page-link"
+                                                       asp-action="Quests"
+                                                       asp-route-database="@Model.Database"
+                                                       asp-route-search="@Model.Search"
+                                                       asp-route-show="true"
+                                                       asp-route-entry="@quest.Entry"
+                                                       asp-route-page="@Model.Quests.Page"
+                                                       asp-route-pageSize="@Model.Quests.PageSize"
+                                                       asp-route-relationPage="@(detail.Relations.Page - 1)"
+                                                       asp-route-relationPageSize="@detail.Relations.PageSize">
+                                                        <i class="bi bi-chevron-left"></i><span>Previous</span>
+                                                    </a>
+                                                </li>
+                                                @for (int pageNumber = relationFirstPage; pageNumber <= relationLastPage; pageNumber++)
+                                                {
+                                                    <li class="page-item @(pageNumber == detail.Relations.Page ? "active" : string.Empty)">
+                                                        <a class="page-link"
+                                                           asp-action="Quests"
+                                                           asp-route-database="@Model.Database"
+                                                           asp-route-search="@Model.Search"
+                                                           asp-route-show="true"
+                                                           asp-route-entry="@quest.Entry"
+                                                           asp-route-page="@Model.Quests.Page"
+                                                           asp-route-pageSize="@Model.Quests.PageSize"
+                                                           asp-route-relationPage="@pageNumber"
+                                                           asp-route-relationPageSize="@detail.Relations.PageSize">@pageNumber</a>
+                                                    </li>
+                                                }
+                                                <li class="page-item pagination-direction @(detail.Relations.Page == detail.Relations.TotalPages ? "disabled" : string.Empty)">
+                                                    <a class="page-link"
+                                                       asp-action="Quests"
+                                                       asp-route-database="@Model.Database"
+                                                       asp-route-search="@Model.Search"
+                                                       asp-route-show="true"
+                                                       asp-route-entry="@quest.Entry"
+                                                       asp-route-page="@Model.Quests.Page"
+                                                       asp-route-pageSize="@Model.Quests.PageSize"
+                                                       asp-route-relationPage="@(detail.Relations.Page + 1)"
+                                                       asp-route-relationPageSize="@detail.Relations.PageSize">
+                                                        <span>Next</span><i class="bi bi-chevron-right"></i>
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </nav>
+                                    }
+                                </div>
+
+                                <form method="get" asp-action="Quests" class="viewer-record-page-size">
+                                    <input type="hidden" name="database" value="@Model.Database" />
+                                    <input type="hidden" name="search" value="@Model.Search" />
+                                    <input type="hidden" name="show" value="true" />
+                                    <input type="hidden" name="entry" value="@quest.Entry" />
+                                    <input type="hidden" name="page" value="@Model.Quests.Page" />
+                                    <input type="hidden" name="pageSize" value="@Model.Quests.PageSize" />
+                                    <input type="hidden" name="relationPage" value="1" />
+                                    <label class="world-filter-select">
+                                        <span>Rows per page</span>
+                                        <select name="relationPageSize" class="form-select" onchange="this.form.submit()">
+                                            @foreach (int size in pageSizes)
+                                            {
+                                                if (detail.Relations.PageSize == size) { <option value="@size" selected>@size</option> }
+                                                else { <option value="@size">@size</option> }
+                                            }
+                                        </select>
+                                    </label>
+                                </form>
+                            </footer>
+                        }
+                    </section>
+                </section>
+            }
+        </main>
+    </div>
+</div>
+
+@if (Model.IsAvailable && Model.CanAddRelations && Model.EditorCapabilities.RelationKinds.Count > 0)
+{
+    <div class="modal fade viewer-editor-modal" id="questAddExistingModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" asp-action="QuestAddRelation">
+                    <div class="modal-header">
+                        <div>
+                            <span class="eyebrow">Quest Viewer</span>
+                            <h2 class="modal-title fs-5">Add existing quest</h2>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body viewer-editor-form-grid">
+                        <input type="hidden" name="Database" value="@Model.Database" />
+                        <input type="hidden" name="Search" value="@Model.Search" />
+                        <input type="hidden" name="Page" value="@Model.Quests.Page" />
+                        <input type="hidden" name="PageSize" value="@Model.Quests.PageSize" />
+                        <input type="hidden" name="RelationPage" value="1" />
+                        <input type="hidden" name="RelationPageSize" value="@Model.Quests.PageSize" />
+
+                        <label class="viewer-editor-wide">
+                            <span>Existing quest</span>
+                            <div class="npc-vendor-item-picker"
+                                 data-world-lookup-picker
+                                 data-world-lookup-url="@questLookupUrl"
+                                 data-world-lookup-database="@Model.Database"
+                                 data-world-lookup-singular="quest"
+                                 data-world-lookup-plural="quests"
+                                 data-world-lookup-placeholder="Select a quest..."
+                                 data-world-lookup-search-placeholder="Search quest title or ID"
+                                 data-world-lookup-required="true">
+                                <input type="hidden" name="Entry" data-world-lookup-value />
+                                <button
+                                    type="button"
+                                    class="form-select npc-vendor-item-picker-toggle is-placeholder"
+                                    data-world-lookup-toggle
+                                    aria-haspopup="listbox"
+                                    aria-expanded="false">
+                                    <span data-world-lookup-label>Select a quest...</span>
+                                </button>
+                            </div>
+                        </label>
+                        <label class="viewer-editor-wide">
+                            <span>Relationship type</span>
+                            <select class="form-select" name="Kind" required>
+                                @foreach (QuestRelationCapability relation in Model.EditorCapabilities.RelationKinds)
+                                {
+                                    <option value="@relation.Kind">@relation.Label</option>
+                                }
+                            </select>
+                        </label>
+                        <label class="viewer-editor-wide">
+                            <span>Creature / GameObject template entry</span>
+                            <input class="form-control" type="number" name="EntityEntry" min="1" required />
+                        </label>
+                        <div class="viewer-editor-help viewer-editor-wide">
+                            <i class="bi bi-info-circle"></i>
+                            <span>Selects an existing quest from quest_template and links it to the chosen creature or GameObject. This does not create a new quest_template row.</span>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add quest relationship</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+@if (Model.SelectedQuest != null)
+{
+    QuestSummary selected = Model.SelectedQuest.Quest;
+    @if (Model.CanEditQuests)
+    {
+        <div class="modal fade viewer-editor-modal" id="questEditModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content">
+                    <form method="post" asp-action="QuestEdit">
+            <div class="modal-header">
+                <div>
+                    <span class="eyebrow">Quest @selected.Entry</span>
+                    <h2 class="modal-title fs-5">Edit quest</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body viewer-editor-form-grid">
+                <input type="hidden" name="Database" value="@Model.Database" /><input type="hidden" name="Search" value="@Model.Search" /><input type="hidden" name="Entry" value="@selected.Entry" /><input type="hidden" name="Page" value="@Model.Quests.Page" /><input type="hidden" name="PageSize" value="@Model.Quests.PageSize" /><input type="hidden" name="RelationPage" value="@Model.SelectedQuest.Relations.Page" /><input type="hidden" name="RelationPageSize" value="@Model.SelectedQuest.Relations.PageSize" />
+                @if (Model.EditorCapabilities.HasTitle)
+                {
+                    <label class="viewer-editor-wide">
+                        <span>Title</span>
+                        <input class="form-control" type="text" name="Title" value="@selected.Title" maxlength="255" />
+                    </label>
+                }
+                @if (Model.EditorCapabilities.HasMinLevel)
+                {
+                    <label>
+                        <span>Minimum level</span>
+                        <input class="form-control" type="number" name="MinLevel" value="@(selected.MinLevel?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)" />
+                    </label>
+                }
+                @if (Model.EditorCapabilities.HasQuestLevel)
+                {
+                    <label>
+                        <span>Quest level</span>
+                        <input class="form-control" type="number" name="QuestLevel" value="@(selected.QuestLevel?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)" />
+                    </label>
+                }
+                @if (Model.EditorCapabilities.HasPrevQuestId)
+                {
+                    <label>
+                        <span>PrevQuestId</span>
+                        <input class="form-control" type="number" name="PrevQuestId" value="@selected.PrevQuestId" />
+                    </label>
+                }
+                @if (Model.EditorCapabilities.HasNextQuestId)
+                {
+                    <label>
+                        <span>NextQuestId</span>
+                        <input class="form-control" type="number" name="NextQuestId" value="@selected.NextQuestId" />
+                    </label>
+                }
+                @if (Model.EditorCapabilities.HasNextQuestInChain)
+                {
+                    <label>
+                        <span>NextQuestInChain</span>
+                        <input class="form-control" type="number" name="NextQuestInChain" value="@selected.NextQuestInChain" />
+                    </label>
+                }
+                @if (Model.EditorCapabilities.HasExclusiveGroup)
+                {
+                    <label>
+                        <span>ExclusiveGroup</span>
+                        <input class="form-control" type="number" name="ExclusiveGroup" value="@selected.ExclusiveGroup" />
+                    </label>
+                }
+                @if (Model.EditorCapabilities.HasDetails)
+                {
+                    <label class="viewer-editor-wide">
+                        <span>Details</span>
+                        <textarea class="form-control" name="Details" rows="4">@Model.SelectedQuest.Details</textarea>
+                    </label>
+                }
+                @if (Model.EditorCapabilities.HasObjectives)
+                {
+                    <label class="viewer-editor-wide">
+                        <span>Objectives</span>
+                        <textarea class="form-control" name="Objectives" rows="3">@Model.SelectedQuest.Objectives</textarea>
+                    </label>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check2"></i> Save quest changes</button>
+            </div>
+        </form>
+        </div>
+        </div>
+        </div>
+    }
+
+    @if (Model.CanAddRelations && Model.EditorCapabilities.RelationKinds.Count > 0)
+    {
+        <div class="modal fade viewer-editor-modal" id="questAddRelationModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <form method="post" asp-action="QuestAddRelation">
+            <div class="modal-header">
+                <div>
+                    <span class="eyebrow">Quest @selected.Entry</span>
+                    <h2 class="modal-title fs-5">Add world relationship</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body viewer-editor-form-grid">
+                <input type="hidden" name="Database" value="@Model.Database" /><input type="hidden" name="Search" value="@Model.Search" /><input type="hidden" name="Entry" value="@selected.Entry" /><input type="hidden" name="Page" value="@Model.Quests.Page" /><input type="hidden" name="PageSize" value="@Model.Quests.PageSize" /><input type="hidden" name="RelationPage" value="@Model.SelectedQuest.Relations.Page" /><input type="hidden" name="RelationPageSize" value="@Model.SelectedQuest.Relations.PageSize" />
+                <label class="viewer-editor-wide">
+                    <span>Relationship type</span>
+                    <select class="form-select" name="Kind" required>
+                        @foreach (QuestRelationCapability relation in Model.EditorCapabilities.RelationKinds)
+                        {
+                            <option value="@relation.Kind">@relation.Label</option>
+                        }
+                    </select>
+                </label>
+                <label class="viewer-editor-wide">
+                    <span>Creature / GameObject template entry</span>
+                    <input class="form-control" type="number" name="EntityEntry" min="1" required />
+                </label>
+                <div class="viewer-editor-help viewer-editor-wide">
+                    <i class="bi bi-info-circle"></i>
+                    <span>The selected template entry is validated before the quest relationship is created.</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add world relationship</button>
+            </div>
+        </form>
+        </div>
+        </div>
+        </div>
+    }
+
+    @if (Model.CanEditRelations)
+    {
+        <div class="modal fade viewer-editor-modal" id="questEditRelationModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <form method="post" asp-action="QuestEditRelation">
+            <div class="modal-header">
+                <div>
+                    <span class="eyebrow">Quest relationship</span>
+                    <h2 class="modal-title fs-5">Edit world relationship</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body viewer-editor-form-grid">
+                <input type="hidden" name="Database" value="@Model.Database" /><input type="hidden" name="Search" value="@Model.Search" /><input type="hidden" name="Entry" value="@selected.Entry" /><input type="hidden" name="Page" value="@Model.Quests.Page" /><input type="hidden" name="PageSize" value="@Model.Quests.PageSize" /><input type="hidden" name="RelationPage" value="@Model.SelectedQuest.Relations.Page" /><input type="hidden" name="RelationPageSize" value="@Model.SelectedQuest.Relations.PageSize" /><input type="hidden" name="OriginalKind" data-quest-edit-original-kind /><input type="hidden" name="OriginalEntityEntry" data-quest-edit-original-entry />
+                <div class="viewer-edit-member-context viewer-editor-wide">
+                    <span><i class="bi bi-link-45deg"></i></span>
+                    <div>
+                        <small>Current source</small>
+                        <strong data-quest-edit-name>Quest relationship</strong>
+                        <code data-quest-edit-entry></code>
+                    </div>
+                </div>
+                <label class="viewer-editor-wide">
+                    <span>Relationship type</span>
+                    <select class="form-select" name="Kind" required data-quest-edit-kind>
+                        @foreach (QuestRelationCapability relation in Model.EditorCapabilities.RelationKinds)
+                        {
+                            <option value="@relation.Kind">@relation.Label</option>
+                        }
+                    </select>
+                </label>
+                <label class="viewer-editor-wide">
+                    <span>Creature / GameObject template entry</span>
+                    <input class="form-control" type="number" name="EntityEntry" min="1" required data-quest-edit-entity-entry />
+                </label>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check2"></i> Save relationship changes</button>
+            </div>
+        </form>
+        </div>
+        </div>
+        </div>
+    }
+
+    @if (Model.CanDeleteQuests)
+    {
+        <div class="modal fade viewer-editor-modal" id="questDeleteModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <form method="post" asp-action="QuestDelete">
+            <div class="modal-header">
+                <div>
+                    <span class="eyebrow">Destructive action</span>
+                    <h2 class="modal-title fs-5">Delete quest @selected.Entry?</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="Database" value="@Model.Database" /><input type="hidden" name="Search" value="@Model.Search" /><input type="hidden" name="Entry" value="@selected.Entry" /><input type="hidden" name="Page" value="@Model.Quests.Page" /><input type="hidden" name="PageSize" value="@Model.Quests.PageSize" /><input type="hidden" name="RelationPage" value="@Model.SelectedQuest.Relations.Page" /><input type="hidden" name="RelationPageSize" value="@Model.SelectedQuest.Relations.PageSize" />
+                <div class="alert alert-warning studio-inline-alert mb-0">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <div>
+                        <strong>Relationships and incoming chain links must be removed first</strong>
+                        <span>Quest Viewer does not cascade-delete world or chain relationships. Other quest-related auxiliary tables should also be reviewed before deleting a quest template.</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-danger"><i class="bi bi-trash"></i> Delete quest</button>
+            </div>
+        </form>
+        </div>
+        </div>
+        </div>
+    }
+
+    @if (Model.CanRemoveRelations)
+    {
+        <div class="modal fade viewer-editor-modal" id="questRemoveRelationModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <form method="post" asp-action="QuestRemoveRelation">
+            <div class="modal-header">
+                <div>
+                    <span class="eyebrow">Quest relationship</span>
+                    <h2 class="modal-title fs-5">Remove world relationship?</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="Database" value="@Model.Database" /><input type="hidden" name="Search" value="@Model.Search" /><input type="hidden" name="Entry" value="@selected.Entry" /><input type="hidden" name="Page" value="@Model.Quests.Page" /><input type="hidden" name="PageSize" value="@Model.Quests.PageSize" /><input type="hidden" name="RelationPage" value="@Model.SelectedQuest.Relations.Page" /><input type="hidden" name="RelationPageSize" value="@Model.SelectedQuest.Relations.PageSize" /><input type="hidden" name="Kind" data-quest-remove-kind /><input type="hidden" name="EntityEntry" data-quest-remove-entry />
+                <div class="viewer-remove-confirmation">
+                    <span><i class="bi bi-link-45deg"></i></span>
+                    <div>
+                        <small>Relationship to remove</small>
+                        <strong data-quest-remove-name>Selected source</strong>
+                        <p>This removes only the quest relationship. The underlying creature or GameObject template remains unchanged.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-danger"><i class="bi bi-trash"></i> Remove relationship</button>
+            </div>
+        </form>
+        </div>
+        </div>
+        </div>
+    }
+}
+
+@section Scripts {
+<script src="~/js/world-lookup-picker.js" asp-append-version="true"></script>
+<script>
+(() => {
+    document.querySelectorAll('[data-quest-edit-relation]').forEach(button => {
+        button.addEventListener('click', () => {
+            const modal = document.getElementById('questEditRelationModal');
+            if (!modal)
+            {
+                return;
+            }
+            const kind = button.dataset.kind || '';
+            const entry = button.dataset.entry || '';
+            const name = button.dataset.name || 'Quest relationship';
+            modal.querySelector('[data-quest-edit-original-kind]').value = kind;
+            modal.querySelector('[data-quest-edit-original-entry]').value = entry;
+            modal.querySelector('[data-quest-edit-kind]').value = kind;
+            modal.querySelector('[data-quest-edit-entity-entry]').value = entry;
+            modal.querySelector('[data-quest-edit-name]').textContent = name;
+            modal.querySelector('[data-quest-edit-entry]').textContent = 'Entry ' + entry;
+        });
+    });
+
+    document.querySelectorAll('[data-quest-remove-relation]').forEach(button => {
+        button.addEventListener('click', () => {
+            const modal = document.getElementById('questRemoveRelationModal');
+            if (!modal)
+            {
+                return;
+            }
+            modal.querySelector('[data-quest-remove-kind]').value = button.dataset.kind || '';
+            modal.querySelector('[data-quest-remove-entry]').value = button.dataset.entry || '';
+            modal.querySelector('[data-quest-remove-name]').textContent = button.dataset.name || 'Selected source';
+        });
+    });
+})();
+</script>
+}

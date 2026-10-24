@@ -1,0 +1,103 @@
+@* Reusable edit fields for the selected gossip-menu option. *@
+
+@model GossipOptionFieldsViewModel
+@{
+    string p = Model.Prefix;
+}
+<div class="viewer-editor-form-grid gossip-option-form-grid">
+    <label class="form-label">
+        <span>Option ID</span>
+        <input type="number" min="0" class="form-control" name="@(p).Id" required data-gossip-option-field="Id" />
+    </label>
+    @if (Model.Capabilities.HasOptionIcon)
+    {
+        <label class="form-label">
+            <span>Icon</span>
+            <input type="number" min="0" class="form-control" name="@(p).OptionIcon" data-gossip-option-field="OptionIcon" />
+        </label>
+    }
+    @if (Model.Capabilities.HasOptionText)
+    {
+        <label class="form-label gossip-option-field-wide">
+            <span>Option text</span>
+            <input type="text" class="form-control" name="@(p).OptionText" maxlength="2048" data-gossip-option-field="OptionText" />
+        </label>
+    }
+    @if (Model.Capabilities.HasOptionBroadcastTextId)
+    {
+        <label class="form-label">
+            <span>Option broadcast text ID</span>
+            <input type="number" min="0" class="form-control" name="@(p).OptionBroadcastTextId" data-gossip-option-field="OptionBroadcastTextId" />
+        </label>
+    }
+    @if (Model.Capabilities.HasOptionId)
+    {
+        <label class="form-label">
+            <span>Option type</span>
+            <input type="number" min="0" class="form-control" name="@(p).OptionId" data-gossip-option-field="OptionId" />
+        </label>
+    }
+    @if (Model.Capabilities.HasNpcOptionNpcFlag)
+    {
+        <label class="form-label">
+            <span>Required NPC flag</span>
+            <input type="number" min="0" class="form-control" name="@(p).NpcOptionNpcFlag" data-gossip-option-field="NpcOptionNpcFlag" />
+        </label>
+    }
+    @if (Model.Capabilities.HasActionMenuId)
+    {
+        <label class="form-label">
+            <span>Action menu ID</span>
+            <input type="number" class="form-control" name="@(p).ActionMenuId" data-gossip-option-field="ActionMenuId" /><small>Negative values are preserved for close-menu sentinels.</small>
+        </label>
+    }
+    @if (Model.Capabilities.HasActionPoiId)
+    {
+        <label class="form-label">
+            <span>Action POI ID</span>
+            <input type="number" min="0" class="form-control" name="@(p).ActionPoiId" data-gossip-option-field="ActionPoiId" />
+        </label>
+    }
+    @if (Model.Capabilities.HasActionScriptId)
+    {
+        <label class="form-label">
+            <span>Action script ID</span>
+            <input type="number" min="0" class="form-control" name="@(p).ActionScriptId" data-gossip-option-field="ActionScriptId" />
+        </label>
+    }
+    @if (Model.Capabilities.HasBoxCoded)
+    {
+        <label class="form-label">
+            <span>Coded input</span>
+            <select class="form-select" name="@(p).BoxCoded" data-gossip-option-field="BoxCoded"><option value="false">No</option><option value="true">Yes</option></select>
+        </label>
+    }
+    @if (Model.Capabilities.HasBoxMoney)
+    {
+        <label class="form-label">
+            <span>Box money</span>
+            <input type="number" min="0" class="form-control" name="@(p).BoxMoney" data-gossip-option-field="BoxMoney" />
+        </label>
+    }
+    @if (Model.Capabilities.HasBoxText)
+    {
+        <label class="form-label gossip-option-field-wide">
+            <span>Box text</span>
+            <input type="text" class="form-control" name="@(p).BoxText" maxlength="2048" data-gossip-option-field="BoxText" />
+        </label>
+    }
+    @if (Model.Capabilities.HasBoxBroadcastTextId)
+    {
+        <label class="form-label">
+            <span>Box broadcast text ID</span>
+            <input type="number" min="0" class="form-control" name="@(p).BoxBroadcastTextId" data-gossip-option-field="BoxBroadcastTextId" />
+        </label>
+    }
+    @if (Model.Capabilities.HasOptionConditionId)
+    {
+        <label class="form-label">
+            <span>Condition ID</span>
+            <input type="number" min="0" class="form-control" name="@(p).ConditionId" data-gossip-option-field="ConditionId" />
+        </label>
+    }
+</div>

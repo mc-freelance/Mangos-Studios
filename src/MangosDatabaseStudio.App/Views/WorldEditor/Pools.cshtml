@@ -1,0 +1,1175 @@
+@* Present the WorldEditor Pools workflow within the shared studio layout. *@
+
+@using MangosDatabaseStudio.Domain.World
+@model PoolViewerViewModel
+@{
+    ViewData["Title"] = "Pool Viewer";
+    ViewData["Section"] = Model.Database + " / " + Model.CatalogName;
+    ViewData["PageClass"] = "world-editor-page";
+    ViewData["ContentClass"] = "world-editor-content world-record-editor-content";
+
+    int[] pageSizes = new[] { 10, 20, 50, 100, 200 };
+    int firstPage = Math.Max(1, Model.Pools.Page - 2);
+    int lastPage = Math.Min(Model.Pools.TotalPages, Model.Pools.Page + 2);
+    int memberFirstPage = Model.SelectedPool == null ? 1 : Math.Max(1, Model.SelectedPool.Members.Page - 2);
+    int memberLastPage = Model.SelectedPool == null ? 1 : Math.Min(Model.SelectedPool.Members.TotalPages, Model.SelectedPool.Members.Page + 2);
+    bool canManagePools = Model.CanCreatePools || Model.CanEditPools || Model.CanDeletePools || Model.CanAddMembers || Model.CanRemoveMembers;
+}
+
+<div class="world-record-editor viewer-page pool-viewer" data-pool-viewer>
+    <header class="record-editor-commandbar">
+        <div class="record-command-identity">
+            <a class="record-back-button" asp-action="Index" asp-route-database="@Model.Database" aria-label="Back to World Editor">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <span class="record-command-icon"><i class="bi bi-diagram-3"></i></span>
+            <div>
+                <span class="eyebrow">Structured world data viewer</span>
+                <h2>Pool Viewer</h2>
+                <p>Inspect pool templates and their creature, GameObject, template, and child-pool relationships.</p>
+            </div>
+        </div>
+        <div class="record-command-actions">
+            <span class="record-change-badge">
+                <i class="bi @(canManagePools ? "bi-pencil-square" : "bi-shield-check")"></i>
+                @(canManagePools ? "Pool editor" : "Read-only")
+            </span>
+            @if (Model.IsAvailable && Model.CanCreatePools)
+            {
+                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#poolCreateModal">
+                    <i class="bi bi-plus-lg"></i> Add pool
+                </button>
+            }
+        </div>
+    </header>
+
+    <div class="viewer-flow">
+        <section class="panel viewer-search-panel" aria-labelledby="poolDirectoryHeading">
+            <header class="panel-header viewer-search-heading">
+                <div>
+                    <span class="eyebrow">Pool directory</span>
+                    <h2 id="poolDirectoryHeading">Find a pool template</h2>
+                    <p>Search by pool entry or description, then open a pool to inspect only the relationships that belong to it.</p>
+                </div>
+                <span class="viewer-catalog-badge"><i class="bi bi-database-check"></i> @Model.CatalogName @Model.CatalogVersion</span>
+            </header>
+
+            @if (!Model.IsAvailable)
+            {
+                <div class="alert alert-warning studio-inline-alert mb-0">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <div>
+                        <strong>Pool Viewer unavailable</strong>
+                        <span>The connected world database does not expose pool_template.</span>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <form method="get" asp-action="Pools" class="viewer-search-form">
+                    <input type="hidden" name="database" value="@Model.Database" />
+                    <input type="hidden" name="show" value="true" />
+                    <input type="hidden" name="pageSize" value="@Model.Pools.PageSize" />
+
+                    <label class="viewer-search-field" for="poolSearch">
+                        <span>Pool entry or description</span>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input id="poolSearch" type="search" name="search" class="form-control" value="@Model.Search"
+                                   placeholder="Example: 100 or rare spawn" autocomplete="off" />
+                            <select name="population" class="form-select pool-population-select" aria-label="Pool population filter" onchange="this.form.submit()">
+                                @if (Model.Population == PoolPopulationFilters.All)
+                                {
+                                    <option value="@PoolPopulationFilters.All" selected>All pools</option>
+                                }
+                                else
+                                {
+                                    <option value="@PoolPopulationFilters.All">All pools</option>
+                                }
+                                @if (Model.Population == PoolPopulationFilters.Populated)
+                                {
+                                    <option value="@PoolPopulationFilters.Populated" selected>Populated</option>
+                                }
+                                else
+                                {
+                                    <option value="@PoolPopulationFilters.Populated">Populated</option>
+                                }
+                                @if (Model.Population == PoolPopulationFilters.Empty)
+                                {
+                                    <option value="@PoolPopulationFilters.Empty" selected>Empty</option>
+                                }
+                                else
+                                {
+                                    <option value="@PoolPopulationFilters.Empty">Empty</option>
+                                }
+                            </select>
+                        </div>
+                        <small>Search all pools, or narrow the directory to populated or empty pool templates.</small>
+                    </label>
+
+                    <div class="viewer-context-card">
+                        <span class="viewer-context-icon"><i class="bi bi-diagram-2"></i></span>
+                        <div>
+                            <small>Pool data sources</small>
+                            <strong>@Model.AvailableTables.Count table@(Model.AvailableTables.Count == 1 ? string.Empty : "s")</strong>
+                            <span>@(Model.AvailableTables.Count > 1 ? "Pool membership tables are detected automatically." : "Only pool_template is available in this schema.")</span>
+                        </div>
+                    </div>
+
+                    <div class="viewer-context-card">
+                        <span class="viewer-context-icon"><i class="bi @(canManagePools ? "bi-pencil-square" : "bi-shield-check")"></i></span>
+                        <div>
+                            <small>Workspace access</small>
+                            <strong>@(canManagePools ? "Pool management enabled" : "Read-only viewer")</strong>
+                            <span>@(canManagePools ? "Create pools and manage relationships according to your World Editor permissions." : "Pool templates and relationships can be inspected without changing world data.")</span>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary viewer-search-button"><i class="bi bi-search"></i> Search pools</button>
+                </form>
+            }
+        </section>
+
+        @if (Model.IsAvailable && Model.HasSearched)
+        {
+            <section class="viewer-summary-grid" aria-label="Pool viewer summary">
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-diagram-3"></i></span>
+                    <div>
+                        <small>Matching pools</small>
+                        <strong>@Model.Pools.TotalCount.ToString("N0")</strong>
+                        <p>@(PoolPopulationFilters.GetLabel(Model.Population))@(string.IsNullOrWhiteSpace(Model.Search) ? string.Empty : " · search applied")</p>
+                    </div>
+                </article>
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-file-earmark-text"></i></span>
+                    <div>
+                        <small>Directory page</small>
+                        <strong>@Model.Pools.Page / @Math.Max(Model.Pools.TotalPages, 1)</strong>
+                        <p>@Model.Pools.PageSize rows per page</p>
+                    </div>
+                </article>
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi bi-bounding-box-circles"></i></span>
+                    <div>
+                        <small>Current selection</small>
+                        @if (Model.SelectedPool == null)
+                        {
+                            <strong>None</strong>
+                            <p>Select a pool below</p>
+                        }
+                        else
+                        {
+                            <strong>Pool @Model.SelectedPool.Pool.Entry</strong>
+                            <p>@Model.SelectedPool.Pool.TotalMemberCount.ToString("N0") direct member@(Model.SelectedPool.Pool.TotalMemberCount == 1 ? string.Empty : "s")</p>
+                        }
+                    </div>
+                </article>
+                <article class="panel viewer-summary-card">
+                    <span><i class="bi @(canManagePools ? "bi-check2-circle" : "bi-shield-lock")"></i></span>
+                    <div>
+                        <small>Pool access</small>
+                        <strong>@(canManagePools ? "Editable" : "Read-only")</strong>
+                        <p>@Model.CatalogName @Model.CatalogVersion</p>
+                    </div>
+                </article>
+            </section>
+        }
+
+        <main class="viewer-detail-stack">
+            @if (!ViewData.ModelState.IsValid)
+            {
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+            }
+
+            @if (!Model.IsAvailable)
+            {
+                <section class="panel viewer-empty-state is-warning">
+                    <span><i class="bi bi-database-exclamation"></i></span>
+                    <h3>pool_template was not found</h3>
+                    <p>The Pool Viewer requires pool_template. Additional pool membership tables are detected when available.</p>
+                </section>
+            }
+            else if (!Model.HasSearched)
+            {
+                <section class="panel viewer-empty-state">
+                    <span><i class="bi bi-diagram-3"></i></span>
+                    <h3>Review pools without opening raw pool tables</h3>
+                    <p>Search the pool directory to inspect one pool and its relationships at a time.</p>
+                </section>
+            }
+            else if (Model.Pools.Items.Count == 0)
+            {
+                <section class="panel viewer-empty-state">
+                    <span><i class="bi bi-search"></i></span>
+                    <h3>No matching pools</h3>
+                    <p>@(Model.Population == PoolPopulationFilters.Populated
+                        ? "No populated pools match the current search. Try another entry, description, or population filter."
+                        : Model.Population == PoolPopulationFilters.Empty
+                            ? "No empty pools match the current search. Try another entry, description, or population filter."
+                            : "No pool templates match the current search. Try another entry, description, or population filter.")</p>
+                </section>
+            }
+            else if (Model.SelectedPool == null)
+            {
+                <section class="panel viewer-panel-flush viewer-results-panel">
+                    <header class="viewer-results-header">
+                        <div>
+                            <span class="eyebrow">Pool search results</span>
+                            <h3>Choose a pool template</h3>
+                            <p>Member counts are summarized here so the directory stays compact.</p>
+                        </div>
+                        <div class="viewer-results-count">
+                            <strong>@Model.Pools.TotalCount.ToString("N0")</strong>
+                            <span>pool@(Model.Pools.TotalCount == 1 ? string.Empty : "s")</span>
+                        </div>
+                    </header>
+
+                    <form method="get" asp-action="Pools" class="world-filter-bar viewer-results-toolbar">
+                        <input type="hidden" name="database" value="@Model.Database" />
+                        <input type="hidden" name="search" value="@Model.Search" />
+                        <input type="hidden" name="population" value="@Model.Population" />
+                        <input type="hidden" name="show" value="true" />
+                        <span class="world-filter-hint">Page @Model.Pools.Page of @Math.Max(Model.Pools.TotalPages, 1)</span>
+                        <label class="world-filter-select">
+                            <span>Rows per page</span>
+                            <select name="pageSize" class="form-select" onchange="this.form.submit()">
+                                @foreach (int size in pageSizes)
+                                {
+                                    if (Model.Pools.PageSize == size) { <option value="@size" selected>@size</option> }
+                                    else { <option value="@size">@size</option> }
+                                }
+                            </select>
+                        </label>
+                    </form>
+
+                    <div class="world-record-table-wrap viewer-results-table-wrap">
+                        <table class="table studio-table viewer-results-table viewer-directory-table mb-0" aria-label="Pool search results">
+                            <colgroup>
+                                <col class="viewer-directory-col" style="--viewer-col-width:47%" />
+                                <col class="viewer-directory-col" style="--viewer-col-width:11%" />
+                                <col class="viewer-directory-col" style="--viewer-col-width:11%" />
+                                <col class="viewer-directory-col" style="--viewer-col-width:23%" />
+                                <col class="viewer-directory-col" style="--viewer-col-width:8%" />
+                            </colgroup>
+                            <thead>
+                                <tr>
+                                    <th>Pool</th>
+                                    <th class="viewer-directory-center">Max active</th>
+                                    <th class="viewer-directory-center">Members</th>
+                                    <th class="viewer-directory-center">Composition</th>
+                                    <th class="actions-column viewer-action-column viewer-directory-center">Open</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            @foreach (PoolSummary pool in Model.Pools.Items)
+                            {
+                                <tr>
+                                    <td class="viewer-directory-name-cell">
+                                        <div class="viewer-directory-identity">
+                                            <span class="viewer-directory-icon"><i class="bi bi-diagram-3"></i></span>
+                                            <span><strong>Pool @pool.Entry</strong><small>@(string.IsNullOrWhiteSpace(pool.Description) ? "No description" : pool.Description)</small></span>
+                                        </div>
+                                    </td>
+                                    <td class="viewer-directory-center">@(pool.MaxLimit?.ToString(CultureInfo.InvariantCulture) ?? "—")</td>
+                                    <td class="viewer-directory-center">
+                                        <span class="npc-vendor-item-count">@pool.TotalMemberCount.ToString("N0")</span>
+                                    </td>
+                                    <td class="viewer-directory-center">
+                                        <div class="viewer-composition-chips">
+                                            @if (pool.CreatureSpawnCount + pool.CreatureTemplateCount > 0)
+                                            {
+                                                <span><i class="bi bi-person-walking"></i> @(pool.CreatureSpawnCount + pool.CreatureTemplateCount)</span>
+                                            }
+                                            @if (pool.GameObjectSpawnCount + pool.GameObjectTemplateCount > 0)
+                                            {
+                                                <span><i class="bi bi-box"></i> @(pool.GameObjectSpawnCount + pool.GameObjectTemplateCount)</span>
+                                            }
+                                            @if (pool.ChildPoolCount > 0)
+                                            {
+                                                <span><i class="bi bi-diagram-2"></i> @pool.ChildPoolCount</span>
+                                            }
+                                            @if (pool.TotalMemberCount == 0)
+                                            {
+                                                <span class="is-empty">Empty</span>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td class="actions-column viewer-action-column viewer-directory-center">
+                                        <a class="icon-button" asp-action="Pools" asp-route-database="@Model.Database" asp-route-search="@Model.Search" asp-route-population="@Model.Population" asp-route-show="true"
+                                           asp-route-page="@Model.Pools.Page" asp-route-pageSize="@Model.Pools.PageSize" asp-route-entry="@pool.Entry" title="Open pool @pool.Entry" aria-label="Open pool @pool.Entry">
+                                            <i class="bi bi-chevron-right"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    @if (Model.Pools.TotalPages > 1)
+                    {
+                        <nav class="pagination-shell world-pagination viewer-results-pagination" aria-label="Pool result pages">
+                            <div class="pagination-status">
+                                <strong>Page @Model.Pools.Page</strong>
+                                <span>of @Model.Pools.TotalPages · @Model.Pools.TotalCount.ToString("N0") pools</span>
+                            </div>
+                            <ul class="pagination mb-0">
+                                <li class="page-item pagination-direction @(Model.Pools.Page == 1 ? "disabled" : string.Empty)">
+                                    <a
+                                        class="page-link"
+                                        asp-action="Pools"
+                                        asp-route-database="@Model.Database"
+                                        asp-route-search="@Model.Search"
+                                        asp-route-population="@Model.Population"
+                                        asp-route-show="true"
+                                        asp-route-page="@(Model.Pools.Page - 1)"
+                                        asp-route-pageSize="@Model.Pools.PageSize"><i class="bi bi-chevron-left"></i><span>Previous</span></a>
+                                </li>
+                                @for (int pageNumber = firstPage; pageNumber <= lastPage; pageNumber++)
+                                {
+                                    <li class="page-item @(pageNumber == Model.Pools.Page ? "active" : string.Empty)">
+                                        <a
+                                            class="page-link"
+                                            asp-action="Pools"
+                                            asp-route-database="@Model.Database"
+                                            asp-route-search="@Model.Search"
+                                            asp-route-population="@Model.Population"
+                                            asp-route-show="true"
+                                            asp-route-page="@pageNumber"
+                                            asp-route-pageSize="@Model.Pools.PageSize">@pageNumber</a>
+                                    </li>
+                                }
+                                <li class="page-item pagination-direction @(Model.Pools.Page == Model.Pools.TotalPages ? "disabled" : string.Empty)">
+                                    <a
+                                        class="page-link"
+                                        asp-action="Pools"
+                                        asp-route-database="@Model.Database"
+                                        asp-route-search="@Model.Search"
+                                        asp-route-population="@Model.Population"
+                                        asp-route-show="true"
+                                        asp-route-page="@(Model.Pools.Page + 1)"
+                                        asp-route-pageSize="@Model.Pools.PageSize"><span>Next</span><i class="bi bi-chevron-right"></i></a>
+                                </li>
+                            </ul>
+                        </nav>
+                    }
+                </section>
+            }
+            else
+            {
+                PoolDetail selected = Model.SelectedPool;
+                PoolSummary pool = selected.Pool;
+                bool hasRelationships = selected.Members.TotalCount > 0 || selected.ParentPools.Count > 0;
+                <section class="panel viewer-panel-flush viewer-workbench">
+                    <header class="viewer-record-header">
+                        <span class="viewer-record-icon"><i class="bi bi-diagram-3"></i></span>
+                        <div>
+                            <span class="eyebrow">Selected pool template</span>
+                            <h2>Pool @pool.Entry</h2>
+                            <p>@(string.IsNullOrWhiteSpace(pool.Description) ? "No pool description" : pool.Description)</p>
+                        </div>
+                        <div class="viewer-record-actions">
+                            <a
+                                class="btn btn-outline-secondary btn-sm"
+                                asp-action="Pools"
+                                asp-route-database="@Model.Database"
+                                asp-route-search="@Model.Search"
+                                asp-route-population="@Model.Population"
+                                asp-route-show="true"
+                                asp-route-page="@Model.Pools.Page"
+                                asp-route-pageSize="@Model.Pools.PageSize"><i class="bi bi-arrow-left"></i> Results</a>
+                            @if (Model.CanAddMembers && Model.EditorCapabilities.MemberSources.Count > 0)
+                            {
+                                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#poolAddMemberModal"><i class="bi bi-plus-lg"></i> Add member</button>
+                            }
+                            @if (Model.CanEditPools)
+                            {
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#poolEditModal"><i class="bi bi-pencil"></i> Edit pool</button>
+                            }
+                            @if (Model.CanDeletePools)
+                            {
+                                <button type="button"
+                                        class="btn btn-outline-danger btn-sm"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#poolDeleteModal"
+                                        disabled="@hasRelationships"
+                                        title="@(hasRelationships ? "Remove all direct and parent relationships before deleting this pool." : "Delete pool template")">
+                                    <i class="bi bi-trash"></i> Delete pool
+                                </button>
+                            }
+
+
+                            <partial name="_ViewerPendingRecordActions" />
+                        </div>
+                    </header>
+
+                    <div class="viewer-detail-metrics">
+                        <div>
+                            <small>Max active</small>
+                            <strong>@(pool.MaxLimit?.ToString(CultureInfo.InvariantCulture) ?? "—")</strong>
+                            <span>pool_template limit</span>
+                        </div>
+                        <div>
+                            <small>Direct members</small>
+                            <strong>@pool.TotalMemberCount.ToString("N0")</strong>
+                            <span>all membership sources</span>
+                        </div>
+                        <div>
+                            <small>Parent pools</small>
+                            <strong>@selected.ParentPools.Count.ToString("N0")</strong>
+                            <span>pool_pool parents</span>
+                        </div>
+                        <div>
+                            <small>Membership page</small>
+                            <strong>@selected.Members.Page / @Math.Max(selected.Members.TotalPages, 1)</strong>
+                            <span>@selected.Members.PageSize rows per page</span>
+                        </div>
+                    </div>
+
+                    @if (selected.ParentPools.Count > 0)
+                    {
+                        <section class="pool-parent-section">
+                            <header>
+                                <div>
+                                    <span class="eyebrow">Parent relationships</span>
+                                    <h3>This pool is nested inside</h3>
+                                </div>
+                                <span class="badge rounded-pill">@selected.ParentPools.Count parent@(selected.ParentPools.Count == 1 ? string.Empty : "s")</span>
+                            </header>
+                            <div class="pool-parent-list">
+                                @foreach (PoolParentMembership parent in selected.ParentPools)
+                                {
+                                    <article>
+                                        <span class="pool-parent-icon"><i class="bi bi-diagram-2"></i></span>
+                                        <div>
+                                            <strong>@(string.IsNullOrWhiteSpace(parent.Description) ? "Parent pool" : parent.Description)</strong>
+                                            <small>Pool entry @parent.PoolEntry</small>
+                                            @if (!string.IsNullOrWhiteSpace(parent.MembershipDescription))
+                                            {
+                                                <small class="pool-parent-membership-note">@parent.MembershipDescription</small>
+                                            }
+                                        </div>
+                                        <span class="pool-parent-chance">@(parent.Chance.HasValue ? parent.Chance.Value.ToString("0.###", CultureInfo.InvariantCulture) + "%" : "—")</span>
+                                        @if (Model.CanRemoveMembers)
+                                        {
+                                            <button
+                                                type="button"
+                                                class="btn btn-sm btn-outline-danger"
+                                                data-pool-remove-open
+                                                data-source="@PoolMemberSources.ChildPool"
+                                                data-member-id="@pool.Entry"
+                                                data-membership-pool-entry="@parent.PoolEntry"
+                                                data-member-name="Pool @pool.Entry from parent pool @parent.PoolEntry"><i class="bi bi-x-lg"></i> Remove</button>
+                                        }
+                                    </article>
+                                }
+                            </div>
+                        </section>
+                    }
+
+                    <div class="viewer-record-section">
+                        <header class="viewer-record-section-header">
+                            <div>
+                                <span class="eyebrow">Pool relationships</span>
+                                <h3>Members in this pool</h3>
+                                <p>Creature spawns, templates, GameObjects, and child pools are combined into one compact workbench.</p>
+                            </div>
+                            <span class="badge rounded-pill">@selected.Members.TotalCount.ToString("N0") member@(selected.Members.TotalCount == 1 ? string.Empty : "s")</span>
+                        </header>
+
+                        @if (selected.Members.TotalCount == 0)
+                        {
+                            <div class="viewer-record-empty">
+                                <i class="bi bi-diagram-3"></i>
+                                <strong>No direct members</strong>
+                                <p>This pool has no creature, GameObject, template, or child-pool relationships.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="viewer-record-table-wrap">
+                                <table class="table studio-table viewer-record-table viewer-workbench-table pool-member-table mb-0">
+                                    <colgroup>
+                                        <col class="pool-member-col-type" />
+                                        <col class="pool-member-col-stored" />
+                                        <col class="pool-member-col-resolved" />
+                                        <col class="pool-member-col-chance" />
+                                        <col class="pool-member-col-description" />
+                                        <col class="viewer-table-col-actions" />
+                                    </colgroup>
+                                    <thead>
+                                        <tr>
+                                            <th>Type</th>
+                                            <th class="viewer-table-center">Stored member</th>
+                                            <th>Resolved entity</th>
+                                            <th class="pool-member-chance-column">Chance</th>
+                                            <th>Description</th>
+                                            <th class="actions-column viewer-action-column">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    @foreach (PoolMember member in selected.Members.Items)
+                                    {
+                                        string storedLabel = member.Source switch
+                                        {
+                                            PoolMemberSources.CreatureSpawn => "Spawn GUID",
+                                            PoolMemberSources.CreatureTemplate => "Creature entry",
+                                            PoolMemberSources.GameObjectSpawn => "Spawn GUID",
+                                            PoolMemberSources.GameObjectTemplate => "GameObject entry",
+                                            PoolMemberSources.ChildPool => "Child pool entry",
+                                            _ => "Member ID"
+                                        };
+                                        string resolvedType = member.Source switch
+                                        {
+                                            PoolMemberSources.CreatureSpawn or PoolMemberSources.CreatureTemplate => "Creature entry",
+                                            PoolMemberSources.GameObjectSpawn or PoolMemberSources.GameObjectTemplate => "GameObject entry",
+                                            PoolMemberSources.ChildPool => "Pool entry",
+                                            _ => "Resolved entry"
+                                        };
+                                        string unresolvedLabel = member.Source switch
+                                        {
+                                            PoolMemberSources.CreatureSpawn => "Spawn GUID does not resolve to a creature entry",
+                                            PoolMemberSources.CreatureTemplate => "Creature template entry was not found",
+                                            PoolMemberSources.GameObjectSpawn => "Spawn GUID does not resolve to a GameObject entry",
+                                            PoolMemberSources.GameObjectTemplate => "GameObject template entry was not found",
+                                            PoolMemberSources.ChildPool => "Child pool template was not found",
+                                            _ => "No matching world-data record was found"
+                                        };
+                                        <tr>
+                                            <td>
+                                                <div class="viewer-member-type">
+                                                    <span><i class="bi @(member.Source == PoolMemberSources.ChildPool ? "bi-diagram-2" : member.Source.Contains("gameobject", StringComparison.OrdinalIgnoreCase) ? "bi-box" : "bi-person-walking")"></i></span>
+                                                    <div>
+                                                        <strong>@member.SourceLabel</strong>
+                                                        <code>@member.Source</code>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="viewer-table-center">
+                                                <div class="viewer-cell-stack viewer-cell-code pool-stored-member">
+                                                    <strong>@storedLabel</strong>
+                                                    <small>@member.MemberId.ToString(CultureInfo.InvariantCulture)</small>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                @if (member.IsResolved && member.EntityEntry.HasValue)
+                                                {
+                                                    <div class="viewer-resolved-entity is-resolved">
+                                                        <strong>@(string.IsNullOrWhiteSpace(member.ResolvedName) ? "Name unavailable" : member.ResolvedName)</strong>
+                                                        <small>@resolvedType @member.EntityEntry.Value.ToString(CultureInfo.InvariantCulture)</small>
+                                                        <span><i class="bi bi-check-circle-fill"></i> Resolved</span>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="viewer-resolved-entity is-unresolved">
+                                                        <strong>Unresolved reference</strong>
+                                                        <small>@unresolvedLabel</small>
+                                                        <span><i class="bi bi-exclamation-triangle-fill"></i> Stored ID @member.MemberId.ToString(CultureInfo.InvariantCulture)</span>
+                                                    </div>
+                                                }
+                                            </td>
+                                            <td class="pool-member-chance-column">@(member.Chance.HasValue ? member.Chance.Value.ToString("0.###", CultureInfo.InvariantCulture) + "%" : "—")</td>
+                                            <td class="pool-member-description-column">@(string.IsNullOrWhiteSpace(member.Description) ? "—" : member.Description)</td>
+                                            <td class="actions-column viewer-action-column">
+                                                @{
+                                                    PoolMemberSourceCapability? memberCapability = Model.EditorCapabilities.MemberSources.FirstOrDefault(source => string.Equals(source.Source, member.Source, StringComparison.OrdinalIgnoreCase));
+                                                    bool canEditThisMember = Model.CanEditMembers && memberCapability != null;
+                                                }
+                                                <div class="row-actions row-actions-compact">
+                                                    @if (canEditThisMember)
+                                                    {
+                                                        <button type="button" class="icon-button" data-pool-edit-member-open
+                                                                data-source="@member.Source"
+                                                                data-source-label="@member.SourceLabel"
+                                                                data-member-label="@(memberCapability!.MemberLabel)"
+                                                                data-member-id="@member.MemberId"
+                                                                data-member-name="@member.DisplayName"
+                                                                data-resolved-name="@member.ResolvedName"
+                                                                data-resolved-entry="@(member.EntityEntry?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"
+                                                                data-is-resolved="@member.IsResolved.ToString().ToLowerInvariant()"
+                                                                data-chance="@(member.Chance?.ToString("R", CultureInfo.InvariantCulture) ?? string.Empty)"
+                                                                data-description="@member.Description"
+                                                                data-has-chance="@(memberCapability!.HasChance.ToString().ToLowerInvariant())"
+                                                                data-has-description="@(memberCapability!.HasDescription.ToString().ToLowerInvariant())"
+                                                                title="Edit @member.DisplayName" aria-label="Edit @member.DisplayName"><i class="bi bi-pencil"></i></button>
+                                                    }
+                                                    @if (Model.CanRemoveMembers)
+                                                    {
+                                                        <button
+                                                            type="button"
+                                                            class="icon-button danger"
+                                                            data-pool-remove-open
+                                                            data-source="@member.Source"
+                                                            data-member-id="@member.MemberId"
+                                                            data-member-name="@member.DisplayName"
+                                                            title="Remove @member.DisplayName"
+                                                            aria-label="Remove @member.DisplayName"><i class="bi bi-trash"></i></button>
+                                                    }
+
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <footer class="viewer-record-footer">
+                                <div class="viewer-record-pagination-wrap">
+                                    <div class="pagination-status">
+                                        <strong>Page @selected.Members.Page</strong>
+                                        <span>of @Math.Max(selected.Members.TotalPages, 1) · @selected.Members.TotalCount.ToString("N0") members</span>
+                                    </div>
+                                    @if (selected.Members.TotalPages > 1)
+                                    {
+                                        <nav class="world-pagination viewer-record-pagination" aria-label="Pool member pages">
+                                            <ul class="pagination mb-0">
+                                            <li class="page-item pagination-direction @(selected.Members.Page == 1 ? "disabled" : string.Empty)">
+                                                <a
+                                                    class="page-link"
+                                                    asp-action="Pools"
+                                                    asp-route-database="@Model.Database"
+                                                    asp-route-search="@Model.Search"
+                                                    asp-route-population="@Model.Population"
+                                                    asp-route-show="true"
+                                                    asp-route-page="@Model.Pools.Page"
+                                                    asp-route-pageSize="@Model.Pools.PageSize"
+                                                    asp-route-entry="@pool.Entry"
+                                                    asp-route-memberPage="@(selected.Members.Page - 1)"
+                                                    asp-route-memberPageSize="@selected.Members.PageSize"><i class="bi bi-chevron-left"></i><span>Previous</span></a>
+                                            </li>
+                                            @for (int pageNumber = memberFirstPage; pageNumber <= memberLastPage; pageNumber++)
+                                            {
+                                                <li class="page-item @(pageNumber == selected.Members.Page ? "active" : string.Empty)">
+                                                    <a
+                                                        class="page-link"
+                                                        asp-action="Pools"
+                                                        asp-route-database="@Model.Database"
+                                                        asp-route-search="@Model.Search"
+                                                        asp-route-population="@Model.Population"
+                                                        asp-route-show="true"
+                                                        asp-route-page="@Model.Pools.Page"
+                                                        asp-route-pageSize="@Model.Pools.PageSize"
+                                                        asp-route-entry="@pool.Entry"
+                                                        asp-route-memberPage="@pageNumber"
+                                                        asp-route-memberPageSize="@selected.Members.PageSize">@pageNumber</a>
+                                                </li>
+                                            }
+                                            <li class="page-item pagination-direction @(selected.Members.Page == selected.Members.TotalPages ? "disabled" : string.Empty)">
+                                                <a
+                                                    class="page-link"
+                                                    asp-action="Pools"
+                                                    asp-route-database="@Model.Database"
+                                                    asp-route-search="@Model.Search"
+                                                    asp-route-population="@Model.Population"
+                                                    asp-route-show="true"
+                                                    asp-route-page="@Model.Pools.Page"
+                                                    asp-route-pageSize="@Model.Pools.PageSize"
+                                                    asp-route-entry="@pool.Entry"
+                                                    asp-route-memberPage="@(selected.Members.Page + 1)"
+                                                    asp-route-memberPageSize="@selected.Members.PageSize"><span>Next</span><i class="bi bi-chevron-right"></i></a>
+                                            </li>
+                                        </ul>
+                                        </nav>
+                                    }
+                                </div>
+                                <form method="get" asp-action="Pools" class="viewer-record-page-size">
+                                    <input type="hidden" name="database" value="@Model.Database" />
+                                    <input type="hidden" name="search" value="@Model.Search" />
+                                    <input type="hidden" name="population" value="@Model.Population" />
+                                    <input type="hidden" name="show" value="true" />
+                                    <input type="hidden" name="page" value="@Model.Pools.Page" />
+                                    <input type="hidden" name="pageSize" value="@Model.Pools.PageSize" />
+                                    <input type="hidden" name="entry" value="@pool.Entry" />
+                                    <input type="hidden" name="memberPage" value="1" />
+                                    <label class="world-filter-select">
+                                        <span>Rows per page</span>
+                                        <select name="memberPageSize" class="form-select" onchange="this.form.submit()">
+                                            @foreach (int size in pageSizes)
+                                            {
+                                                if (selected.Members.PageSize == size)
+                                                {
+                                                    <option value="@size" selected>@size</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@size">@size</option>
+                                                }
+                                            }
+                                        </select>
+                                    </label>
+                                </form>
+                            </footer>
+                        }
+                    </div>
+                </section>
+            }
+        </main>
+    </div>
+</div>
+
+@if (Model.IsAvailable && Model.CanCreatePools)
+{
+    <div class="modal fade viewer-editor-modal" id="poolCreateModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+            <form method="post" asp-action="PoolCreate">
+                <div class="modal-header">
+                    <div>
+                        <span class="eyebrow">Pool template</span>
+                        <h2 class="modal-title fs-5">Add pool</h2>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body viewer-editor-form-grid">
+                    <input type="hidden" name="Database" value="@Model.Database" />
+                    <input type="hidden" name="Search" value="@Model.Search" />
+                    <input type="hidden" name="Population" value="@Model.Population" />
+                    <input type="hidden" name="Entry" value="@(Model.SelectedEntry ?? 0)" />
+                    <input type="hidden" name="Page" value="@Model.Pools.Page" />
+                    <input type="hidden" name="PageSize" value="@Model.Pools.PageSize" />
+                    <input type="hidden" name="MemberPage" value="@(Model.SelectedPool?.Members.Page ?? 1)" />
+                    <input type="hidden" name="MemberPageSize" value="@(Model.SelectedPool?.Members.PageSize ?? Model.Pools.PageSize)" />
+                    <label>
+                        <span>Pool entry</span>
+                        <input class="form-control" type="number" name="NewEntry" min="1" required />
+                    </label>
+                    @if (Model.EditorCapabilities.HasMaxLimit)
+                    {
+                        <label>
+                            <span>Max active</span>
+                            <input class="form-control" type="number" name="MaxLimit" min="0" value="1" />
+                        </label>
+                    }
+                    @if (Model.EditorCapabilities.HasDescription)
+                    {
+                        <label class="viewer-editor-wide">
+                            <span>Description</span>
+                            <input class="form-control" type="text" name="Description" maxlength="255" />
+                        </label>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Create pool</button>
+                </div>
+            </form>
+        </div>
+        </div>
+    </div>
+}
+
+@if (Model.SelectedPool != null)
+{
+    PoolSummary selectedPool = Model.SelectedPool.Pool;
+    @if (Model.CanEditPools)
+    {
+        <div class="modal fade viewer-editor-modal" id="poolEditModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                <form method="post" asp-action="PoolEdit">
+                    <div class="modal-header">
+                        <div>
+                            <span class="eyebrow">Pool @selectedPool.Entry</span>
+                            <h2 class="modal-title fs-5">Edit pool details</h2>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body viewer-editor-form-grid">
+                        <input type="hidden" name="Database" value="@Model.Database" />
+                        <input type="hidden" name="Search" value="@Model.Search" />
+                        <input type="hidden" name="Population" value="@Model.Population" />
+                        <input type="hidden" name="Entry" value="@selectedPool.Entry" />
+                        <input type="hidden" name="Page" value="@Model.Pools.Page" />
+                        <input type="hidden" name="PageSize" value="@Model.Pools.PageSize" />
+                        <input type="hidden" name="MemberPage" value="@Model.SelectedPool.Members.Page" />
+                        <input type="hidden" name="MemberPageSize" value="@Model.SelectedPool.Members.PageSize" />
+                        @if (Model.EditorCapabilities.HasMaxLimit)
+                        {
+                            <label>
+                                <span>Max active</span>
+                                <input class="form-control" type="number" name="MaxLimit" min="0" value="@(selectedPool.MaxLimit?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)" />
+                            </label>
+                        }
+                        @if (Model.EditorCapabilities.HasDescription)
+                        {
+                            <label class="viewer-editor-wide">
+                                <span>Description</span>
+                                <input class="form-control" type="text" name="Description" value="@selectedPool.Description" maxlength="255" />
+                            </label>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-check2"></i> Save pool changes</button>
+                    </div>
+                </form>
+            </div>
+            </div>
+        </div>
+    }
+
+    @if (Model.CanAddMembers && Model.EditorCapabilities.MemberSources.Count > 0)
+    {
+        <div class="modal fade viewer-editor-modal" id="poolAddMemberModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                <form method="post" asp-action="PoolAddMember" data-pool-member-form>
+                    <div class="modal-header">
+                        <div>
+                            <span class="eyebrow">Pool @selectedPool.Entry</span>
+                            <h2 class="modal-title fs-5">Add pool member</h2>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body viewer-editor-form-grid">
+                        <input type="hidden" name="Database" value="@Model.Database" />
+                        <input type="hidden" name="Search" value="@Model.Search" />
+                        <input type="hidden" name="Population" value="@Model.Population" />
+                        <input type="hidden" name="Entry" value="@selectedPool.Entry" />
+                        <input type="hidden" name="Page" value="@Model.Pools.Page" />
+                        <input type="hidden" name="PageSize" value="@Model.Pools.PageSize" />
+                        <input type="hidden" name="MemberPage" value="@Model.SelectedPool.Members.Page" />
+                        <input type="hidden" name="MemberPageSize" value="@Model.SelectedPool.Members.PageSize" />
+                        <label class="viewer-editor-wide">
+                            <span>Membership source</span>
+                            <select class="form-select" name="Source" required data-pool-source-select>
+                                @foreach (PoolMemberSourceCapability source in Model.EditorCapabilities.MemberSources)
+                                {
+                                    <option value="@source.Source"
+                                            data-member-label="@source.MemberLabel"
+                                            data-has-chance="@source.HasChance.ToString().ToLowerInvariant()"
+                                            data-has-description="@source.HasDescription.ToString().ToLowerInvariant()">
+                                        @source.Label — @source.Source
+                                    </option>
+                                }
+                            </select>
+                        </label>
+                        <label>
+                            <span data-pool-member-label>Member ID</span>
+                            <input class="form-control" type="number" name="MemberId" min="1" required />
+                        </label>
+                        <label data-pool-chance-field>
+                            <span>Chance (%)</span>
+                            <input class="form-control" type="number" name="Chance" min="0" max="100" step="0.001" value="0" />
+                        </label>
+                        <label class="viewer-editor-wide" data-pool-description-field>
+                            <span>Membership description</span>
+                            <input class="form-control" type="text" name="Description" maxlength="255" />
+                        </label>
+                        <div class="viewer-editor-help viewer-editor-wide">
+                            <i class="bi bi-info-circle"></i>
+                            <span>Use spawn GUIDs for spawn membership tables, template entries for template membership tables, and a pool entry when adding a child pool.</span>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add member</button>
+                    </div>
+                </form>
+            </div>
+            </div>
+        </div>
+    }
+
+    @if (Model.CanEditMembers && Model.EditorCapabilities.MemberSources.Count > 0)
+    {
+        <div class="modal fade viewer-editor-modal" id="poolEditMemberModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                <form method="post" asp-action="PoolEditMember" data-pool-edit-member-form>
+                    <div class="modal-header">
+                        <div>
+                            <span class="eyebrow">Pool @selectedPool.Entry</span>
+                            <h2 class="modal-title fs-5">Edit pool member</h2>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body viewer-editor-form-grid">
+                        <input type="hidden" name="Database" value="@Model.Database" />
+                        <input type="hidden" name="Search" value="@Model.Search" />
+                        <input type="hidden" name="Population" value="@Model.Population" />
+                        <input type="hidden" name="Entry" value="@selectedPool.Entry" />
+                        <input type="hidden" name="Page" value="@Model.Pools.Page" />
+                        <input type="hidden" name="PageSize" value="@Model.Pools.PageSize" />
+                        <input type="hidden" name="MemberPage" value="@Model.SelectedPool.Members.Page" />
+                        <input type="hidden" name="MemberPageSize" value="@Model.SelectedPool.Members.PageSize" />
+                        <input type="hidden" name="Source" data-pool-edit-source />
+                        <input type="hidden" name="OriginalMemberId" data-pool-edit-original-member />
+
+                        <div class="viewer-edit-member-context viewer-editor-wide">
+                            <span><i class="bi bi-diagram-2"></i></span>
+                            <div>
+                                <small>Membership source</small>
+                                <strong data-pool-edit-source-label>Pool member</strong>
+                                <code data-pool-edit-source-code></code>
+                            </div>
+                        </div>
+
+                        <div class="pool-edit-member-resolution viewer-editor-wide" data-pool-edit-resolution>
+                            <span><i class="bi bi-link-45deg"></i></span>
+                            <div>
+                                <small>Current resolution</small>
+                                <strong data-pool-edit-resolved-name>Resolved world entity</strong>
+                                <code data-pool-edit-resolved-entry></code>
+                            </div>
+                        </div>
+
+                        <label>
+                            <span data-pool-edit-member-label>Member ID</span>
+                            <input class="form-control" type="number" name="MemberId" min="1" required data-pool-edit-member />
+                        </label>
+                        <label data-pool-edit-chance-field>
+                            <span>Chance (%)</span>
+                            <input class="form-control" type="number" name="Chance" min="0" max="100" step="0.001" data-pool-edit-chance />
+                        </label>
+                        <label class="viewer-editor-wide" data-pool-edit-description-field>
+                            <span>Membership description</span>
+                            <input class="form-control" type="text" name="Description" maxlength="255" data-pool-edit-description />
+                        </label>
+                        <div class="viewer-editor-help viewer-editor-wide">
+                            <i class="bi bi-info-circle"></i>
+                            <span>The membership table stays the same. Editing changes this existing relationship directly instead of removing and recreating it.</span>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-check2"></i> Save member changes</button>
+                    </div>
+                </form>
+            </div>
+            </div>
+        </div>
+    }
+
+    @if (Model.CanDeletePools)
+    {
+        <div class="modal fade viewer-editor-modal" id="poolDeleteModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                <form method="post" asp-action="PoolDelete">
+                    <div class="modal-header">
+                        <div>
+                            <span class="eyebrow">Destructive action</span>
+                            <h2 class="modal-title fs-5">Delete pool @selectedPool.Entry?</h2>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="Database" value="@Model.Database" />
+                        <input type="hidden" name="Search" value="@Model.Search" />
+                        <input type="hidden" name="Population" value="@Model.Population" />
+                        <input type="hidden" name="Entry" value="@selectedPool.Entry" />
+                        <input type="hidden" name="Page" value="@Model.Pools.Page" />
+                        <input type="hidden" name="PageSize" value="@Model.Pools.PageSize" />
+                        <input type="hidden" name="MemberPage" value="@Model.SelectedPool.Members.Page" />
+                        <input type="hidden" name="MemberPageSize" value="@Model.SelectedPool.Members.PageSize" />
+                        <div class="alert alert-warning studio-inline-alert mb-0">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            <div>
+                                <strong>Pool must be empty first</strong>
+                                <span>Creature, GameObject, child-pool, and parent-pool relationships must be removed before pool_template can be deleted. The service will refuse a destructive cascade.</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger"><i class="bi bi-trash"></i> Delete pool</button>
+                    </div>
+                </form>
+            </div>
+            </div>
+        </div>
+    }
+
+    @if (Model.CanRemoveMembers)
+    {
+        <div class="modal fade viewer-editor-modal" id="poolRemoveMemberModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                <form method="post" asp-action="PoolRemoveMember" data-pool-remove-form>
+                    <div class="modal-header">
+                        <div>
+                            <span class="eyebrow">Pool relationship</span>
+                            <h2 class="modal-title fs-5">Remove member?</h2>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="Database" value="@Model.Database" />
+                        <input type="hidden" name="Search" value="@Model.Search" />
+                        <input type="hidden" name="Population" value="@Model.Population" />
+                        <input type="hidden" name="Entry" value="@selectedPool.Entry" />
+                        <input type="hidden" name="Page" value="@Model.Pools.Page" />
+                        <input type="hidden" name="PageSize" value="@Model.Pools.PageSize" />
+                        <input type="hidden" name="MemberPage" value="@Model.SelectedPool.Members.Page" />
+                        <input type="hidden" name="MemberPageSize" value="@Model.SelectedPool.Members.PageSize" />
+                        <input type="hidden" name="Source" data-pool-remove-source />
+                        <input type="hidden" name="MemberId" data-pool-remove-member />
+                        <input type="hidden" name="MembershipPoolEntry" data-pool-remove-membership-pool />
+                        <div class="viewer-remove-confirmation">
+                            <span><i class="bi bi-link-45deg"></i></span>
+                            <div>
+                                <small>Relationship to remove</small>
+                                <strong data-pool-remove-name>Selected member</strong>
+                                <p>This removes the membership row only. It does not delete the underlying creature, GameObject, template, or child pool.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger"><i class="bi bi-x-lg"></i> Remove relationship</button>
+                    </div>
+                </form>
+            </div>
+            </div>
+        </div>
+    }
+}
+
+@section Scripts {
+<script>
+(() => {
+    const root = document.querySelector('[data-pool-viewer]');
+    if (!root)
+    {
+        return;
+    }
+
+    const sourceSelect = document.querySelector('[data-pool-source-select]');
+    const memberLabel = document.querySelector('[data-pool-member-label]');
+    const chanceField = document.querySelector('[data-pool-chance-field]');
+    const descriptionField = document.querySelector('[data-pool-description-field]');
+    const syncSourceFields = () => {
+        if (!sourceSelect)
+        {
+            return;
+        }
+        const option = sourceSelect.selectedOptions[0];
+        if (!option)
+        {
+            return;
+        }
+        if (memberLabel)
+        {
+            memberLabel.textContent = option.dataset.memberLabel || 'Member ID';
+        }
+        if (chanceField)
+        {
+            chanceField.hidden = option.dataset.hasChance !== 'true';
+        }
+        if (descriptionField)
+        {
+            descriptionField.hidden = option.dataset.hasDescription !== 'true';
+        }
+    };
+    sourceSelect?.addEventListener('change', syncSourceFields);
+    syncSourceFields();
+
+    const editMemberModalElement = document.getElementById('poolEditMemberModal');
+    const editMemberModal = editMemberModalElement && window.bootstrap ? bootstrap.Modal.getOrCreateInstance(editMemberModalElement) : null;
+    document.querySelectorAll('[data-pool-edit-member-open]').forEach(button => {
+        button.addEventListener('click', () => {
+            const source = document.querySelector('[data-pool-edit-source]');
+            const originalMember = document.querySelector('[data-pool-edit-original-member]');
+            const member = document.querySelector('[data-pool-edit-member]');
+            const chance = document.querySelector('[data-pool-edit-chance]');
+            const description = document.querySelector('[data-pool-edit-description]');
+            const sourceLabel = document.querySelector('[data-pool-edit-source-label]');
+            const sourceCode = document.querySelector('[data-pool-edit-source-code]');
+            const resolution = document.querySelector('[data-pool-edit-resolution]');
+            const resolvedName = document.querySelector('[data-pool-edit-resolved-name]');
+            const resolvedEntry = document.querySelector('[data-pool-edit-resolved-entry]');
+            const memberLabelElement = document.querySelector('[data-pool-edit-member-label]');
+            const chanceFieldElement = document.querySelector('[data-pool-edit-chance-field]');
+            const descriptionFieldElement = document.querySelector('[data-pool-edit-description-field]');
+
+            if (source)
+            {
+                source.value = button.dataset.source || '';
+            }
+            if (originalMember)
+            {
+                originalMember.value = button.dataset.memberId || '';
+            }
+            if (member)
+            {
+                member.value = button.dataset.memberId || '';
+            }
+            if (chance)
+            {
+                chance.value = button.dataset.chance || '';
+            }
+            if (description)
+            {
+                description.value = button.dataset.description || '';
+            }
+            if (sourceLabel)
+            {
+                sourceLabel.textContent = button.dataset.sourceLabel || 'Pool member';
+            }
+            if (sourceCode)
+            {
+                sourceCode.textContent = button.dataset.source || '';
+            }
+            const isResolved = button.dataset.isResolved === 'true' && Boolean(button.dataset.resolvedEntry);
+            if (resolution)
+            {
+                resolution.classList.toggle('is-unresolved', !isResolved);
+            }
+            if (resolvedName)
+            {
+                resolvedName.textContent = isResolved ? (button.dataset.resolvedName || 'Name unavailable') : 'Unresolved reference';
+            }
+            if (resolvedEntry)
+            {
+                resolvedEntry.textContent = isResolved ? `Entry ${button.dataset.resolvedEntry}` : `Stored ID ${button.dataset.memberId || ''}`;
+            }
+            if (memberLabelElement)
+            {
+                memberLabelElement.textContent = button.dataset.memberLabel || 'Member ID';
+            }
+            if (chanceFieldElement)
+            {
+                chanceFieldElement.hidden = button.dataset.hasChance !== 'true';
+            }
+            if (descriptionFieldElement)
+            {
+                descriptionFieldElement.hidden = button.dataset.hasDescription !== 'true';
+            }
+            editMemberModal?.show();
+        });
+    });
+
+    const removeModalElement = document.getElementById('poolRemoveMemberModal');
+    const removeModal = removeModalElement && window.bootstrap ? bootstrap.Modal.getOrCreateInstance(removeModalElement) : null;
+    document.querySelectorAll('[data-pool-remove-open]').forEach(button => {
+        button.addEventListener('click', () => {
+            const source = document.querySelector('[data-pool-remove-source]');
+            const member = document.querySelector('[data-pool-remove-member]');
+            const membershipPool = document.querySelector('[data-pool-remove-membership-pool]');
+            const name = document.querySelector('[data-pool-remove-name]');
+            if (source)
+            {
+                source.value = button.dataset.source || '';
+            }
+            if (member)
+            {
+                member.value = button.dataset.memberId || '';
+            }
+            if (membershipPool)
+            {
+                membershipPool.value = button.dataset.membershipPoolEntry || '';
+            }
+            if (name)
+            {
+                name.textContent = button.dataset.memberName || 'Selected member';
+            }
+            removeModal?.show();
+        });
+    });
+})();
+</script>
+}

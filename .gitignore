@@ -1,0 +1,42 @@
+#
+# Mangos Studio Application Ignore File
+#
+
+#
+# Ignore build folders and files
+#
+
+obj/
+bin/
+.vscode/
+.artifacts/
+.directory
+
+#
+# Ignore application SQLite database files
+#
+
+*.db
+*.db-shm
+*.db-wal
+
+#
+# Ignore SQL files
+#
+*.sql
+
+#
+# Ignore user uploaded avatar images
+#
+
+*,jpg
+*.jpeg
+*.gif
+*.png
+
+#
+# Ignore application generated keys
+#
+
+*.key
+*.xml

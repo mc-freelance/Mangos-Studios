@@ -1,0 +1,830 @@
+@* Present and validate the WorldEditor record editor. *@
+
+@model TableEditViewModel
+@{
+    ViewData["Title"] = (Model.IsCreate ? "Add " : "Edit ") + Model.DisplayName;
+    ViewData["Section"] = "World Editor / " + Model.CategoryName;
+    ViewData["PageClass"] = "world-editor-page world-record-editor-page";
+    ViewData["ContentClass"] = "world-editor-content world-record-editor-content";
+    string action = !string.IsNullOrWhiteSpace(Model.SubmitAction)
+        ? Model.SubmitAction
+        : (Model.IsCreate ? "Create" : "Edit");
+    bool hasCustomReturn = !string.IsNullOrWhiteSpace(Model.ReturnUrl);
+    string returnAction = hasCustomReturn
+        ? Model.ReturnUrl
+        : (Url.Action("ReturnToBrowse", "WorldEditor") ?? string.Empty);
+}
+
+<form method="post"
+      asp-action="@action"
+      class="world-record-editor"
+      data-sql-preview
+      data-table="@Model.Table.Name"
+      data-database="@Model.Table.DatabaseName"
+      data-create="@(Model.IsCreate ? "true" : "false")"
+      data-title-candidates="name,title,description">
+    <input type="hidden" name="Database" value="@Model.Table.DatabaseName" />
+    <input type="hidden" name="Table" value="@Model.Table.Name" />
+    <input type="hidden" name="KeyToken" value="@Model.KeyToken" />
+    <input type="hidden" name="ReturnToken" value="@Model.ReturnToken" />
+    <input type="hidden" name="ReturnUrl" value="@Model.ReturnUrl" />
+    <input type="hidden" name="ChangeSql" value="" data-change-sql />
+
+    <header class="record-editor-commandbar">
+        <div class="record-command-identity">
+            @if (hasCustomReturn)
+            {
+                <a class="record-back-button" href="@returnAction" aria-label="Back to records" title="Back to records">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+            }
+            else
+            {
+                <button type="submit"
+                        class="record-back-button"
+                        formaction="@returnAction"
+                        formmethod="post"
+                        formnovalidate
+                        data-editor-navigation
+                        aria-label="Back to records"
+                        title="Back to records">
+                    <i class="bi bi-arrow-left"></i>
+                </button>
+            }
+            <span class="record-command-icon"><i class="bi @Model.CategoryIcon"></i></span>
+            <div>
+                <span class="eyebrow">@(Model.IsCreate ? "New record" : "Editing record") · @Model.CategoryName</span>
+                <h2 data-record-title>@Model.RecordTitle</h2>
+                <p>
+                    <code>@Model.Table.DatabaseName.@Model.Table.Name</code>
+                    @if (!string.IsNullOrWhiteSpace(Model.RecordIdentifier))
+                    {
+                        <span> · @Model.RecordIdentifier</span>
+                    }
+                </p>
+            </div>
+        </div>
+        <div class="record-command-actions">
+            <span class="record-change-badge" data-change-badge>
+                <i class="bi bi-check-circle"></i>
+                <span data-change-count>0</span> changes
+            </span>
+            @if (hasCustomReturn)
+            {
+                <a class="btn btn-outline-secondary" href="@returnAction">Cancel</a>
+            }
+            else
+            {
+                <button type="submit"
+                        class="btn btn-outline-secondary"
+                        formaction="@returnAction"
+                        formmethod="post"
+                        formnovalidate
+                        data-editor-navigation>
+                    Cancel
+                </button>
+            }
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check2"></i>
+                @(Model.IsCreate ? "Create entry" : "Save changes")
+            </button>
+        </div>
+    </header>
+
+    <div class="record-editor-layout">
+        <aside class="record-outline-panel">
+            <div class="record-outline-sticky">
+                <label class="record-field-search">
+                    <i class="bi bi-search"></i>
+                    <input type="search" placeholder="Find a field…" autocomplete="off" data-field-filter />
+                </label>
+
+                <div class="record-outline-heading">Record sections</div>
+                <nav class="record-outline-nav" aria-label="Record editor sections">
+                    <a href="#query-preview" class="active"><i class="bi bi-code-slash"></i><span>SQL preview</span></a>
+                    @foreach (var group in Model.FieldGroups)
+                    {
+                        <a href="#section-@group.Id" data-outline-link="@group.Id">
+                            <i class="bi @group.Icon"></i>
+                            <span>@group.Name</span>
+                            <small>@group.Columns.Count</small>
+                        </a>
+                    }
+                </nav>
+
+                <div class="record-outline-meta">
+                    <div>
+                        <span>Database</span>
+                        <strong title="@Model.Table.DatabaseName">@Model.Table.DatabaseName</strong>
+                    </div>
+                    <div>
+                        <span>Columns</span>
+                        <strong>@Model.Table.Columns.Count</strong>
+                    </div>
+                    <div>
+                        <span>Primary keys</span>
+                        <strong>@Model.Table.PrimaryKeyColumns.Count</strong>
+                    </div>
+                    <div>
+                        <span>Engine</span>
+                        <strong>@Model.Table.Engine</strong>
+                    </div>
+                </div>
+
+                @if (!Model.IsCreate)
+                {
+                    <div class="record-outline-note">
+                        <i class="bi bi-key"></i>
+                        <p>Identifier fields stay locked to protect this record.</p>
+                    </div>
+                }
+            </div>
+        </aside>
+
+        <main class="record-editor-main">
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger studio-alert"></div>
+
+            <section id="query-preview" class="query-workbench">
+                <header class="query-workbench-header">
+                    <div>
+                        <span class="eyebrow">Generated query</span>
+                        <h3>SQL preview</h3>
+                    </div>
+                    <div class="query-workbench-actions">
+                        @if (!Model.IsCreate)
+                        {
+                            <div class="query-mode-switch" role="group" aria-label="SQL preview mode" data-direct-query-actions>
+                                <button type="button" class="active" data-sql-mode="diff">Diff query</button>
+                                <button type="button" data-sql-mode="full">Full query</button>
+                            </div>
+                        }
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-copy-target="#sql-preview">
+                            <i class="bi bi-copy"></i>
+                            <span data-copy-label>Copy SQL</span>
+                        </button>
+                    </div>
+                </header>
+
+                <pre id="sql-preview" class="query-workbench-code" aria-live="polite" aria-atomic="true"></pre>
+                <footer class="query-workbench-footer">
+                    <span><i class="bi bi-shield-check"></i> Database writes use parameterized values.</span>
+                    <span data-query-state>No changes.</span>
+                </footer>
+            </section>
+
+            <div class="record-sections">
+                @foreach (var group in Model.FieldGroups)
+                {
+                    bool collapsedByDefault = group.Id == "advanced" && Model.FieldGroups.Count > 2;
+                    <section id="section-@group.Id" class="record-field-section @(collapsedByDefault ? "is-collapsed" : string.Empty)" data-field-group="@group.Id">
+                        <header class="record-field-section-header">
+                            <span class="record-section-icon"><i class="bi @group.Icon"></i></span>
+                            <div>
+                                <h3>@group.Name</h3>
+                                <p>@group.Description</p>
+                            </div>
+                            <span class="record-section-count" data-visible-count>@group.Columns.Count fields</span>
+                            <button type="button" class="record-section-toggle" data-collapse-section aria-label="Toggle @group.Name">
+                                <i class="bi bi-chevron-up"></i>
+                            </button>
+                        </header>
+
+                        <div class="record-field-grid" data-section-content>
+                            @foreach (var column in group.Columns)
+                            {
+                                if (column.IsAutoIncrement && Model.IsCreate)
+                                {
+                                    continue;
+                                }
+
+                                Model.Values.TryGetValue(column.Name, out string? value);
+                                bool isNull = Model.NullColumns.Contains(column.Name);
+                                bool isLargeText = IsLargeText(column);
+                                bool isBinary = IsBinary(column);
+                                bool isBoolean = IsBoolean(column);
+                                string inputValue = WorldEditorValueFormatter.FormatForEditor(column, value);
+                                Model.FieldEditors.TryGetValue(column.Name, out MangosFieldEditorDefinition? fieldEditor);
+                                bool isSelectEditor = fieldEditor?.Kind == MangosFieldEditorKind.Select;
+                                bool isBitMaskEditor = fieldEditor?.Kind == MangosFieldEditorKind.BitMask;
+                                bool isMultiSelectEditor = fieldEditor?.Kind == MangosFieldEditorKind.MultiSelect;
+                                bool hasBitMaskValue = TryParseBitMaskValue(inputValue, out ulong bitMaskValue);
+                                bool isIdentifierLocked = !Model.IsCreate && ColumnEditPolicy.IsLockedIdentifier(Model.Table, column);
+                                bool isReadOnly = column.IsGenerated || isIdentifierLocked;
+                                bool isWide = isLargeText || isBinary || (column.CharacterMaximumLength ?? 0) > 160;
+                                string humanName = WorldEditorPresentation.Humanize(column.Name);
+                                string fieldControlId = isBitMaskEditor && !isReadOnly && hasBitMaskValue
+                                    ? $"bitmask_trigger_{column.OrdinalPosition}"
+                                    : isMultiSelectEditor && !isReadOnly && hasBitMaskValue
+                                        ? $"multivalue_trigger_{column.OrdinalPosition}"
+                                        : $"field_{column.OrdinalPosition}";
+                                string optionSearchText = fieldEditor == null
+                                    ? string.Empty
+                                    : string.Join(" ", fieldEditor.Options.Select(option => option.Label + " " + option.Value));
+                                string searchText = humanName + " " + column.Name + " " + column.Comment + " " + column.ColumnType + " " + optionSearchText;
+
+                                <div class="record-field @(isWide ? "record-field-wide" : string.Empty) @(isIdentifierLocked ? "is-identifier" : string.Empty)"
+                                     data-field-card
+                                     data-search-text="@searchText">
+                                    <div class="record-field-label-row">
+                                        <label for="@fieldControlId">
+                                            <span>@humanName</span>
+                                            @if (isIdentifierLocked)
+                                            {
+                                                <i class="bi bi-lock-fill" title="Identifier locked"></i>
+                                            }
+                                        </label>
+                                        <button type="button" class="record-field-info" title="@(string.IsNullOrWhiteSpace(column.Comment) ? column.ColumnType : column.Comment)" aria-label="Field information">
+                                            <i class="bi bi-info-circle-fill"></i>
+                                        </button>
+                                    </div>
+
+                                    <div class="record-field-technical">
+                                        <code>@column.Name</code>
+                                        <span>@column.ColumnType</span>
+                                    </div>
+
+                                    @if (isLargeText || isBinary)
+                                    {
+                                        <textarea id="field_@column.OrdinalPosition"
+                                                  name="Values[@column.Name]"
+                                                  class="form-control sql-field"
+                                                  rows="@(isLargeText ? 5 : 3)"
+                                                  data-column="@column.Name"
+                                                  data-label="@humanName"
+                                                  data-original="@inputValue"
+                                                  data-original-null="@(isNull ? "true" : "false")"
+                                                  data-primary="@(column.IsPrimaryKey ? "true" : "false")"
+                                                  data-numeric="false"
+                                                  data-nullable="@(column.IsNullable ? "true" : "false")"
+                                                  data-binary="@(isBinary ? "true" : "false")"
+                                                  data-data-type="@column.DataType"
+                                                  data-column-type="@column.ColumnType"
+                                                  data-writable="@(!isReadOnly ? "true" : "false")"
+                                                  autocomplete="off"
+                                                  readonly="@(isReadOnly ? "readonly" : null)">@inputValue</textarea>
+                                    }
+                                    else if (isSelectEditor && !isReadOnly)
+                                    {
+                                        bool hasKnownValue = fieldEditor!.Options.Any(option =>
+                                            string.Equals(option.Value, inputValue, StringComparison.OrdinalIgnoreCase));
+
+                                        <select id="field_@column.OrdinalPosition"
+                                                name="Values[@column.Name]"
+                                                class="form-select sql-field"
+                                                data-column="@column.Name"
+                                                data-label="@humanName"
+                                                data-original="@inputValue"
+                                                data-original-null="@(isNull ? "true" : "false")"
+                                                data-primary="@(column.IsPrimaryKey ? "true" : "false")"
+                                                data-numeric="@(column.IsNumeric ? "true" : "false")"
+                                                data-nullable="@(column.IsNullable ? "true" : "false")"
+                                                data-binary="false"
+                                                data-data-type="@column.DataType"
+                                                data-column-type="@column.ColumnType"
+                                                data-writable="true"
+                                                autocomplete="off">
+                                            @if (!isNull && !hasKnownValue && string.IsNullOrWhiteSpace(inputValue))
+                                            {
+                                                <option value="" selected>Not selected</option>
+                                            }
+                                            else if (isNull)
+                                            {
+                                                <option value="" selected>NULL / no value</option>
+                                            }
+                                            @foreach (MangosFieldOption option in fieldEditor.Options)
+                                            {
+                                                <option value="@option.Value"
+                                                        title="@option.Description"
+                                                        selected="@(string.Equals(option.Value, inputValue, StringComparison.OrdinalIgnoreCase) ? "selected" : null)">
+                                                    @option.Label (@option.Value)
+                                                </option>
+                                            }
+                                            @if (!isNull && !hasKnownValue && !string.IsNullOrWhiteSpace(inputValue))
+                                            {
+                                                <option value="@inputValue" selected>Unknown / custom value (@inputValue)</option>
+                                            }
+                                        </select>
+                                    }
+                                    else if (isBitMaskEditor && !isReadOnly && hasBitMaskValue)
+                                    {
+                                        List<(MangosFieldOption Option, ulong Bit)> bitOptions =
+                                            new List<(MangosFieldOption Option, ulong Bit)>();
+                                        ulong knownMask = 0;
+                                        foreach (MangosFieldOption option in fieldEditor!.Options)
+                                        {
+                                            if (TryParseBitMaskOption(option.Value, out ulong bit))
+                                            {
+                                                bitOptions.Add((option, bit));
+                                                knownMask |= bit;
+                                            }
+                                        }
+
+                                        ulong unknownBits = bitMaskValue & ~knownMask;
+                                        List<string> selectedBitLabels = bitOptions
+                                            .Where(item => (bitMaskValue & item.Bit) == item.Bit)
+                                            .Select(item => item.Option.Label)
+                                            .ToList();
+                                        int selectedBitCount = selectedBitLabels.Count;
+                                        string selectedBitSummary = selectedBitCount == 0
+                                            ? (unknownBits == 0 ? "None" : "Custom bits")
+                                            : string.Join(", ", selectedBitLabels.Take(2)) +
+                                              (selectedBitCount > 2 ? $" + {selectedBitCount - 2} more" : string.Empty);
+                                        string bitMaskModalId = $"bitmask_editor_{column.OrdinalPosition}";
+                                        string bitMaskModalTitleId = $"bitmask_editor_title_{column.OrdinalPosition}";
+
+                                        <div class="record-bitmask-editor"
+                                             data-bitmask-editor
+                                             data-bitmask-unknown="@unknownBits"
+                                             data-bitmask-preserve-unknown="@(fieldEditor!.PreserveUnknownValues ? "true" : "false")">
+                                            <input id="field_@column.OrdinalPosition"
+                                                   type="hidden"
+                                                   name="Values[@column.Name]"
+                                                   value="@bitMaskValue"
+                                                   class="sql-field"
+                                                   data-bitmask-value
+                                                   data-column="@column.Name"
+                                                   data-label="@humanName"
+                                                   data-original="@inputValue"
+                                                   data-original-null="@(isNull ? "true" : "false")"
+                                                   data-primary="@(column.IsPrimaryKey ? "true" : "false")"
+                                                   data-numeric="true"
+                                                   data-nullable="@(column.IsNullable ? "true" : "false")"
+                                                   data-binary="false"
+                                                   data-data-type="@column.DataType"
+                                                   data-column-type="@column.ColumnType"
+                                                   data-writable="true"
+                                                   autocomplete="off" />
+
+                                            <button id="@fieldControlId"
+                                                    type="button"
+                                                    class="record-bitmask-trigger"
+                                                    data-bitmask-open
+                                                    aria-haspopup="dialog"
+                                                    aria-controls="@bitMaskModalId">
+                                                <span class="record-bitmask-trigger-main">
+                                                    <span class="record-bitmask-trigger-value">
+                                                        <strong data-bitmask-decimal>@bitMaskValue</strong>
+                                                        <code data-bitmask-hex>@FormatBitMaskHex(bitMaskValue)</code>
+                                                    </span>
+                                                    <span class="record-bitmask-trigger-summary" data-bitmask-summary-text>@selectedBitSummary</span>
+                                                </span>
+                                                <span class="record-bitmask-trigger-meta">
+                                                    <span class="record-bitmask-count">
+                                                        <strong data-bitmask-count>@selectedBitCount</strong>
+                                                        selected
+                                                    </span>
+                                                    <i class="bi bi-sliders2"></i>
+                                                </span>
+                                            </button>
+
+                                            <div id="@bitMaskModalId"
+                                                 class="record-bitmask-modal"
+                                                 data-bitmask-modal
+                                                 role="dialog"
+                                                 aria-modal="true"
+                                                 aria-labelledby="@bitMaskModalTitleId"
+                                                 hidden>
+                                                <button type="button"
+                                                        class="record-bitmask-modal-backdrop"
+                                                        data-bitmask-cancel
+                                                        aria-label="Close bit mask editor"></button>
+
+                                                <div class="record-bitmask-dialog" role="document">
+                                                    <header class="record-bitmask-dialog-header">
+                                                        <div>
+                                                            <span class="eyebrow">Bit mask editor</span>
+                                                            <h3 id="@bitMaskModalTitleId">@humanName</h3>
+                                                            <p>
+                                                                <code>@column.Name</code> · @column.ColumnType</p>
+                                                        </div>
+                                                        <button type="button"
+                                                                class="record-bitmask-close"
+                                                                data-bitmask-cancel
+                                                                aria-label="Close bit mask editor">
+                                                            <i class="bi bi-x-lg"></i>
+                                                        </button>
+                                                    </header>
+
+                                                    <div class="record-bitmask-dialog-tools">
+                                                        <label class="record-bitmask-search">
+                                                            <i class="bi bi-search"></i>
+                                                            <input type="search"
+                                                                   placeholder="Filter flags..."
+                                                                   autocomplete="off"
+                                                                   data-bitmask-search />
+                                                        </label>
+
+                                                        <label class="record-bitmask-raw">
+                                                            <span>Raw value</span>
+                                                            <input type="text"
+                                                                   value="@bitMaskValue"
+                                                                   inputmode="numeric"
+                                                                   autocomplete="off"
+                                                                   spellcheck="false"
+                                                                   data-bitmask-raw />
+                                                        </label>
+                                                    </div>
+
+                                                    <div class="record-bitmask-dialog-summary">
+                                                        <div>
+                                                            <span>Preview</span>
+                                                            <strong data-bitmask-draft-decimal>@bitMaskValue</strong>
+                                                            <code data-bitmask-draft-hex>@FormatBitMaskHex(bitMaskValue)</code>
+                                                        </div>
+                                                        <span class="record-bitmask-count">
+                                                            <strong data-bitmask-draft-count>@selectedBitCount</strong>
+                                                            selected
+                                                        </span>
+                                                    </div>
+
+                                                    <div class="record-bitmask-options" data-bitmask-options>
+                                                        @foreach (var item in bitOptions)
+                                                        {
+                                                            bool isChecked = (bitMaskValue & item.Bit) == item.Bit;
+                                                            string bitSearchText = item.Option.Label + " " + item.Option.Value + " " + item.Option.Description;
+                                                            <label class="record-bitmask-option"
+                                                                   data-bitmask-option-row
+                                                                   data-bitmask-search-text="@bitSearchText"
+                                                                   title="@item.Option.Description">
+                                                                <input type="checkbox"
+                                                                       value="@item.Option.Value"
+                                                                       data-bitmask-option
+                                                                       checked="@(isChecked ? "checked" : null)" />
+                                                                <span>
+                                                                    <strong>@item.Option.Label</strong>
+                                                                    <small>@item.Option.Value · @FormatBitMaskHex(item.Bit)</small>
+                                                                    @if (!string.IsNullOrWhiteSpace(item.Option.Description))
+                                                                    {
+                                                                        <em>@item.Option.Description</em>
+                                                                    }
+                                                                </span>
+                                                            </label>
+                                                        }
+                                                    </div>
+
+                                                    <div class="record-bitmask-empty" data-bitmask-empty hidden>
+                                                        <i class="bi bi-search"></i>
+                                                        <span>No flags match this filter.</span>
+                                                    </div>
+
+                                                    <div class="record-bitmask-unknown @(unknownBits == 0 ? "d-none" : string.Empty)"
+                                                         data-bitmask-unknown-notice>
+                                                        <i class="bi bi-exclamation-triangle"></i>
+                                                        <span>
+                                                            @if (fieldEditor!.PreserveUnknownValues)
+                                                            {
+                                                                <text>The stored value contains bits that are not mapped by Studio. They are preserved as explicit Unmapped bit entries:</text>
+                                                            }
+                                                            else
+                                                            {
+                                                                <text>The stored value contains bits that are not mapped by this catalog. Those bits will be removed if you apply a mapped selection:</text>
+                                                            }
+                                                            <strong data-bitmask-unknown-value>@FormatBitMaskHex(unknownBits)</strong>
+                                                        </span>
+                                                    </div>
+
+                                                    <div class="record-bitmask-validation d-none" data-bitmask-validation>
+                                                        Enter an unsigned decimal value before applying.
+                                                    </div>
+
+                                                    <footer class="record-bitmask-dialog-footer">
+                                                        <button type="button"
+                                                                class="btn btn-outline-secondary btn-sm me-auto"
+                                                                data-bitmask-clear-known>
+                                                            Clear all flags
+                                                        </button>
+                                                        <button type="button"
+                                                                class="btn btn-outline-secondary btn-sm"
+                                                                data-bitmask-cancel>
+                                                            Cancel
+                                                        </button>
+                                                        <button type="button"
+                                                                class="btn btn-primary btn-sm"
+                                                                data-bitmask-apply>
+                                                            <i class="bi bi-check2"></i>
+                                                            Apply
+                                                        </button>
+                                                    </footer>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                    else if (isMultiSelectEditor && !isReadOnly && hasBitMaskValue)
+                                    {
+                                        string multiValueModalId = $"multivalue_editor_{column.OrdinalPosition}";
+                                        string multiValueModalTitleId = $"multivalue_editor_title_{column.OrdinalPosition}";
+                                        string handlingLabel = fieldEditor!.ValueHandling == MangosFieldValueHandling.Additive
+                                            ? "Additive sum"
+                                            : fieldEditor.ValueHandling.ToString();
+
+                                        <div class="record-bitmask-editor"
+                                             data-multivalue-editor
+                                             data-multivalue-handling="@fieldEditor.ValueHandling">
+                                            <input id="field_@column.OrdinalPosition"
+                                                   type="hidden"
+                                                   name="Values[@column.Name]"
+                                                   value="@bitMaskValue"
+                                                   class="sql-field"
+                                                   data-multivalue-value
+                                                   data-column="@column.Name"
+                                                   data-label="@humanName"
+                                                   data-original="@inputValue"
+                                                   data-original-null="@(isNull ? "true" : "false")"
+                                                   data-primary="@(column.IsPrimaryKey ? "true" : "false")"
+                                                   data-numeric="true"
+                                                   data-nullable="@(column.IsNullable ? "true" : "false")"
+                                                   data-binary="false"
+                                                   data-data-type="@column.DataType"
+                                                   data-column-type="@column.ColumnType"
+                                                   data-writable="true" />
+
+                                            <button id="@fieldControlId"
+                                                    type="button"
+                                                    class="record-bitmask-trigger"
+                                                    data-multivalue-open
+                                                    aria-haspopup="dialog"
+                                                    aria-controls="@multiValueModalId">
+                                                <span class="record-bitmask-trigger-main">
+                                                    <span class="record-bitmask-trigger-value">
+                                                        <strong data-multivalue-decimal>@bitMaskValue</strong>
+                                                    </span>
+                                                    <span class="record-bitmask-trigger-summary">@handlingLabel · choose one or more entries</span>
+                                                </span>
+                                                <span class="record-bitmask-trigger-meta">
+                                                    <span class="record-bitmask-count"><strong data-multivalue-count>0</strong> selected</span>
+                                                    <i class="bi bi-ui-checks"></i>
+                                                </span>
+                                            </button>
+
+                                            <div id="@multiValueModalId"
+                                                 class="record-bitmask-modal"
+                                                 data-multivalue-modal
+                                                 role="dialog"
+                                                 aria-modal="true"
+                                                 aria-labelledby="@multiValueModalTitleId"
+                                                 hidden>
+                                                <button type="button" class="record-bitmask-modal-backdrop" data-multivalue-cancel aria-label="Close multiple value editor"></button>
+                                                <div class="record-bitmask-dialog" role="document">
+                                                    <header class="record-bitmask-dialog-header">
+                                                        <div>
+                                                            <span class="eyebrow">Multiple value editor</span>
+                                                            <h3 id="@multiValueModalTitleId">@humanName</h3>
+                                                            <p>
+                                                                <code>@column.Name</code> · @handlingLabel</p>
+                                                        </div>
+                                                        <button type="button" class="record-bitmask-close" data-multivalue-cancel aria-label="Close multiple value editor"><i class="bi bi-x-lg"></i></button>
+                                                    </header>
+                                                    <div class="record-bitmask-dialog-tools">
+                                                        <label class="record-bitmask-search">
+                                                            <i class="bi bi-search"></i>
+                                                            <input type="search" placeholder="Filter options..." autocomplete="off" data-multivalue-search />
+                                                        </label>
+                                                        <label class="record-bitmask-raw">
+                                                            <span>Raw value</span>
+                                                            <input type="text" value="@bitMaskValue" inputmode="numeric" autocomplete="off" spellcheck="false" data-multivalue-raw />
+                                                        </label>
+                                                    </div>
+                                                    <div class="record-bitmask-dialog-summary">
+                                                        <div>
+                                                            <span>Preview</span>
+                                                            <strong data-multivalue-draft-value>@bitMaskValue</strong>
+                                                        </div>
+                                                        <span class="record-bitmask-count"><strong data-multivalue-draft-count>0</strong> selected</span>
+                                                    </div>
+                                                    <div class="record-bitmask-options" data-multivalue-options>
+                                                        @foreach (MangosFieldOption option in fieldEditor.Options)
+                                                        {
+                                                            string multiSearchText = option.Label + " " + option.Value + " " + option.Description;
+                                                            <label class="record-bitmask-option" data-multivalue-option-row data-multivalue-search-text="@multiSearchText" title="@option.Description">
+                                                                <input type="checkbox" value="@option.Value" data-multivalue-option />
+                                                                <span><strong>@option.Label</strong><small>@option.Value</small>
+                                                                    @if (!string.IsNullOrWhiteSpace(option.Description))
+                                                                    {
+                                                                        <em>@option.Description</em>
+                                                                    }
+                                                                </span>
+                                                            </label>
+                                                        }
+                                                    </div>
+                                                    <div class="record-bitmask-empty" data-multivalue-empty hidden>
+                                                        <i class="bi bi-search"></i>
+                                                        <span>No options match this filter.</span>
+                                                    </div>
+                                                    <div class="record-bitmask-validation d-none" data-multivalue-validation></div>
+                                                    <footer class="record-bitmask-dialog-footer">
+                                                        <button type="button" class="btn btn-outline-secondary btn-sm" data-multivalue-clear><i class="bi bi-eraser"></i> Clear selections</button>
+                                                        <button type="button" class="btn btn-outline-secondary btn-sm" data-multivalue-cancel>Cancel</button>
+                                                        <button type="button" class="btn btn-primary btn-sm" data-multivalue-apply><i class="bi bi-check2"></i> Apply</button>
+                                                    </footer>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                    else if (isBoolean && !isReadOnly)
+                                    {
+                                        <select id="field_@column.OrdinalPosition"
+                                                name="Values[@column.Name]"
+                                                class="form-select sql-field"
+                                                data-column="@column.Name"
+                                                data-label="@humanName"
+                                                data-original="@inputValue"
+                                                data-original-null="@(isNull ? "true" : "false")"
+                                                data-primary="@(column.IsPrimaryKey ? "true" : "false")"
+                                                data-numeric="true"
+                                                data-nullable="@(column.IsNullable ? "true" : "false")"
+                                                data-binary="false"
+                                                data-data-type="@column.DataType"
+                                                data-column-type="@column.ColumnType"
+                                                data-writable="true"
+                                                autocomplete="off">
+                                            @if (inputValue == "1")
+                                            {
+                                                <option value="0">Disabled (0)</option>
+                                                <option value="1" selected>Enabled (1)</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="0" selected>Disabled (0)</option>
+                                                <option value="1">Enabled (1)</option>
+                                            }
+                                        </select>
+                                    }
+                                    else
+                                    {
+                                        string inputType = WorldEditorValueFormatter.GetInputType(column, inputValue);
+                                        string step = GetStep(column);
+                                        <input id="field_@column.OrdinalPosition"
+                                               type="@inputType"
+                                               step="@step"
+                                               name="Values[@column.Name]"
+                                               value="@inputValue"
+                                               class="form-control sql-field"
+                                               data-column="@column.Name"
+                                               data-label="@humanName"
+                                               data-original="@inputValue"
+                                               data-original-null="@(isNull ? "true" : "false")"
+                                               data-primary="@(column.IsPrimaryKey ? "true" : "false")"
+                                               data-numeric="@(column.IsNumeric ? "true" : "false")"
+                                               data-nullable="@(column.IsNullable ? "true" : "false")"
+                                               data-binary="@(isBinary ? "true" : "false")"
+                                               data-data-type="@column.DataType"
+                                               data-column-type="@column.ColumnType"
+                                               data-writable="@(!isReadOnly ? "true" : "false")"
+                                               autocomplete="off"
+                                               readonly="@(isReadOnly ? "readonly" : null)" />
+                                    }
+
+                                    <div class="record-field-footer">
+                                        <span>
+                                            @if (column.IsPrimaryKey)
+                                            {
+                                                <i class="bi bi-key-fill"></i>
+
+                                                if (isIdentifierLocked)
+                                                {
+                                                    <text>Primary key · locked</text>
+                                                }
+                                                else
+                                                {
+                                                    <text>Primary key · editable</text>
+                                                }
+                                            }
+                                            else if (column.IsNullable)
+                                            {
+                                                <text>Optional field</text>
+                                            }
+                                            else
+                                            {
+                                                <text>Required field</text>
+                                            }
+                                            @if (column.IsAutoIncrement)
+                                            {
+                                                <text> · Auto increment</text>
+                                            }
+                                        </span>
+
+                                        @if (column.IsNullable && !isReadOnly)
+                                        {
+                                            <label class="record-null-toggle">
+                                                @if (isNull)
+                                                {
+                                                    <input type="checkbox" name="NullColumns" value="@column.Name" checked data-null-for="@column.Name" />
+                                                }
+                                                else
+                                                {
+                                                    <input type="checkbox" name="NullColumns" value="@column.Name" data-null-for="@column.Name" />
+                                                }
+                                                <span>NULL</span>
+                                            </label>
+                                        }
+                                    </div>
+
+                                    @if (fieldEditor != null && !string.IsNullOrWhiteSpace(fieldEditor.Description))
+                                    {
+                                        <p class="record-field-help">@fieldEditor.Description</p>
+                                    }
+                                    else if (!string.IsNullOrWhiteSpace(column.Comment))
+                                    {
+                                        <p class="record-field-help" title="@column.Comment">@WorldEditorPresentation.SimplifyDescription(column.Comment)</p>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </section>
+                }
+            </div>
+
+            <div class="record-editor-savebar">
+                <div>
+                    <strong data-save-state>@(Model.IsCreate ? "Ready to create" : "No changes to save")</strong>
+                    <span>Review the SQL before saving.</span>
+                </div>
+                <div class="record-save-actions">
+                    @if (hasCustomReturn)
+                    {
+                        <a class="btn btn-outline-secondary" href="@returnAction">Cancel</a>
+                    }
+                    else
+                    {
+                        <button type="submit"
+                                class="btn btn-outline-secondary"
+                                formaction="@returnAction"
+                                formmethod="post"
+                                formnovalidate
+                                data-editor-navigation>
+                            Cancel
+                        </button>
+                    }
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check2"></i>
+                        @(Model.IsCreate ? "Create entry" : "Save changes")
+                    </button>
+                </div>
+            </div>
+        </main>
+
+    </div>
+</form>
+
+@section Scripts {
+    <script src="~/js/world-editor.js" asp-append-version="true"></script>
+}
+
+@functions {
+    private static bool IsLargeText(MangosDatabaseStudio.Domain.Schema.ColumnMetadata column)
+    {
+        return column.DataType.Contains("text", StringComparison.OrdinalIgnoreCase) ||
+               (column.CharacterMaximumLength ?? 0) > 255;
+    }
+
+    private static bool IsBinary(MangosDatabaseStudio.Domain.Schema.ColumnMetadata column)
+    {
+        return column.DataType.Contains("blob", StringComparison.OrdinalIgnoreCase) ||
+               column.DataType.Contains("binary", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsBoolean(MangosDatabaseStudio.Domain.Schema.ColumnMetadata column)
+    {
+        return string.Equals(column.DataType, "tinyint", StringComparison.OrdinalIgnoreCase) &&
+               column.ColumnType.StartsWith("tinyint(1)", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetStep(MangosDatabaseStudio.Domain.Schema.ColumnMetadata column)
+    {
+        return string.Equals(column.DataType, "float", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(column.DataType, "double", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(column.DataType, "decimal", StringComparison.OrdinalIgnoreCase)
+            ? "any"
+            : "1";
+    }
+
+    private static bool TryParseBitMaskValue(string value, out ulong result)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            result = 0;
+            return true;
+        }
+
+        return ulong.TryParse(
+            value,
+            System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out result);
+    }
+
+    private static bool TryParseBitMaskOption(string value, out ulong result)
+    {
+        if (!TryParseBitMaskValue(value, out result) || result == 0)
+        {
+            return false;
+        }
+
+        return (result & (result - 1)) == 0;
+    }
+
+    private static string FormatBitMaskHex(ulong value)
+    {
+        return "0x" + value.ToString("X", System.Globalization.CultureInfo.InvariantCulture);
+    }
+}

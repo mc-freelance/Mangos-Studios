@@ -1,0 +1,58 @@
+name: Build (Windows and Linux)
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# Untrusted pull requests get a read-only token and no production credentials.
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Release build - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install .NET 9 SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Show SDK information
+        run: dotnet --info
+
+      # Restore/build the full solution, including the optional device helper,
+      # without enabling or executing privileged hardware-identity behavior.
+      - name: Restore NuGet packages
+        run: dotnet restore MangosDatabaseStudio.sln
+
+      - name: Build Release
+        run: dotnet build MangosDatabaseStudio.sln --configuration Release --no-restore
+
+      # The supplied tree has no test project today. This will run any tests
+      # contributors add to the solution without trying to launch the desktop UI.
+      - name: Run .NET tests (if any)
+        run: dotnet test MangosDatabaseStudio.sln --configuration Release --no-build --no-restore

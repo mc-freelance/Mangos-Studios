@@ -1,0 +1,273 @@
+@* Present the FieldData Definition workflow within the shared studio layout. *@
+
+@model FieldDataDefinitionEditViewModel
+@{
+    ViewData["Title"] = Model.IsCreate ? "Add Column Field Data" : "Edit Column Field Data";
+    ViewData["Section"] = "System / Field Data / Column Definition";
+    string columnOptionsUrl = Url.Action("ColumnOptions", "FieldData") ?? "/FieldData/ColumnOptions";
+}
+<div class="page-actions field-data-definition-page-actions">
+    <div>
+        <p class="page-lead">Choose the database column, how users select values, and how multiple selections are combined.</p>
+    </div>
+    <a class="btn btn-outline-secondary" asp-action="Index" asp-route-categoryId="@Model.CategoryId"><i class="bi bi-arrow-left"></i> Field data</a>
+</div>
+
+@if (!Model.IsCreate && Model.IsSystem)
+{
+    <div class="alert alert-secondary studio-inline-alert rbac-notice">
+        <i class="bi bi-database-lock"></i>
+        <div>
+            <strong>Originally supplied with Database Studio</strong>
+            <span>This definition lives in SQLite like custom data. Administrator changes are retained; later built-in audits update only fields that still match the prior shipped baseline.</span>
+        </div>
+    </div>
+}
+
+<form method="post" asp-action="SaveDefinition" class="panel field-data-editor-form field-data-definition-editor" data-field-data-definition data-field-data-column-url="@columnOptionsUrl">
+    <input asp-for="Id" type="hidden" />
+    <input asp-for="SourceKey" type="hidden" />
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+    <div class="section-heading">
+        <div>
+            <span class="eyebrow">Column rule</span>
+            <h2>@(Model.IsCreate ? "New field definition" : (string.IsNullOrWhiteSpace(Model.DisplayName) ? Model.ColumnName : Model.DisplayName))</h2>
+        </div>
+        <i class="bi bi-layout-three-columns"></i>
+    </div>
+
+    <div class="form-grid field-data-definition-grid">
+        <div class="field-data-definition-display">
+            <label class="form-label" asp-for="DisplayName">Display name</label>
+            <input class="form-control" asp-for="DisplayName" placeholder="NPC Flags" /><span asp-validation-for="DisplayName" class="text-danger"></span>
+        </div>
+        <div class="field-data-definition-category">
+            <label class="form-label" asp-for="CategoryId">Category</label>
+            <select class="form-select" asp-for="CategoryId"><option value="">Uncategorized</option>
+                @foreach (FieldDataCategoryRecord category in Model.Categories)
+                {
+                    <option value="@category.Id">@category.Name</option>
+                }
+            </select>
+        </div>
+
+        @if (Model.HasActiveDatabaseConnection && Model.CanBrowseDatabaseSchema)
+        {
+            bool savedTableMissing = !string.IsNullOrWhiteSpace(Model.TableName) && !Model.AvailableTables.Any(table => string.Equals(table, Model.TableName, StringComparison.OrdinalIgnoreCase));
+            bool savedColumnMissing = !string.IsNullOrWhiteSpace(Model.ColumnName) && !Model.AvailableColumns.Any(column => string.Equals(column, Model.ColumnName, StringComparison.OrdinalIgnoreCase));
+            <div class="field-data-definition-table">
+                <label class="form-label" asp-for="TableName">Database table</label>
+                <select class="form-select" asp-for="TableName" data-field-data-table>
+                    <option value="">Select a table...</option>
+                    @if (savedTableMissing)
+                    {
+                        <option value="@Model.TableName">@Model.TableName (saved target)</option>
+                    }
+                    @foreach (string table in Model.AvailableTables)
+                    {
+                        <option value="@table">@table</option>
+                    }
+                </select>
+                <span asp-validation-for="TableName" class="text-danger"></span>
+                <div class="form-text">
+                    <i class="bi bi-database-check"></i> Tables loaded from <code>@Model.ActiveDatabase</code>.</div>
+            </div>
+            <div class="field-data-definition-column">
+                <label class="form-label" asp-for="ColumnName">Column</label>
+                <select class="form-select" asp-for="ColumnName" data-field-data-column disabled="@(string.IsNullOrWhiteSpace(Model.TableName) ? "disabled" : null)">
+                    <option value="">@(string.IsNullOrWhiteSpace(Model.TableName) ? "Select a table first..." : "Select a column...")</option>
+                    @if (savedColumnMissing)
+                    {
+                        <option value="@Model.ColumnName">@Model.ColumnName (saved target)</option>
+                    }
+                    @foreach (string column in Model.AvailableColumns)
+                    {
+                        <option value="@column">@column</option>
+                    }
+                </select>
+                <span asp-validation-for="ColumnName" class="text-danger"></span>
+                <div class="form-text" data-field-data-column-status>
+                    @if (string.IsNullOrWhiteSpace(Model.TableName))
+                    {
+                        <span>Choose a table to load its available columns.</span>
+                    }
+                    else if (Model.AvailableColumns.Count > 0)
+                    {
+                        <span>@Model.AvailableColumns.Count.ToString("N0") columns available from <code>@Model.TableName</code>.</span>
+                    }
+                    else
+                    {
+                        <span>No columns were returned for the saved table. Select another table to refresh the list.</span>
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="field-data-definition-table">
+                <label class="form-label" asp-for="TableName">Database table</label>
+                <input class="form-control" asp-for="TableName" autocomplete="off" placeholder="creature_template" />
+                <span asp-validation-for="TableName" class="text-danger"></span>
+                <div class="form-text">
+                    @if (Model.HasActiveDatabaseConnection)
+                    {
+                        <span>The active database schema could not be loaded. Enter the table name manually.</span>
+                    }
+                    else
+                    {
+                        <span>Connect to MySQL / MariaDB to select a table from the database, or enter its name manually.</span>
+                    }
+                </div>
+            </div>
+            <div class="field-data-definition-column">
+                <label class="form-label" asp-for="ColumnName">Column</label>
+                <input class="form-control" asp-for="ColumnName" autocomplete="off" placeholder="NpcFlags" />
+                <span asp-validation-for="ColumnName" class="text-danger"></span>
+                <div class="form-text">Column names become selectable automatically when a connected database schema is available.</div>
+            </div>
+        }
+
+        <div class="field-data-definition-selection">
+            <label class="form-label" asp-for="SelectionMode">Selection mode</label>
+            <select class="form-select" asp-for="SelectionMode" data-field-data-selection><option value="Single">Single option</option><option value="Multiple">Multiple options</option></select>
+            <div class="form-text">Single uses a normal dropdown. Multiple uses a selectable option list.</div>
+        </div>
+        <div class="field-data-definition-handling">
+            <label class="form-label" asp-for="ValueHandling">Value handling</label>
+            <select class="form-select" asp-for="ValueHandling" data-field-data-handling><option value="Direct">Direct value</option><option value="BitwiseOr">Bitwise OR (flags / masks)</option><option value="Additive">Additive sum</option></select>
+            <span asp-validation-for="ValueHandling" class="text-danger"></span>
+            <div class="form-text">Defines how multiple selected entry values become the stored database value.</div>
+        </div>
+
+        <div class="field-data-definition-priority">
+            <label class="form-label" asp-for="Priority">Priority</label>
+            <input class="form-control" asp-for="Priority" type="number" />
+            <div class="form-text">Higher priority wins if more than one enabled definition targets the same table and column.</div>
+        </div>
+        <label class="field-data-setting-card field-data-definition-enabled">
+            <span class="field-data-setting-copy"><strong>Definition enabled</strong><small>Disabled definitions stay in the catalog but are not used by editors.</small></span>
+            <span class="form-check form-switch field-data-setting-switch"><input class="form-check-input" asp-for="IsEnabled" /></span>
+        </label>
+        <label class="field-data-setting-card field-data-definition-preserve" data-field-data-preserve-row>
+            <span class="field-data-setting-copy"><strong>Preserve unknown bits</strong><small>Keep stored bits that are not represented by a known entry when mapped values are changed.</small></span>
+            <span class="form-check form-switch field-data-setting-switch"><input class="form-check-input" asp-for="PreserveUnknownValues" data-field-data-preserve /></span>
+        </label>
+
+        <div class="field-data-form-wide field-data-definition-description">
+            <label class="form-label" asp-for="Description">Description</label>
+            <textarea class="form-control" asp-for="Description" rows="2"></textarea>
+            <span asp-validation-for="Description" class="text-danger"></span>
+        </div>
+    </div>
+    <div class="form-actions sticky-actions">
+        <a class="btn btn-outline-secondary" asp-action="Index" asp-route-categoryId="@Model.CategoryId">Cancel</a>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i> @(Model.IsCreate ? "Add column data" : "Save column data")</button>
+    </div>
+</form>
+
+@if (!Model.IsCreate)
+{
+    <section class="panel viewer-panel-flush viewer-results-panel mt-3 field-data-list-panel field-data-variant-list-panel">
+        <header class="viewer-results-header">
+            <div>
+                <span class="eyebrow">Expansion-aware values</span>
+                <h3>Data sets</h3>
+                <p>Map this column's selectable values to Vanilla through Mists of Pandaria.</p>
+            </div>
+            <div class="field-data-results-header-tools">
+                <div class="viewer-results-count">
+                    <strong>@Model.Variants.Count.ToString("N0")</strong>
+                    <span>data set@(Model.Variants.Count == 1 ? string.Empty : "s")</span>
+                </div>
+                <a class="btn btn-primary btn-sm field-data-header-add" asp-action="CreateVariant" asp-route-definitionId="@Model.Id"><i class="bi bi-plus-lg"></i> Add data set</a>
+            </div>
+        </header>
+        <div class="field-data-results-note">Each expansion can use one data set for this column. A data set may be shared by several expansions when their values are identical.</div>
+        @if (Model.Variants.Count == 0)
+        {
+            <div class="viewer-record-empty">
+                <i class="bi bi-layers"></i>
+                <strong>No expansion data yet</strong>
+                <p>This definition will not change the World Editor until an expansion data set with entries is added.</p>
+            </div>
+        }
+        else
+        {
+            <div class="world-record-table-wrap viewer-results-table-wrap">
+                <table class="table studio-table responsive-table viewer-results-table field-data-variant-table mb-0">
+                    <colgroup>
+                        <col class="field-data-variant-col-key" />
+                        <col class="field-data-variant-col-expansions" />
+                        <col class="field-data-variant-col-entries" />
+                        <col class="field-data-variant-col-description" />
+                        <col class="field-data-variant-col-actions" />
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th>Data set</th>
+                            <th>Expansions</th>
+                            <th class="field-data-variant-entries-cell">Entries</th>
+                            <th>Description</th>
+                            <th class="actions-column viewer-action-column">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (FieldDataVariantRecord variant in Model.Variants)
+                    {
+                        <tr>
+                            <td data-label="Data set">
+                                <strong>@variant.Key</strong>
+                            </td>
+                            <td data-label="Expansions">
+                                <div class="field-data-expansion-list">
+                                    @foreach (int generation in variant.Generations)
+                                    {
+                                        <span>@ShortExpansion(generation)</span>
+                                    }
+                                </div>
+                            </td>
+                            <td data-label="Entries" class="field-data-variant-entries-cell">
+                                <strong>@variant.Options.Count.ToString("N0")</strong>
+                            </td>
+                            <td data-label="Description" class="field-data-description-cell">
+                                @if (string.IsNullOrWhiteSpace(variant.Description))
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                                else
+                                {
+                                    <span class="field-data-description-preview" title="@variant.Description">@variant.Description</span>
+                                }
+                            </td>
+                            <td data-label="Actions" class="actions-column viewer-action-column">
+                                <div class="row-actions row-actions-compact">
+                                    <a
+                                        class="icon-button"
+                                        asp-action="EditVariant"
+                                        asp-route-id="@variant.Id"
+                                        title="Edit data set"
+                                        aria-label="Edit @variant.Key"><i class="bi bi-pencil"></i></a>
+                                    <form asp-action="DeleteVariant" method="post" data-confirm="Remove this expansion data set and all of its entries?">
+                                        <input type="hidden" name="id" value="@variant.Id" />
+                                        <input type="hidden" name="definitionId" value="@Model.Id" />
+                                        <button class="icon-button danger" type="submit" title="Remove data set" aria-label="Remove @variant.Key"><i class="bi bi-trash"></i></button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+
+@section Scripts { <script src="~/js/field-data.js" asp-append-version="true"></script> }
+
+@functions {
+    private static string ShortExpansion(int generation)
+    {
+        return generation switch { 0 => "Vanilla", 1 => "TBC", 2 => "Wrath", 3 => "Cata", 4 => "MoP", _ => generation.ToString(CultureInfo.InvariantCulture) };
+    }
+}

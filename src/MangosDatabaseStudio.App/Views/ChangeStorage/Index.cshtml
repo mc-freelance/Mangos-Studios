@@ -1,0 +1,307 @@
+@* Present the ChangeStorage workspace and its available actions. *@
+
+@model ChangeStorageViewModel
+@using MangosDatabaseStudio.App.Services
+@{
+    ViewData["Title"] = "Change Storage";
+    ViewData["Section"] = "Database Administration";
+    ViewData["ContentClass"] = "change-storage-page";
+    int startItem = Model.Page.TotalCount == 0 ? 0 : ((Model.Page.Page - 1) * Model.Page.PageSize) + 1;
+    int endItem = Math.Min(Model.Page.Page * Model.Page.PageSize, Model.Page.TotalCount);
+    bool canSelectChanges = Model.CanReview || Model.CanBuildContribution;
+    string selectionAction = Model.CanReview ? "Review" : "GenerateContribution";
+}
+
+<div class="change-storage-header">
+    <div>
+        <p class="page-lead mb-1">Review successful database changes before deciding what belongs in a MaNGOS contribution.</p>
+        <p class="form-text mb-0">
+            <i class="bi bi-shield-check"></i> Deleting a pending reversible record rolls that change back first. Approved or ignored records delete history only.</p>
+    </div>
+    <div class="change-storage-context">
+        <span>Active server</span>
+        <strong>@Model.ConnectionName</strong>
+    </div>
+</div>
+
+<section class="change-storage-summary-grid" aria-label="Change storage summary">
+    <article class="panel change-storage-summary-card">
+        <span class="eyebrow">Stored changes</span>
+        <strong>@Model.Counts.Total</strong>
+        <small>@(string.IsNullOrWhiteSpace(Model.Database) ? "Current server" : Model.Database)</small>
+    </article>
+    <article class="panel change-storage-summary-card pending">
+        <span class="eyebrow">Pending review</span>
+        <strong>@Model.Counts.Pending</strong>
+        <small>Needs a decision</small>
+    </article>
+    <article class="panel change-storage-summary-card approved">
+        <span class="eyebrow">Approved</span>
+        <strong>@Model.Counts.Approved</strong>
+        <small>Accepted changes</small>
+    </article>
+    <article class="panel change-storage-summary-card contribution">
+        <span class="eyebrow">Contribution ready</span>
+        <strong>@Model.Counts.ContributionReady</strong>
+        <small>Approved reusable SQL</small>
+    </article>
+</section>
+
+<section class="panel change-storage-history-panel">
+    <div class="section-heading">
+        <div>
+            <span class="eyebrow">History</span>
+            <h2>Database changes</h2>
+            <p>Filter the audit trail, inspect generated SQL, and approve only the changes that should move forward.</p>
+        </div>
+        <i class="bi bi-clock-history"></i>
+    </div>
+
+    <form method="get" asp-action="Index" class="change-storage-filters">
+        <label>
+            <span>Database</span>
+            <select name="database" class="form-select form-select-sm">
+                <option value="">All databases</option>
+                @foreach (string databaseName in Model.Databases)
+                {
+                    <option value="@databaseName" selected="@(string.Equals(Model.Database, databaseName, StringComparison.OrdinalIgnoreCase) ? "selected" : null)">@databaseName</option>
+                }
+            </select>
+        </label>
+        <label>
+            <span>Status</span>
+            <select name="status" class="form-select form-select-sm">
+                <option value="">All statuses</option>
+                <option value="pending" selected="@(Model.Status == StoredChangeStatuses.Pending ? "selected" : null)">Pending</option>
+                <option value="approved" selected="@(Model.Status == StoredChangeStatuses.Approved ? "selected" : null)">Approved</option>
+                <option value="ignored" selected="@(Model.Status == StoredChangeStatuses.Ignored ? "selected" : null)">Ignored</option>
+            </select>
+        </label>
+        <label>
+            <span>Source</span>
+            <select name="source" class="form-select form-select-sm">
+                <option value="">All sources</option>
+                @foreach (string sourceName in Model.Sources)
+                {
+                    <option value="@sourceName" selected="@(string.Equals(Model.Source, sourceName, StringComparison.OrdinalIgnoreCase) ? "selected" : null)">@sourceName</option>
+                }
+            </select>
+        </label>
+        <label class="change-storage-search">
+            <span>Search</span>
+            <span class="input-group">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input name="search" value="@Model.Search" class="form-control form-control-sm" placeholder="Table, summary, user, or SQL..." />
+            </span>
+        </label>
+        <input type="hidden" name="pageSize" value="@Model.Page.PageSize" />
+        <div class="change-storage-filter-actions">
+            <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-funnel"></i> Apply filters</button>
+            <a class="btn btn-outline-secondary btn-sm" asp-action="Index">Reset</a>
+        </div>
+    </form>
+
+    @if (Model.Page.Items.Count == 0)
+    {
+        <div class="empty-state compact change-storage-empty">
+            <i class="bi bi-journal-x"></i>
+            <h2>No stored changes match</h2>
+            <p>Successful database mutations will appear here automatically. Adjust the filters if you are looking for an older change.</p>
+        </div>
+    }
+    else
+    {
+        <form asp-action="@selectionAction" method="post" class="change-storage-review-form" data-change-review-form>
+            <input type="hidden" name="Database" value="@Model.Database" />
+            <input type="hidden" name="CurrentStatus" value="@Model.Status" />
+            <input type="hidden" name="Source" value="@Model.Source" />
+            <input type="hidden" name="Search" value="@Model.Search" />
+            <input type="hidden" name="Page" value="@Model.Page.Page" />
+            <input type="hidden" name="PageSize" value="@Model.Page.PageSize" />
+
+            @if (canSelectChanges)
+            {
+                <div class="change-storage-reviewbar">
+                    <label class="change-storage-select-all">
+                        <input type="checkbox" data-change-select-all /> <span>Select this page</span>
+                    </label>
+                    <div>
+                        @if (Model.CanReview)
+                        {
+                            <button class="btn btn-sm btn-success" type="submit" name="Status" value="approved"><i class="bi bi-check2-circle"></i> Approve</button>
+                            <button class="btn btn-sm btn-outline-secondary" type="submit" name="Status" value="pending"><i class="bi bi-arrow-counterclockwise"></i> Pending</button>
+                            <button class="btn btn-sm btn-outline-secondary" type="submit" name="Status" value="ignored"><i class="bi bi-eye-slash"></i> Ignore</button>
+                            <button class="btn btn-sm btn-outline-danger" type="submit"
+                                    asp-action="Delete"
+                                    asp-controller="ChangeStorage"
+                                    formmethod="post"
+                                    data-change-delete-selected>
+                                <i class="bi bi-trash3"></i> Delete
+                            </button>
+                        }
+                        @if (Model.CanBuildContribution)
+                        {
+                            <button class="btn btn-sm btn-primary"
+                                    type="submit"
+                                    asp-action="GenerateContribution"
+                                    asp-controller="ChangeStorage"
+                                    formmethod="post"
+                                    data-change-generate-contribution>
+                                <i class="bi bi-file-earmark-code"></i> Generate contrib SQL file
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+
+            <div class="change-storage-list">
+                @foreach (StoredDatabaseChange change in Model.Page.Items)
+                {
+                    string statusClass = StoredChangeStatuses.Normalize(change.ReviewStatus);
+                    <article class="change-storage-entry @statusClass">
+                        <div class="change-storage-entry-main">
+                            @if (canSelectChanges)
+                            {
+                                bool contributionReady =
+                                    statusClass == StoredChangeStatuses.Approved &&
+                                    change.ContributionEligible &&
+                                    !string.IsNullOrWhiteSpace(change.SqlText);
+                                <label class="change-storage-checkbox" title="Select change">
+                                    <input type="checkbox"
+                                           name="Ids"
+                                           value="@change.Id"
+                                           data-change-select
+                                           data-change-status="@statusClass"
+                                           data-change-revert="@(change.RevertAvailable ? "true" : "false")"
+                                           data-change-contribution="@(contributionReady ? "true" : "false")"
+                                           data-change-database="@change.DatabaseName" />
+                                </label>
+                            }
+                            <span class="change-storage-operation @change.Operation.ToLowerInvariant()">@change.Operation</span>
+                            <div class="change-storage-entry-copy">
+                                <div class="change-storage-entry-title">
+                                    <strong>@change.Summary</strong>
+                                    <span class="change-storage-status @statusClass">@statusClass</span>
+                                    @if (change.ContributionEligible)
+                                    {
+                                        <span class="change-storage-eligible" title="This SQL can be used by the contribution builder"><i class="bi bi-code-slash"></i> reusable SQL</span>
+                                    }
+                                    @if (statusClass == StoredChangeStatuses.Pending && change.RevertAvailable)
+                                    {
+                                        <span class="change-storage-revert-ready" title="Deleting this pending record will revert the database change first."><i class="bi bi-arrow-counterclockwise"></i> revert ready</span>
+                                    }
+                                    else if (statusClass == StoredChangeStatuses.Pending)
+                                    {
+                                        <span class="change-storage-revert-unavailable" title="Automatic rollback data is not available for this pending change."><i class="bi bi-shield-exclamation"></i> no auto revert</span>
+                                    }
+                                </div>
+                                <div class="change-storage-entry-meta">
+                                    <span><i class="bi bi-database"></i> @change.DatabaseName</span>
+                                    <span><i class="bi bi-table"></i> @(string.IsNullOrWhiteSpace(change.ObjectName) ? "Database operation" : change.ObjectName)</span>
+                                    <span><i class="bi bi-box-arrow-in-right"></i> @change.Source</span>
+                                    <span><i class="bi bi-person"></i> @(string.IsNullOrWhiteSpace(change.Username) ? "Unknown user" : change.Username)</span>
+                                    <span><i class="bi bi-clock"></i> @change.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</span>
+                                </div>
+                            </div>
+                            @if (Model.CanReview)
+                            {
+                                <button class="btn btn-outline-danger btn-sm change-storage-entry-delete"
+                                        type="submit"
+                                        name="Ids"
+                                        value="@change.Id"
+                                        asp-action="Delete"
+                                        asp-controller="ChangeStorage"
+                                        formmethod="post"
+                                        data-change-delete-one
+                                        data-change-status="@statusClass"
+                                        data-change-revert="@(change.RevertAvailable ? "true" : "false")"
+                                        title="@(statusClass == StoredChangeStatuses.Pending ? "Revert and delete this pending change" : "Delete this Change Storage record")">
+                                    <i class="bi bi-trash3"></i>
+                                </button>
+                            }
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(change.SqlText))
+                        {
+                            <details class="change-storage-sql">
+                                <summary>
+                                    <i class="bi bi-code-square"></i> View stored SQL</summary>
+                                <div class="change-storage-sql-box">
+                                    <button type="button" class="btn btn-outline-light btn-sm" data-copy-stored-sql><i class="bi bi-copy"></i> Copy SQL</button>
+                                    <pre>@change.SqlText</pre>
+                                </div>
+                            </details>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(change.ReviewedByUsername) && change.ReviewedAtUtc.HasValue)
+                        {
+                            <div class="change-storage-review-note">Reviewed by @change.ReviewedByUsername · @change.ReviewedAtUtc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</div>
+                        }
+                    </article>
+                }
+            </div>
+        </form>
+
+        <footer class="change-storage-pagination">
+            <span>Showing @startItem–@endItem of @Model.Page.TotalCount</span>
+            <nav aria-label="Change history pages">
+                <ul class="pagination pagination-sm mb-0">
+                    <li class="page-item pagination-direction @(Model.Page.Page <= 1 ? "disabled" : "")">
+                        <a
+                            class="page-link"
+                            asp-action="Index"
+                            asp-route-database="@Model.Database"
+                            asp-route-status="@Model.Status"
+                            asp-route-source="@Model.Source"
+                            asp-route-search="@Model.Search"
+                            asp-route-page="@(Model.Page.Page - 1)"
+                            asp-route-pageSize="@Model.Page.PageSize"
+                            aria-label="Previous page"><i class="bi bi-chevron-left"></i><span>Previous</span></a>
+                    </li>
+                    @for (int pageNumber = Math.Max(1, Model.Page.Page - 2); pageNumber <= Math.Min(Model.Page.TotalPages, Model.Page.Page + 2); pageNumber++)
+                    {
+                        <li class="page-item @(pageNumber == Model.Page.Page ? "active" : "")">
+                            <a
+                                class="page-link"
+                                asp-action="Index"
+                                asp-route-database="@Model.Database"
+                                asp-route-status="@Model.Status"
+                                asp-route-source="@Model.Source"
+                                asp-route-search="@Model.Search"
+                                asp-route-page="@pageNumber"
+                                asp-route-pageSize="@Model.Page.PageSize">@pageNumber</a>
+                        </li>
+                    }
+                    <li class="page-item pagination-direction @(Model.Page.Page >= Model.Page.TotalPages ? "disabled" : "")">
+                        <a
+                            class="page-link"
+                            asp-action="Index"
+                            asp-route-database="@Model.Database"
+                            asp-route-status="@Model.Status"
+                            asp-route-source="@Model.Source"
+                            asp-route-search="@Model.Search"
+                            asp-route-page="@(Model.Page.Page + 1)"
+                            asp-route-pageSize="@Model.Page.PageSize"
+                            aria-label="Next page"><span>Next</span><i class="bi bi-chevron-right"></i></a>
+                    </li>
+                </ul>
+            </nav>
+            <form method="get" asp-action="Index" class="change-storage-page-size">
+                <input type="hidden" name="database" value="@Model.Database" />
+                <input type="hidden" name="status" value="@Model.Status" />
+                <input type="hidden" name="source" value="@Model.Source" />
+                <input type="hidden" name="search" value="@Model.Search" />
+                <span>Rows per page</span>
+                <select name="pageSize" class="form-select form-select-sm" onchange="this.form.submit()">
+                    @foreach (int size in new[] { 10, 20, 50, 100 })
+                    {
+                        <option value="@size" selected="@(size == Model.Page.PageSize ? "selected" : null)">@size</option>
+                    }
+                </select>
+            </form>
+        </footer>
+    }
+</section>
+
+
+@section Scripts {
+    <script src="~/js/change-storage.js" asp-append-version="true"></script>
+}

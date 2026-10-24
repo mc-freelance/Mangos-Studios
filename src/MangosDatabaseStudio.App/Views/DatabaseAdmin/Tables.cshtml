@@ -1,0 +1,86 @@
+@* Present the DatabaseAdmin Tables workflow within the shared studio layout. *@
+
+@model DatabaseTablesViewModel
+@{
+    ViewData["Title"] = Model.Database + " tables";
+    ViewData["Section"] = "Database Administration";
+}
+<div class="page-actions">
+    <div>
+        <span class="eyebrow">Database tables</span>
+        <p class="page-lead">Browse table data, review storage details, and open schema information for the selected database.</p>
+    </div>
+</div>
+<div class="data-table-wrap">
+    <table class="studio-table responsive-table database-tables-table">
+        <thead>
+            <tr>
+                <th>Table</th>
+                <th>Engine</th>
+                <th>Rows</th>
+                <th>Data</th>
+                <th>Indexes</th>
+                <th>Collation</th>
+                <th class="actions-column">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        @if (Model.Tables.Count == 0)
+        {
+            <tr>
+                <td colspan="7" class="empty-cell">No tables were found in this database.</td>
+            </tr>
+        }
+        @foreach (var table in Model.Tables)
+        {
+            <tr>
+                <td data-label="Table">
+                    <strong>@table.Name</strong>
+                    <small class="d-block text-muted">@table.Comment</small>
+                </td>
+                <td data-label="Engine">@table.Engine</td>
+                <td data-label="Rows">@table.ApproximateRows.ToString("N0")</td>
+                <td data-label="Data">@FormatBytes(table.DataLength)</td>
+                <td data-label="Indexes">@FormatBytes(table.IndexLength)</td>
+                <td data-label="Collation">@table.Collation</td>
+                <td data-label="Actions" class="actions-column">
+                    <div class="row-actions row-actions-compact">
+                        @if (User.HasPermission(AppPermissions.WorldBrowse))
+                        {
+                            <a
+                                class="icon-button"
+                                title="Browse"
+                                aria-label="Browse @table.Name"
+                                asp-controller="WorldEditor"
+                                asp-action="Browse"
+                                asp-route-database="@Model.Database"
+                                asp-route-table="@table.Name"><i class="bi bi-table" aria-hidden="true"></i></a>
+                        }
+                        @if (User.HasPermission(AppPermissions.DatabaseStructureView))
+                        {
+                            <a
+                                class="icon-button"
+                                title="Structure"
+                                aria-label="View @table.Name structure"
+                                asp-action="Structure"
+                                asp-route-database="@Model.Database"
+                                asp-route-table="@table.Name"><i class="bi bi-diagram-3" aria-hidden="true"></i></a>
+                        }
+                    </div>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div>
+@functions {
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes <= 0) return "0 B";
+        string[] units = { "B", "KB", "MB", "GB", "TB" };
+        double value = bytes;
+        int unit = 0;
+        while (value >= 1024 && unit < units.Length - 1) { value /= 1024; unit++; }
+        return value.ToString(value >= 10 || unit == 0 ? "N0" : "N1") + " " + units[unit];
+    }
+}

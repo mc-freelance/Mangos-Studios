@@ -1,0 +1,64 @@
+@* Present the DatabaseAdmin TableProperties workflow within the shared studio layout. *@
+
+@model SchemaTablePropertiesEditorViewModel
+@{
+    ViewData["Title"] = "Edit table properties";
+    ViewData["Section"] = "Database Administration / " + Model.Database + " / " + Model.Table;
+}
+
+<div class="page-actions schema-editor-page-heading">
+    <div>
+        <span class="eyebrow">Restricted schema editor</span>
+        <h1>Edit table properties</h1>
+        <p class="page-lead">Change supported storage and metadata properties with a server-generated SQL preview.</p>
+    </div>
+    <a class="btn btn-outline-secondary" asp-action="Structure" asp-route-database="@Model.Database" asp-route-table="@Model.Table"><i class="bi bi-arrow-left"></i> Back to structure</a>
+</div>
+
+<section class="panel schema-editor-form-panel">
+    <form method="post" asp-action="PreviewTableProperties" class="schema-editor-form">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="Database" />
+        <input type="hidden" asp-for="Table" />
+        <div asp-validation-summary="All" class="alert alert-danger schema-validation-summary"></div>
+
+        <div class="schema-form-grid two-column">
+            <div class="form-group">
+                <label asp-for="Engine">Storage engine</label>
+                <select asp-for="Engine" class="form-select">
+                    @foreach (string engine in Model.Engines)
+                    {
+                        <option value="@engine">@engine</option>
+                    }
+                </select>
+                <small>Only engines reported as supported by the active server are shown.</small>
+            </div>
+            <div class="form-group">
+                <label asp-for="Collation">Default collation</label>
+                <select asp-for="Collation" class="form-select schema-long-select">
+                    @foreach (string collation in Model.Collations)
+                    {
+                        <option value="@collation">@collation</option>
+                    }
+                </select>
+                <small>Changing collation may rebuild or reinterpret textual data.</small>
+            </div>
+        </div>
+        <div class="form-group">
+            <label asp-for="Comment">Table comment</label>
+            <textarea asp-for="Comment" class="form-control" rows="4"></textarea>
+        </div>
+
+        <div class="schema-editor-safety-note warning">
+            <i class="bi bi-exclamation-triangle"></i>
+            <div>
+                <strong>Engine and collation changes can be expensive</strong>
+                <p>Large tables may be rebuilt or locked while the server applies these changes. Database Studio requires typed confirmation when either setting changes.</p>
+            </div>
+        </div>
+        <div class="form-actions">
+            <a class="btn btn-outline-secondary" asp-action="Structure" asp-route-database="@Model.Database" asp-route-table="@Model.Table">Cancel</a>
+            <button class="btn btn-primary" type="submit"><i class="bi bi-code-square"></i> Review SQL</button>
+        </div>
+    </form>
+</section>

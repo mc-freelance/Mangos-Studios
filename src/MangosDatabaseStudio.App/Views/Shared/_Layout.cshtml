@@ -1,0 +1,554 @@
+@* Shared authenticated shell, navigation, scripts, and desktop controls. *@
+
+@using MangosDatabaseStudio.Application.Connections
+@inject IActiveConnectionAccessor ActiveConnectionAccessor
+@inject IApplicationUserStore ApplicationUserStore
+@inject ApplicationVersionInfo ApplicationVersion
+@{
+    var activeConnection = await ActiveConnectionAccessor.GetActiveAsync(Context.RequestAborted);
+    string controller = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty;
+    string action = ViewContext.RouteData.Values["action"]?.ToString() ?? string.Empty;
+    string worldEditorName = activeConnection?.Name ?? "World editor";
+    bool isNpcVendorViewer = string.Equals(controller, "WorldEditor", StringComparison.OrdinalIgnoreCase) &&
+                             string.Equals(action, "NpcVendors", StringComparison.OrdinalIgnoreCase);
+    bool isNpcTrainerViewer = string.Equals(controller, "WorldEditor", StringComparison.OrdinalIgnoreCase) &&
+                              string.Equals(action, "NpcTrainers", StringComparison.OrdinalIgnoreCase);
+    bool isEventViewer = string.Equals(controller, "WorldEditor", StringComparison.OrdinalIgnoreCase) &&
+                         string.Equals(action, "Events", StringComparison.OrdinalIgnoreCase);
+    bool isLootViewer = string.Equals(controller, "WorldEditor", StringComparison.OrdinalIgnoreCase) &&
+                        string.Equals(action, "Loot", StringComparison.OrdinalIgnoreCase);
+    bool isPoolViewer = string.Equals(controller, "WorldEditor", StringComparison.OrdinalIgnoreCase) &&
+                        string.Equals(action, "Pools", StringComparison.OrdinalIgnoreCase);
+    bool isQuestViewer = string.Equals(controller, "WorldEditor", StringComparison.OrdinalIgnoreCase) &&
+                         string.Equals(action, "Quests", StringComparison.OrdinalIgnoreCase);
+    bool isGossipSourcesViewer = string.Equals(controller, "WorldEditor", StringComparison.OrdinalIgnoreCase) &&
+                                 string.Equals(action, "Gossip", StringComparison.OrdinalIgnoreCase);
+    bool isGossipMenusViewer = string.Equals(controller, "WorldEditor", StringComparison.OrdinalIgnoreCase) &&
+                               string.Equals(action, "Menus", StringComparison.OrdinalIgnoreCase);
+    bool isDoubleSpawnViewer = string.Equals(controller, "WorldEditor", StringComparison.OrdinalIgnoreCase) &&
+                               string.Equals(action, "DoubleSpawns", StringComparison.OrdinalIgnoreCase);
+    bool isViewerTools = isNpcVendorViewer || isNpcTrainerViewer || isEventViewer || isLootViewer || isPoolViewer || isQuestViewer || isGossipSourcesViewer || isGossipMenusViewer;
+    bool isWorldWorkspace = string.Equals(controller, "WorldEditor", StringComparison.OrdinalIgnoreCase) && !isViewerTools && !isDoubleSpawnViewer;
+    bool isDatabaseUpdates = string.Equals(controller, "DatabaseUpdates", StringComparison.OrdinalIgnoreCase);
+    bool isChangeStorage = string.Equals(controller, "ChangeStorage", StringComparison.OrdinalIgnoreCase);
+    bool isWorldDatabaseTools = isWorldWorkspace || isDoubleSpawnViewer || isDatabaseUpdates || isChangeStorage;
+    bool isDatabaseTools = string.Equals(controller, "DatabaseAdmin", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(controller, "SqlConsole", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(controller, "Import", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(controller, "Export", StringComparison.OrdinalIgnoreCase);
+    bool isAccountTools = string.Equals(controller, "Profile", StringComparison.OrdinalIgnoreCase) ||
+                          string.Equals(controller, "Settings", StringComparison.OrdinalIgnoreCase);
+    bool isAdministrationTools = string.Equals(controller, "Connections", StringComparison.OrdinalIgnoreCase) ||
+                                 string.Equals(controller, "Users", StringComparison.OrdinalIgnoreCase) ||
+                                 string.Equals(controller, "Roles", StringComparison.OrdinalIgnoreCase) ||
+                                 string.Equals(controller, "FieldData", StringComparison.OrdinalIgnoreCase);
+    string studioWorkspace = isWorldDatabaseTools || isViewerTools
+        ? "world"
+        : isDatabaseTools
+            ? "database"
+            : isAdministrationTools
+                ? "administration"
+                : isAccountTools
+                    ? "account"
+                    : "overview";
+    string workspaceLabel = studioWorkspace switch
+    {
+        "world" => "World workspace",
+        "database" => "Database workspace",
+        "administration" => "Administration",
+        "account" => "Account",
+        _ => "Studio overview"
+    };
+    string workspaceIcon = studioWorkspace switch
+    {
+        "world" => "bi-globe2",
+        "database" => "bi-database-gear",
+        "administration" => "bi-shield-check",
+        "account" => "bi-person-gear",
+        _ => "bi-grid"
+    };
+    string workspaceSection = ViewData["Section"]?.ToString() ?? workspaceLabel;
+    string currentRole = User.Claims.FirstOrDefault(c => c.Type.EndsWith("/role"))?.Value ?? AppRoles.Viewer;
+    string pageClass = ViewData["PageClass"]?.ToString() ?? string.Empty;
+    string contentClass = ViewData["ContentClass"]?.ToString() ?? string.Empty;
+    string? currentUserIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
+    ApplicationUser? currentUser = Guid.TryParse(currentUserIdValue, out Guid currentUserId)
+        ? await ApplicationUserStore.GetAsync(currentUserId, Context.RequestAborted)
+        : null;
+    UserPreferences currentPreferences = UserPreferences.Normalize(currentUser?.Preferences);
+    string themePreference = currentPreferences.Theme;
+    string? avatarUrl = UserAvatarPresentation.GetImageUrl(currentUser);
+    string avatarInitials = UserAvatarPresentation.GetInitials(currentUser);
+    bool canBrowseWorld = User.HasPermission(AppPermissions.WorldBrowse);
+    bool canBrowseDatabases = User.HasPermission(AppPermissions.DatabaseBrowse);
+    bool canUseSqlConsole = User.HasPermission(AppPermissions.SqlConsoleView);
+    bool canUseSqlImport = User.HasPermission(AppPermissions.SqlImportView);
+    bool canUseSqlExport = User.HasPermission(AppPermissions.SqlExportView);
+    bool canUseDatabaseUpdates = User.HasPermission(AppPermissions.DatabaseUpdatesView);
+    bool canUseChangeStorage = User.HasPermission(AppPermissions.ChangeStorageView);
+    bool canViewConnections = User.HasPermission(AppPermissions.ConnectionsView);
+    bool canViewUsers = User.HasPermission(AppPermissions.UsersView);
+    bool canManageRoles = User.HasPermission(AppPermissions.RolesManage);
+    bool canViewFieldData = User.HasPermission(AppPermissions.FieldDataView);
+    const string desktopHostValue = "true";
+    string desktopAutoScaleValue = currentPreferences.DesktopAutoScale ? "true" : "false";
+}
+<!DOCTYPE html>
+<html lang="en"
+      data-studio-theme="premium"
+      data-theme-preference="@themePreference"
+      data-desktop-host="@desktopHostValue"
+      data-desktop-zoom="@currentPreferences.DesktopZoomPercent"
+      data-desktop-auto-scale="@desktopAutoScaleValue">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - MaNGOS Database Studio</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+    <script>
+(() => {
+            const root = document.documentElement;
+            const preference = root.dataset.themePreference || "system";
+            const dark = preference === "dark" || (preference === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+            root.dataset.theme = dark ? "dark" : "light";
+        })();
+</script>
+    <script src="~/js/desktop-scaling.js" asp-append-version="true"></script>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/themes/premium.css" asp-append-version="true" />
+</head>
+<body class="@pageClass" data-studio-workspace="@studioWorkspace">
+<div class="studio-shell">
+    <aside class="studio-sidebar">
+        <a class="studio-brand" asp-controller="Home" asp-action="Index" aria-label="MaNGOS Database Studio dashboard">
+            <span class="brand-mark"><i class="bi bi-database-gear"></i></span>
+            <span class="studio-brand-copy">
+                <strong>MaNGOS</strong>
+                <small>Database Studio</small>
+                <span class="mangos-core-lineage" aria-hidden="true">
+                    <i></i><i></i><i></i><i></i><i></i>
+                </span>
+            </span>
+        </a>
+
+        <div class="connection-pill">
+            <span class="status-dot @(activeConnection == null ? "offline" : "online")"></span>
+            <div>
+                <small>Active server</small>
+                <strong>@(activeConnection?.Name ?? "Not selected")</strong>
+            </div>
+        </div>
+
+        <nav class="studio-nav" aria-label="Primary navigation">
+            <a class="studio-nav-dashboard @(controller == "Home" ? "active" : "")"
+               asp-controller="Home"
+               asp-action="Index">
+                <i class="bi bi-grid"></i>
+                <span>Dashboard</span>
+            </a>
+
+            @if (canBrowseWorld || canUseDatabaseUpdates || canUseChangeStorage)
+            {
+                <details class="studio-nav-group"
+                         data-nav-group="world-workspace"
+                         data-nav-active="@isWorldDatabaseTools.ToString().ToLowerInvariant()"
+                         open="@isWorldDatabaseTools">
+                    <summary>
+                        <span class="studio-nav-group-icon"><i class="bi bi-globe2"></i></span>
+                        <span class="studio-nav-group-title">World database</span>
+                        <i class="bi bi-chevron-down studio-nav-group-chevron"></i>
+                    </summary>
+                    <div class="studio-nav-group-items">
+                        @if (activeConnection != null)
+                        {
+                            @if (canBrowseWorld)
+                            {
+                                <a class="studio-nav-item studio-nav-item-rich @(isWorldWorkspace ? "active" : "")"
+                                   asp-controller="WorldEditor"
+                                   asp-action="Index">
+                                    <i class="bi bi-database-check"></i>
+                                    <span class="studio-nav-item-copy">
+                                        <strong title="@worldEditorName">@worldEditorName</strong>
+                                        <small>World editor</small>
+                                    </span>
+                                </a>
+                            }
+
+                            @if (canUseChangeStorage)
+                            {
+                                <a class="studio-nav-item @(isChangeStorage ? "active" : "")"
+                                   asp-controller="ChangeStorage"
+                                   asp-action="Index">
+                                    <i class="bi bi-clock-history"></i>
+                                    <span>Change Storage</span>
+                                </a>
+                            }
+                            @if (canUseDatabaseUpdates)
+                            {
+                                <a class="studio-nav-item @(isDatabaseUpdates ? "active" : "")"
+                                   asp-controller="DatabaseUpdates"
+                                   asp-action="Index">
+                                    <i class="bi bi-database-up"></i>
+                                    <span>Database Updates</span>
+                                </a>
+                            }
+                            @if (canBrowseWorld)
+                            {
+                                <a class="studio-nav-item @(isDoubleSpawnViewer ? "active" : "")"
+                                   asp-controller="WorldEditor"
+                                   asp-action="DoubleSpawns"
+                                   asp-route-database="@activeConnection.DefaultDatabase">
+                                    <i class="bi bi-intersect"></i>
+                                    <span>Spawn Overlap Analyzer</span>
+                                </a>
+                            }
+                        }
+                        else
+                        {
+                            <div class="studio-nav-group-empty">
+                                <i class="bi bi-plug"></i>
+                                <span>Connect a world database to open world database tools.</span>
+                            </div>
+                        }
+                    </div>
+                </details>
+            }
+
+
+            @if (canBrowseWorld)
+            {
+                <details class="studio-nav-group"
+                         data-nav-group="world-viewers"
+                         data-nav-active="@isViewerTools.ToString().ToLowerInvariant()"
+                         open="@isViewerTools">
+                    <summary>
+                        <span class="studio-nav-group-icon"><i class="bi bi-binoculars"></i></span>
+                        <span class="studio-nav-group-title">World viewers</span>
+                        <i class="bi bi-chevron-down studio-nav-group-chevron"></i>
+                    </summary>
+                    <div class="studio-nav-group-items">
+                        @if (activeConnection != null)
+                        {
+                            <a class="studio-nav-item @(isEventViewer ? "active" : "")"
+                               asp-controller="WorldEditor"
+                               asp-action="Events"
+                               asp-route-database="@activeConnection.DefaultDatabase">
+                                <i class="bi bi-calendar-event"></i>
+                                <span>Event Viewer</span>
+                            </a>
+                            <a class="studio-nav-item @(isGossipMenusViewer ? "active" : "")"
+                               asp-controller="WorldEditor"
+                               asp-action="Menus"
+                               asp-route-database="@activeConnection.DefaultDatabase">
+                                <i class="bi bi-list-nested"></i>
+                                <span>Gossip Menus</span>
+                            </a>
+                            <a class="studio-nav-item @(isGossipSourcesViewer ? "active" : "")"
+                               asp-controller="WorldEditor"
+                               asp-action="Gossip"
+                               asp-route-database="@activeConnection.DefaultDatabase">
+                                <i class="bi bi-chat-square-text"></i>
+                                <span>Gossip Sources</span>
+                            </a>
+                            <a class="studio-nav-item @(isLootViewer ? "active" : "")"
+                               asp-controller="WorldEditor"
+                               asp-action="Loot"
+                               asp-route-database="@activeConnection.DefaultDatabase">
+                                <i class="bi bi-gift"></i>
+                                <span>Loot Viewer</span>
+                            </a>
+                            <a class="studio-nav-item @(isPoolViewer ? "active" : "")"
+                               asp-controller="WorldEditor"
+                               asp-action="Pools"
+                               asp-route-database="@activeConnection.DefaultDatabase">
+                                <i class="bi bi-diagram-3"></i>
+                                <span>Pool Viewer</span>
+                            </a>
+                            <a class="studio-nav-item @(isQuestViewer ? "active" : "")"
+                               asp-controller="WorldEditor"
+                               asp-action="Quests"
+                               asp-route-database="@activeConnection.DefaultDatabase">
+                                <i class="bi bi-journal-text"></i>
+                                <span>Quest Viewer</span>
+                            </a>
+                            <a class="studio-nav-item @(isNpcTrainerViewer ? "active" : "")"
+                               asp-controller="WorldEditor"
+                               asp-action="NpcTrainers"
+                               asp-route-database="@activeConnection.DefaultDatabase">
+                                <i class="bi bi-mortarboard"></i>
+                                <span>Trainer Viewer</span>
+                            </a>
+                            <a class="studio-nav-item @(isNpcVendorViewer ? "active" : "")"
+                               asp-controller="WorldEditor"
+                               asp-action="NpcVendors"
+                               asp-route-database="@activeConnection.DefaultDatabase">
+                                <i class="bi bi-shop"></i>
+                                <span>Vendor Viewer</span>
+                            </a>
+                        }
+                        else
+                        {
+                            <div class="studio-nav-group-empty">
+                                <i class="bi bi-plug"></i>
+                                <span>Connect a world database to open world viewers.</span>
+                            </div>
+                        }
+                    </div>
+                </details>
+            }
+
+            @if (canBrowseDatabases || canUseSqlConsole || canUseSqlImport || canUseSqlExport)
+            {
+                <details class="studio-nav-group"
+                         data-nav-group="database-tools"
+                         data-nav-active="@isDatabaseTools.ToString().ToLowerInvariant()"
+                         open="@isDatabaseTools">
+                    <summary>
+                        <span class="studio-nav-group-icon"><i class="bi bi-tools"></i></span>
+                        <span class="studio-nav-group-title">Database utilities</span>
+                        <i class="bi bi-chevron-down studio-nav-group-chevron"></i>
+                    </summary>
+                    <div class="studio-nav-group-items">
+                        @if (canBrowseDatabases)
+                        {
+                            <a class="studio-nav-item @(controller == "DatabaseAdmin" ? "active" : "")"
+                               asp-controller="DatabaseAdmin"
+                               asp-action="Index">
+                                <i class="bi bi-server"></i>
+                                <span>Databases</span>
+                            </a>
+                        }
+                        @if (canUseSqlConsole)
+                        {
+                            <a class="studio-nav-item @(controller == "SqlConsole" ? "active" : "")"
+                               asp-controller="SqlConsole"
+                               asp-action="Index">
+                                <i class="bi bi-terminal"></i>
+                                <span>SQL Console</span>
+                            </a>
+                        }
+                        @if (canUseSqlImport)
+                        {
+                            <a class="studio-nav-item @(controller == "Import" ? "active" : "")"
+                               asp-controller="Import"
+                               asp-action="Index">
+                                <i class="bi bi-file-earmark-arrow-up"></i>
+                                <span>Import SQL</span>
+                            </a>
+                        }
+                        @if (canUseSqlExport)
+                        {
+                            <a class="studio-nav-item @(controller == "Export" ? "active" : "")"
+                               asp-controller="Export"
+                               asp-action="Index">
+                                <i class="bi bi-file-earmark-arrow-down"></i>
+                                <span>Export SQL</span>
+                            </a>
+                        }
+                    </div>
+                </details>
+            }
+
+            @if (canViewConnections || canViewUsers || canManageRoles || canViewFieldData)
+            {
+                <details class="studio-nav-group"
+                         data-nav-group="administration-tools"
+                         data-nav-active="@isAdministrationTools.ToString().ToLowerInvariant()"
+                         open="@isAdministrationTools">
+                    <summary>
+                        <span class="studio-nav-group-icon"><i class="bi bi-shield-check"></i></span>
+                        <span class="studio-nav-group-title">Administration</span>
+                        <i class="bi bi-chevron-down studio-nav-group-chevron"></i>
+                    </summary>
+                    <div class="studio-nav-group-items">
+                        @if (canViewConnections)
+                        {
+                            <a class="studio-nav-item @(controller == "Connections" ? "active" : "")"
+                               asp-controller="Connections"
+                               asp-action="Index">
+                                <i class="bi bi-plug"></i>
+                                <span>Connections</span>
+                            </a>
+                        }
+                        @if (canViewUsers)
+                        {
+                            <a class="studio-nav-item @(controller == "Users" ? "active" : "")"
+                               asp-controller="Users"
+                               asp-action="Index">
+                                <i class="bi bi-people"></i>
+                                <span>Users</span>
+                            </a>
+                        }
+                        @if (canManageRoles)
+                        {
+                            <a class="studio-nav-item @(controller == "Roles" ? "active" : "")"
+                               asp-controller="Roles"
+                               asp-action="Index">
+                                <i class="bi bi-shield-lock"></i>
+                                <span>Roles &amp; Permissions</span>
+                            </a>
+                        }
+                        @if (canViewFieldData)
+                        {
+                            <a class="studio-nav-item @(controller == "FieldData" ? "active" : "")"
+                               asp-controller="FieldData"
+                               asp-action="Index">
+                                <i class="bi bi-database-check"></i>
+                                <span>Field Data</span>
+                            </a>
+                        }
+                    </div>
+                </details>
+            }
+        </nav>
+
+        <div class="sidebar-footer @(isAccountTools ? "account-active" : string.Empty)">
+            <div class="user-chip user-chip-static">
+                <span class="profile-avatar profile-avatar-sidebar">
+                    @if (!string.IsNullOrWhiteSpace(avatarUrl))
+                    {
+                        <img src="@avatarUrl" alt="" referrerpolicy="no-referrer" />
+                    }
+                    else
+                    {
+                        <span>@avatarInitials</span>
+                    }
+                </span>
+                <div>
+                    <strong>@User.Identity?.Name</strong>
+                    <small>@AppRoles.GetDisplayName(currentRole)</small>
+                </div>
+            </div>
+            <div class="sidebar-account-actions" aria-label="Account shortcuts">
+                <a class="sidebar-account-link @(controller == "Profile" ? "active" : "")"
+                   asp-controller="Profile"
+                   asp-action="Index">
+                    <i class="bi bi-person"></i>
+                    <span>Profile</span>
+                </a>
+                <a class="sidebar-account-link @(controller == "Settings" ? "active" : "")"
+                   asp-controller="Settings"
+                   asp-action="Index">
+                    <i class="bi bi-sliders"></i>
+                    <span>Settings</span>
+                </a>
+            </div>
+            <form asp-controller="Account" asp-action="Logout" method="post">
+                <button class="btn btn-sm btn-outline-light w-100 sidebar-signout" type="submit"><i class="bi bi-box-arrow-right"></i> Sign out</button>
+            </form>
+            <div class="application-version" title="Build @ApplicationVersion.InformationalVersion">
+                @ApplicationVersion.DisplayText
+            </div>
+        </div>
+    </aside>
+
+    <main class="studio-main">
+        <header class="studio-topbar">
+            <div class="topbar-primary">
+                <button class="sidebar-toggle" type="button" data-sidebar-toggle aria-label="Toggle navigation"><i class="bi bi-list"></i></button>
+                <span class="topbar-workspace-mark" aria-hidden="true"><i class="bi @workspaceIcon"></i></span>
+                <div class="topbar-context">
+                    <strong>@workspaceLabel</strong>
+                    <span>@workspaceSection</span>
+                </div>
+            </div>
+            <div class="topbar-actions">
+                <form class="desktop-zoom-controls"
+                        asp-controller="Settings"
+                        asp-action="DesktopZoom"
+                        method="post"
+                        data-desktop-zoom-controls
+                        aria-label="Desktop page zoom controls">
+                    @Html.AntiForgeryToken()
+                    <button class="desktop-zoom-button" type="button" data-desktop-zoom-out title="Zoom out (Ctrl+-)" aria-label="Zoom out">
+                        <i class="bi bi-dash-lg"></i>
+                    </button>
+                    <output class="desktop-zoom-label" data-desktop-zoom-label aria-live="polite">@(currentPreferences.DesktopZoomPercent)%</output>
+                    <button class="desktop-zoom-button" type="button" data-desktop-zoom-in title="Zoom in (Ctrl++)" aria-label="Zoom in">
+                        <i class="bi bi-plus-lg"></i>
+                    </button>
+                    <button class="desktop-zoom-button desktop-zoom-auto @(currentPreferences.DesktopAutoScale ? "active" : string.Empty)"
+                            type="button"
+                            data-desktop-zoom-auto
+                            aria-pressed="@desktopAutoScaleValue"
+                            title="Automatic screen fitting">
+                        <i class="bi bi-arrows-angle-contract"></i><span>Fit</span>
+                    </button>
+                    <button class="desktop-zoom-button" type="button" data-desktop-zoom-reset title="Reset to 100% (Ctrl+0)" aria-label="Reset zoom to 100%">
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                    </button>
+                    <span class="desktop-zoom-save-status" data-desktop-zoom-status aria-live="polite"></span>
+                </form>
+                @if (activeConnection != null)
+                {
+                    <span class="server-address"><i class="bi bi-hdd-network"></i> @activeConnection.Host:@activeConnection.Port</span>
+                }
+                @if (canViewConnections)
+                {
+                    <a class="btn btn-outline-secondary btn-sm" asp-controller="Connections" asp-action="Index"><i class="bi bi-arrow-left-right"></i> Switch server</a>
+                }
+            </div>
+        </header>
+        <section class="studio-content @contentClass">
+            <div class="studio-content-frame">
+                <header class="workspace-heading">
+                    <div class="workspace-heading-main">
+                        <span class="workspace-kicker"><i class="bi @workspaceIcon" aria-hidden="true"></i>@workspaceLabel</span>
+                        <h1>@ViewData["Title"]</h1>
+                        <p>@workspaceSection</p>
+                    </div>
+                    @if (activeConnection != null)
+                    {
+                        <div class="workspace-target" title="@activeConnection.Host:@activeConnection.Port / @activeConnection.DefaultDatabase">
+                            <span class="workspace-target-status" aria-hidden="true"></span>
+                            <div>
+                                <small>Active target</small>
+                                <strong>@activeConnection.Name</strong>
+                                <span>@activeConnection.DefaultDatabase</span>
+                            </div>
+                        </div>
+                    }
+                </header>
+                <partial name="_Alerts" />
+                <div class="studio-workspace-body">
+                    @RenderBody()
+                </div>
+            </div>
+        </section>
+    </main>
+</div>
+<div class="operation-overlay" data-processing-overlay hidden>
+    <div class="operation-dialog" role="status" aria-live="polite" aria-atomic="false">
+        <div class="operation-spinner" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        <span class="eyebrow">Database operation in progress</span>
+        <h2 data-processing-overlay-title>Processing request</h2>
+        <p data-processing-overlay-message>Please wait while the operation completes.</p>
+        <div class="operation-live-status">
+            <strong data-processing-overlay-stage>Starting operation</strong>
+            <span data-processing-overlay-detail>The request has started. Waiting for backend progress.</span>
+        </div>
+        <div class="operation-progress" data-processing-progress role="progressbar" aria-label="Operation progress" aria-valuemin="0" aria-valuemax="100">
+            <span data-processing-progress-bar></span>
+        </div>
+        <div class="operation-progress-meta">
+            <span class="operation-counter" data-processing-overlay-counter></span>
+            <span class="operation-elapsed" data-processing-overlay-elapsed>Starting…</span>
+        </div>
+        <div class="operation-keep-open">
+            <i class="bi bi-window"></i> Keep this application window open. Submitting again is disabled.</div>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="~/js/studio-dialog.js" asp-append-version="true"></script>
+<script src="~/js/operation-feedback.js" asp-append-version="true"></script>
+<script src="~/js/alerts.js" asp-append-version="true"></script>
+<script src="~/js/site.js" asp-append-version="true"></script>
+@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
