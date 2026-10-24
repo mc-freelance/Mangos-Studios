@@ -1,5 +1,8 @@
 # MaNGOS Database Studio
 
+[![Build (Windows and Linux)](https://github.com/mc-freelance/Mangos-Studios/actions/workflows/build.yml/badge.svg)](https://github.com/mc-freelance/Mangos-Studios/actions/workflows/build.yml)
+[![Code style and source checks](https://github.com/mc-freelance/Mangos-Studios/actions/workflows/code-style.yml/badge.svg)](https://github.com/mc-freelance/Mangos-Studios/actions/workflows/code-style.yml)
+
 MaNGOS Database Studio is an open-source, desktop-only database workbench for **getMaNGOS** world databases and MySQL/MariaDB servers. It is written in **C# for .NET 9** and uses a native **Photino** desktop window with a private, loopback-only ASP.NET Core UI. It is **not intended to run as a publicly accessible web server**.
 
 The application aims to let contributors inspect, manage, and prepare database changes through a consistent interface while respecting the schema differences between MaNGOS expansions.
