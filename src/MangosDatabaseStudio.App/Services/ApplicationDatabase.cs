@@ -14,6 +14,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using MangosDatabaseStudio.Domain.Security;
+using MangosDatabaseStudio.App.Services.FieldData;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Data.Sqlite;
@@ -76,7 +77,8 @@ namespace MangosDatabaseStudio.App.Services
         // Create or migrate encrypted SQLite application storage without overwriting an existing database key.
         public async Task InitializeAsync(
             CancellationToken cancellationToken,
-            Action<int, string, string>? reportProgress = null)
+            Action<int, string, string>? reportProgress = null,
+            Action<int, int, string>? reportFieldDataProgress = null)
         {
             if (_initialized)
             {
@@ -131,10 +133,28 @@ namespace MangosDatabaseStudio.App.Services
                     reportProgress?.Invoke(70, "Checking application schema", "Creating or upgrading the local application database structure...");
                     await CreateSchemaAsync(connection, cancellationToken);
 
-                    reportProgress?.Invoke(82, "Loading Field Data catalog", "Preparing expansion-aware field definitions and safely merging audited built-in updates...");
-                    await MangosFieldDataSeed.ApplyAsync(connection, cancellationToken);
+                    reportProgress?.Invoke(78, "Checking Field Data catalog",
+                        "Discovering and validating expansion-aware dropdown and bitmask definitions...");
 
-                    reportProgress?.Invoke(91, "Checking existing application data", "Migrating compatible data from earlier Studio storage when needed...");
+                    try
+                    {
+                        await MangosFieldDataSeed.ApplyAsync(
+                            connection, cancellationToken, reportFieldDataProgress);
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (Exception exception)
+                    {
+                        // The catalog transaction rolls back on failure. Keep startup blocked
+                        // instead of allowing editors to use incomplete Field Data.
+                        throw new FieldDataSynchronizationException(exception);
+                    }
+
+                    reportProgress?.Invoke(94, "Field Data catalog ready",
+                        "All built-in Field Data checks and any required SQLite updates have completed.");
+                    reportProgress?.Invoke(95, "Checking existing application data", "Migrating compatible data from earlier Studio storage when needed...");
                     await MigrateLegacyJsonAsync(connection, cancellationToken);
                 }
                 catch (SqliteException exception) when (databaseAlreadyExists)

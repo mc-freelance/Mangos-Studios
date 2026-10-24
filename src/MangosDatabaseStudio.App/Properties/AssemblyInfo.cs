@@ -7,3 +7,6 @@
 using System.Runtime.CompilerServices;
 
 [assembly: InternalsVisibleTo("MangosDatabaseStudio.Tests")]
+
+// Grant the dedicated SQLite synchronization checks access to internal seed services.
+[assembly: InternalsVisibleTo("MangosDatabaseStudio.FieldDataChecks")]

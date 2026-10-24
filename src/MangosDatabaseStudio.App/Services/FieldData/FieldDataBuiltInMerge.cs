@@ -17,6 +17,11 @@ namespace MangosDatabaseStudio.App.Services.FieldData
 {
     internal sealed class FieldDataBuiltInMergeResult
     {
+        public int CategoriesInserted
+        {
+            get; set;
+        }
+
         public int DefinitionsInserted
         {
             get; set;
@@ -57,7 +62,8 @@ namespace MangosDatabaseStudio.App.Services.FieldData
         {
             return string.Format(
                 CultureInfo.InvariantCulture,
-                "definitions+={0}; definitions~={1}; variants+={2}; variants~={3}; options+={4}; options~={5}; user-additions-preserved={6}",
+                "categories+={0}; definitions+={1}; definitions~={2}; variants+={3}; variants~={4}; options+={5}; options~={6}; user-additions-preserved={7}",
+                CategoriesInserted,
                 DefinitionsInserted,
                 DefinitionsUpdated,
                 VariantsInserted,
@@ -86,26 +92,88 @@ namespace MangosDatabaseStudio.App.Services.FieldData
             SqliteConnection connection,
             SqliteTransaction transaction,
             IReadOnlyList<FieldDefinitionSeed> currentDefinitions,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            Action<int, int, string>? reportProgress = null)
         {
             FieldDataBuiltInMergeResult result = new();
+            int completed = 0;
 
             foreach (FieldDefinitionSeed definition in currentDefinitions)
             {
-                ExistingDefinition? existing = await ReadDefinitionAsync(
-                    connection, transaction, definition.SourceKey, cancellationToken);
+                string fieldName = definition.TableName + "." + definition.ColumnName;
+                reportProgress?.Invoke(completed, currentDefinitions.Count,
+                    "Synchronizing " + fieldName + " (categories, variants, and options)...");
 
-                if (existing == null)
+                try
                 {
-                    await InsertDefinitionAsync(connection, transaction, definition, result, cancellationToken);
-                    continue;
+                    long categoryId = await EnsureBuiltInCategoryAsync(
+                    connection, transaction, definition.TableName, result, cancellationToken);
+
+                    ExistingDefinition? existing = await ReadDefinitionAsync(
+                        connection, transaction, definition.SourceKey, cancellationToken);
+
+                    if (existing == null)
+                    {
+                        await InsertDefinitionAsync(connection, transaction, categoryId, definition, result, cancellationToken);
+                    }
+                    else
+                    {
+                        await SynchronizeDefinitionAsync(
+                            connection, transaction, existing, categoryId, definition, result, cancellationToken);
+                    }
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    // Preserve the specific source field in startup diagnostics.
+                    throw new InvalidOperationException(
+                        "Could not synchronize Field Data for " + fieldName + ".", exception);
                 }
 
-                await SynchronizeDefinitionAsync(
-                    connection, transaction, existing, definition, result, cancellationToken);
+                completed++;
+                reportProgress?.Invoke(completed, currentDefinitions.Count,
+                    "Completed " + fieldName + ".");
             }
 
             return result;
+        }
+
+        // Create one built-in category for each source table. Existing category names,
+        // visibility and icons are administrator-editable and are never overwritten.
+        private static async Task<long> EnsureBuiltInCategoryAsync(
+            SqliteConnection connection,
+            SqliteTransaction transaction,
+            string tableName,
+            FieldDataBuiltInMergeResult result,
+            CancellationToken cancellationToken)
+        {
+            string categoryKey = "world." + tableName.Replace('_', '-').ToLowerInvariant();
+            string displayName = CultureInfo.InvariantCulture.TextInfo.ToTitleCase(
+                tableName.Replace('_', ' ').ToLowerInvariant());
+            bool isCreatureTemplate = string.Equals(
+                tableName, "creature_template", StringComparison.OrdinalIgnoreCase);
+
+            await using SqliteCommand command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = @"
+INSERT OR IGNORE INTO field_categories(category_key, name, description, icon, sort_order, is_enabled)
+VALUES ($key, $name, $description, $icon, $sortOrder, 1);";
+            command.Parameters.AddWithValue("$key", categoryKey);
+            command.Parameters.AddWithValue("$name", displayName);
+            command.Parameters.AddWithValue("$description", "Editor data for " + tableName + " fields.");
+            command.Parameters.AddWithValue("$icon", isCreatureTemplate ? "bi-person-badge" : "bi-collection");
+            command.Parameters.AddWithValue("$sortOrder", isCreatureTemplate ? 10 : 100);
+            if (await command.ExecuteNonQueryAsync(cancellationToken) > 0)
+            {
+                result.CategoriesInserted++;
+            }
+
+            command.CommandText = "SELECT id FROM field_categories WHERE category_key = $key LIMIT 1;";
+            object? value = await command.ExecuteScalarAsync(cancellationToken);
+            return Convert.ToInt64(value, CultureInfo.InvariantCulture);
         }
 
         // Handle synchronize definition async within the field data built in merge workflow.
@@ -113,11 +181,24 @@ namespace MangosDatabaseStudio.App.Services.FieldData
             SqliteConnection connection,
             SqliteTransaction transaction,
             ExistingDefinition existing,
+            long categoryId,
             FieldDefinitionSeed current,
             FieldDataBuiltInMergeResult result,
             CancellationToken cancellationToken)
         {
             bool changed = false;
+
+            // Repair missing or obsolete built-in category assignments while respecting
+            // definitions that an administrator moved into a custom category.
+            if (existing.CategoryId != categoryId &&
+                (existing.CategoryKey == null ||
+                    existing.CategoryKey.StartsWith("world.", StringComparison.OrdinalIgnoreCase)))
+            {
+                await UpdateDefinitionIntegerAsync(
+                    connection, transaction, existing.Id, "category_id", categoryId, cancellationToken);
+                changed = true;
+            }
+
             string editorKind = current.EditorKind.ToString();
             string selectionMode = current.EditorKind == MangosFieldEditorKind.BitMask
                 ? nameof(MangosFieldSelectionMode.Multiple)
@@ -211,17 +292,23 @@ namespace MangosDatabaseStudio.App.Services.FieldData
             FieldDataBuiltInMergeResult result,
             CancellationToken cancellationToken)
         {
+            // Large lookup variants can contain thousands of values. Resolve existing
+            // options once rather than scanning every SQLite row for each source value.
+            Dictionary<string, ExistingOption> optionsByValue = new(StringComparer.OrdinalIgnoreCase);
+            foreach (ExistingOption option in existingOptions)
+            {
+                // Preserve case-variant user rows without discarding either from SQLite.
+                optionsByValue.TryAdd(option.Value, option);
+            }
+
             for (int currentIndex = 0; currentIndex < currentOptions.Count; currentIndex++)
             {
                 FieldOptionSeed current = currentOptions[currentIndex];
-                ExistingOption? existing = existingOptions.FirstOrDefault(item =>
-                    string.Equals(item.Value, current.Value, StringComparison.OrdinalIgnoreCase));
-
-                if (existing == null)
+                if (!optionsByValue.TryGetValue(current.Value, out ExistingOption? existing))
                 {
                     long id = await InsertOptionAsync(
                         connection, transaction, variantId, current, currentIndex, cancellationToken);
-                    existingOptions.Add(new ExistingOption
+                    ExistingOption inserted = new()
                     {
                         Id = id,
                         VariantId = variantId,
@@ -229,7 +316,9 @@ namespace MangosDatabaseStudio.App.Services.FieldData
                         Label = current.Label,
                         Description = current.Description,
                         SortOrder = currentIndex
-                    });
+                    };
+                    existingOptions.Add(inserted);
+                    optionsByValue.Add(inserted.Value, inserted);
                     result.OptionsInserted++;
                     continue;
                 }
@@ -277,10 +366,11 @@ namespace MangosDatabaseStudio.App.Services.FieldData
             await using SqliteCommand command = connection.CreateCommand();
             command.Transaction = transaction;
             command.CommandText = @"
-SELECT id, table_name, column_name, editor_kind, selection_mode, value_handling,
-       preserve_unknown_values, description
-FROM field_definitions
-WHERE source_key = $sourceKey
+SELECT d.id, d.table_name, d.column_name, d.editor_kind, d.selection_mode, d.value_handling,
+       d.preserve_unknown_values, d.description, d.category_id, c.category_key
+FROM field_definitions AS d
+LEFT JOIN field_categories AS c ON c.id = d.category_id
+WHERE d.source_key = $sourceKey
 LIMIT 1;";
             command.Parameters.AddWithValue("$sourceKey", sourceKey);
             await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -298,7 +388,9 @@ LIMIT 1;";
                 SelectionMode = reader.GetString(4),
                 ValueHandling = reader.GetString(5),
                 PreserveUnknownValues = reader.GetInt32(6),
-                Description = reader.GetString(7)
+                Description = reader.GetString(7),
+                CategoryId = reader.IsDBNull(8) ? null : reader.GetInt64(8),
+                CategoryKey = reader.IsDBNull(9) ? null : reader.GetString(9)
             };
         }
 
@@ -401,6 +493,7 @@ ORDER BY sort_order, id;";
         private static async Task InsertDefinitionAsync(
             SqliteConnection connection,
             SqliteTransaction transaction,
+            long categoryId,
             FieldDefinitionSeed definition,
             FieldDataBuiltInMergeResult result,
             CancellationToken cancellationToken)
@@ -416,11 +509,12 @@ INSERT INTO field_definitions(
     is_system, is_enabled, priority)
 VALUES (
     $sourceKey,
-    (SELECT id FROM field_categories WHERE category_key = 'world.creature-template' LIMIT 1),
+    $categoryId,
     $displayName, $tableName, $columnName, $editorKind,
     $selectionMode, $valueHandling, 1, $description, 1, 1, 0);
 SELECT last_insert_rowid();";
                 command.Parameters.AddWithValue("$sourceKey", definition.SourceKey);
+                command.Parameters.AddWithValue("$categoryId", categoryId);
                 command.Parameters.AddWithValue("$displayName", definition.ColumnName);
                 command.Parameters.AddWithValue("$tableName", definition.TableName);
                 command.Parameters.AddWithValue("$columnName", definition.ColumnName);
@@ -545,7 +639,7 @@ SELECT last_insert_rowid();";
             SqliteTransaction transaction,
             long id,
             string column,
-            int value,
+            long value,
             CancellationToken cancellationToken)
         {
             await using SqliteCommand command = connection.CreateCommand();
@@ -655,6 +749,16 @@ SELECT last_insert_rowid();";
 
         private sealed class ExistingDefinition
         {
+            public long? CategoryId
+            {
+                get; set;
+            }
+
+            public string? CategoryKey
+            {
+                get; set;
+            }
+
             public long Id
             {
                 get; set;

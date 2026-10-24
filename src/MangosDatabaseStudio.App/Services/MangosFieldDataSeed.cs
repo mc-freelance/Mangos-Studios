@@ -7,11 +7,14 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using MangosDatabaseStudio.Application.Schema;
 using MangosDatabaseStudio.App.Services.FieldData;
-using MangosDatabaseStudio.App.Services.FieldData.CreatureTemplate;
 using Microsoft.Data.Sqlite;
 
 namespace MangosDatabaseStudio.App.Services
@@ -19,47 +22,70 @@ namespace MangosDatabaseStudio.App.Services
     internal static class MangosFieldDataSeed
     {
         private const string CatalogVersionMetadataKey = "field_catalog_version";
-        private const int CurrentCatalogVersion = 13;
+        private const string CatalogFingerprintMetadataKey = "field_catalog_source_sha256";
+        private const int CurrentCatalogVersion = 14;
 
-        // Apply  according to the available model or service contract.
-        public static async Task ApplyAsync(
+        // Synchronize all discovered C# FieldData sources into the encrypted SQLite catalog.
+        public static Task ApplyAsync(
             SqliteConnection connection,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            Action<int, int, string>? reportProgress = null)
         {
+            return ApplyAsync(connection, FieldDataSeedRegistry.Discover(), cancellationToken, reportProgress);
+        }
+
+        // A source fingerprint makes synchronization automatic after a code change without
+        // issuing thousands of SQL queries on every application startup. The overload also
+        // permits focused integration tests with small, multi-table field-data catalogs.
+        internal static async Task ApplyAsync(
+            SqliteConnection connection,
+            IReadOnlyList<FieldDefinitionSeed> definitions,
+            CancellationToken cancellationToken,
+            Action<int, int, string>? reportProgress = null)
+        {
+            // Report validation separately: an invalid source must fail before SQLite changes.
+            reportProgress?.Invoke(0, definitions.Count, "Validating Field Data source definitions...");
+            ValidateDefinitions(definitions);
+
+            string fingerprint = ComputeFingerprint(definitions);
             int installedVersion = await GetInstalledVersionAsync(connection, cancellationToken);
-            if (installedVersion >= CurrentCatalogVersion)
+            string? installedFingerprint = await GetMetadataAsync(
+                connection, CatalogFingerprintMetadataKey, cancellationToken);
+
+            // Older application binaries must not open a catalog from a newer release.
+            // Opening a mismatched catalog could silently produce incorrect editor options.
+            if (installedVersion > CurrentCatalogVersion)
             {
-                return;
+                throw new InvalidOperationException(
+                    "The Field Data catalog was created by a newer Studio release (catalog version " +
+                    installedVersion.ToString(CultureInfo.InvariantCulture) +
+                    "). Install a compatible Studio version or restore a matching database backup; " +
+                    "automatic catalog downgrades are not supported.");
             }
 
-            IReadOnlyList<FieldDefinitionSeed> definitions = CreatureTemplateFieldData.Definitions;
-            ValidateDefinitions(definitions);
+            if (installedVersion == CurrentCatalogVersion &&
+                string.Equals(installedFingerprint, fingerprint, StringComparison.Ordinal))
+            {
+                reportProgress?.Invoke(definitions.Count, definitions.Count,
+                    "Field Data is already up to date; no changes were needed.");
+                return;
+            }
 
             bool hasDefinitions = await HasDefinitionsAsync(connection, cancellationToken);
             await using SqliteTransaction transaction = connection.BeginTransaction();
             try
             {
-                if (!hasDefinitions && installedVersion <= 0)
+                if (hasDefinitions || installedVersion <= 0)
                 {
-                    // A genuinely new catalog receives the latest audited built-in baseline.
-                    // An initialized catalog whose administrator deleted every definition has a
-                    // catalog version already and must remain empty.
-                    foreach (FieldDefinitionSeed definition in definitions)
-                    {
-                        await InsertDefinitionAsync(connection, transaction, definition, cancellationToken);
-                    }
-                }
-                else if (hasDefinitions && installedVersion < CurrentCatalogVersion)
-                {
-                    // The field-data source is intentionally consolidated: each field's Create()
-                    // method is the single built-in definition for every supported generation.
-                    // Synchronize existing SQLite catalogs with the current coded source.
-                    // Built-in rows are source-authoritative; user-created rows are retained.
+                    // Apply every coded definition, including new tables, variants, generation
+                    // mappings and options. The merge never deletes administrator-added rows.
+                    // An established catalog that was deliberately emptied remains empty.
                     FieldDataBuiltInMergeResult merge = await FieldDataBuiltInMerge.ApplyCurrentAsync(
                         connection,
                         transaction,
                         definitions,
-                        cancellationToken);
+                        cancellationToken,
+                        reportProgress);
 
                     await SetMetadataAsync(
                         connection,
@@ -68,6 +94,13 @@ namespace MangosDatabaseStudio.App.Services
                         merge.ToString(),
                         cancellationToken);
                 }
+                else
+                {
+                    // An administrator intentionally cleared an established catalog.
+                    // Respect that choice while updating version metadata.
+                    reportProgress?.Invoke(definitions.Count, definitions.Count,
+                        "Field Data was intentionally emptied; built-in entries were not restored.");
+                }
 
                 await SetMetadataAsync(
                     connection,
@@ -75,17 +108,39 @@ namespace MangosDatabaseStudio.App.Services
                     CatalogVersionMetadataKey,
                     CurrentCatalogVersion.ToString(CultureInfo.InvariantCulture),
                     cancellationToken);
+                await SetMetadataAsync(
+                    connection,
+                    transaction,
+                    CatalogFingerprintMetadataKey,
+                    fingerprint,
+                    cancellationToken);
 
                 transaction.Commit();
             }
             catch
             {
+                // Never write a new source fingerprint if any catalog row failed.
                 transaction.Rollback();
                 throw;
             }
+
+            reportProgress?.Invoke(definitions.Count, definitions.Count,
+                "Field Data catalog synchronized and saved successfully.");
         }
 
-        // Validate definitions according to the available model or service contract.
+        // Hash every source field and its ordered variants/options. A change to any built-in
+        // dropdown value, bitmask flag, description or generation triggers a database merge.
+        private static string ComputeFingerprint(IReadOnlyList<FieldDefinitionSeed> definitions)
+        {
+            string json = JsonSerializer.Serialize(definitions
+                .OrderBy(definition => definition.SourceKey, StringComparer.Ordinal)
+                .ToArray());
+            byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(json));
+            return Convert.ToHexString(hash);
+        }
+
+        // Reject duplicate built-in definitions, overlapping expansion mappings, and
+        // invalid bitmask values before any SQLite transaction can modify the catalog.
         private static void ValidateDefinitions(IReadOnlyList<FieldDefinitionSeed> definitions)
         {
             HashSet<string> sourceKeys = new(StringComparer.OrdinalIgnoreCase);
@@ -93,6 +148,14 @@ namespace MangosDatabaseStudio.App.Services
 
             foreach (FieldDefinitionSeed definition in definitions)
             {
+                if (string.IsNullOrWhiteSpace(definition.SourceKey) ||
+                    string.IsNullOrWhiteSpace(definition.TableName) ||
+                    string.IsNullOrWhiteSpace(definition.ColumnName))
+                {
+                    throw new InvalidOperationException(
+                        "Built-in FieldData source keys, table names and column names cannot be empty.");
+                }
+
                 if (!sourceKeys.Add(definition.SourceKey))
                 {
                     throw new InvalidOperationException(
@@ -107,8 +170,15 @@ namespace MangosDatabaseStudio.App.Services
                 }
 
                 HashSet<int> mappedGenerations = new();
+                HashSet<string> variantKeys = new(StringComparer.OrdinalIgnoreCase);
                 foreach (FieldVariantSeed variant in definition.Variants)
                 {
+                    if (string.IsNullOrWhiteSpace(variant.Key) || !variantKeys.Add(variant.Key))
+                    {
+                        throw new InvalidOperationException(
+                            fieldKey + " contains an empty or duplicate variant key: " + variant.Key);
+                    }
+
                     if (variant.Generations.Count == 0)
                     {
                         throw new InvalidOperationException(
@@ -162,26 +232,33 @@ namespace MangosDatabaseStudio.App.Services
             }
         }
 
-        // Read installed version according to the available model or service contract.
+        // Read the catalog version independently of the C# source fingerprint.
         private static async Task<int> GetInstalledVersionAsync(
             SqliteConnection connection,
+            CancellationToken cancellationToken)
+        {
+            string? value = await GetMetadataAsync(
+                connection, CatalogVersionMetadataKey, cancellationToken);
+            return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int version)
+                ? version
+                : 0;
+        }
+
+        // Load a metadata value from the existing application database.
+        private static async Task<string?> GetMetadataAsync(
+            SqliteConnection connection,
+            string name,
             CancellationToken cancellationToken)
         {
             await using SqliteCommand command = connection.CreateCommand();
             command.CommandText =
                 "SELECT value FROM application_metadata WHERE name = $name LIMIT 1;";
-            command.Parameters.AddWithValue("$name", CatalogVersionMetadataKey);
+            command.Parameters.AddWithValue("$name", name);
             object? result = await command.ExecuteScalarAsync(cancellationToken);
-            return int.TryParse(
-                Convert.ToString(result, CultureInfo.InvariantCulture),
-                NumberStyles.Integer,
-                CultureInfo.InvariantCulture,
-                out int version)
-                ? version
-                : 0;
+            return Convert.ToString(result, CultureInfo.InvariantCulture);
         }
 
-        // Determine whether definitions according to the available model or service contract.
+        // Distinguish a new catalog from one an administrator intentionally emptied.
         private static async Task<bool> HasDefinitionsAsync(
             SqliteConnection connection,
             CancellationToken cancellationToken)
@@ -192,7 +269,7 @@ namespace MangosDatabaseStudio.App.Services
             return Convert.ToInt32(value, CultureInfo.InvariantCulture) != 0;
         }
 
-        // Set metadata according to the available model or service contract.
+        // Persist migration state and the source fingerprint atomically with the merge.
         private static async Task SetMetadataAsync(
             SqliteConnection connection,
             SqliteTransaction transaction,
@@ -211,120 +288,5 @@ ON CONFLICT(name) DO UPDATE SET value = excluded.value;";
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
-        // Insert definition according to the available model or service contract.
-        private static async Task InsertDefinitionAsync(
-            SqliteConnection connection,
-            SqliteTransaction transaction,
-            FieldDefinitionSeed definition,
-            CancellationToken cancellationToken)
-        {
-            long definitionId;
-            await using (SqliteCommand insertDefinition = connection.CreateCommand())
-            {
-                insertDefinition.Transaction = transaction;
-                insertDefinition.CommandText = @"
-INSERT INTO field_definitions(
-    source_key,
-    category_id,
-    display_name,
-    table_name,
-    column_name,
-    editor_kind,
-    selection_mode,
-    value_handling,
-    preserve_unknown_values,
-    description,
-    is_system,
-    is_enabled,
-    priority)
-VALUES (
-    $sourceKey,
-    (SELECT id FROM field_categories WHERE category_key = 'world.creature-template' LIMIT 1),
-    $columnName,
-    $tableName,
-    $columnName,
-    $editorKind,
-    $selectionMode,
-    $valueHandling,
-    1,
-    $description,
-    1,
-    1,
-    0);
-SELECT last_insert_rowid();";
-                insertDefinition.Parameters.AddWithValue("$sourceKey", definition.SourceKey);
-                insertDefinition.Parameters.AddWithValue("$tableName", definition.TableName);
-                insertDefinition.Parameters.AddWithValue("$columnName", definition.ColumnName);
-                insertDefinition.Parameters.AddWithValue(
-                    "$editorKind",
-                    definition.EditorKind.ToString());
-                bool isMultiple = definition.EditorKind == MangosFieldEditorKind.BitMask;
-                insertDefinition.Parameters.AddWithValue(
-                    "$selectionMode",
-                    isMultiple ? nameof(MangosFieldSelectionMode.Multiple) : nameof(MangosFieldSelectionMode.Single));
-                insertDefinition.Parameters.AddWithValue(
-                    "$valueHandling",
-                    isMultiple ? nameof(MangosFieldValueHandling.BitwiseOr) : nameof(MangosFieldValueHandling.Direct));
-                insertDefinition.Parameters.AddWithValue("$description", definition.Description);
-                object? result = await insertDefinition.ExecuteScalarAsync(cancellationToken);
-                definitionId = Convert.ToInt64(result, CultureInfo.InvariantCulture);
-            }
-
-            foreach (FieldVariantSeed variant in definition.Variants)
-            {
-                long variantId;
-                await using (SqliteCommand insertVariant = connection.CreateCommand())
-                {
-                    insertVariant.Transaction = transaction;
-                    insertVariant.CommandText = @"
-INSERT INTO field_variants(field_definition_id, variant_key, description)
-VALUES ($definitionId, $variantKey, $description);
-SELECT last_insert_rowid();";
-                    insertVariant.Parameters.AddWithValue("$definitionId", definitionId);
-                    insertVariant.Parameters.AddWithValue("$variantKey", variant.Key);
-                    insertVariant.Parameters.AddWithValue("$description", variant.Description);
-                    object? result = await insertVariant.ExecuteScalarAsync(cancellationToken);
-                    variantId = Convert.ToInt64(result, CultureInfo.InvariantCulture);
-                }
-
-                foreach (int generation in variant.Generations)
-                {
-                    await using SqliteCommand generationCommand = connection.CreateCommand();
-                    generationCommand.Transaction = transaction;
-                    generationCommand.CommandText = @"
-INSERT INTO field_variant_generations(field_variant_id, generation)
-VALUES ($variantId, $generation);";
-                    generationCommand.Parameters.AddWithValue("$variantId", variantId);
-                    generationCommand.Parameters.AddWithValue("$generation", generation);
-                    await generationCommand.ExecuteNonQueryAsync(cancellationToken);
-                }
-
-                for (int index = 0; index < variant.Options.Count; index++)
-                {
-                    FieldOptionSeed option = variant.Options[index];
-                    await using SqliteCommand optionCommand = connection.CreateCommand();
-                    optionCommand.Transaction = transaction;
-                    optionCommand.CommandText = @"
-INSERT INTO field_options(
-    field_variant_id,
-    value,
-    label,
-    description,
-    sort_order)
-VALUES (
-    $variantId,
-    $value,
-    $label,
-    $description,
-    $sortOrder);";
-                    optionCommand.Parameters.AddWithValue("$variantId", variantId);
-                    optionCommand.Parameters.AddWithValue("$value", option.Value);
-                    optionCommand.Parameters.AddWithValue("$label", option.Label);
-                    optionCommand.Parameters.AddWithValue("$description", option.Description);
-                    optionCommand.Parameters.AddWithValue("$sortOrder", index);
-                    await optionCommand.ExecuteNonQueryAsync(cancellationToken);
-                }
-            }
-        }
     }
 }

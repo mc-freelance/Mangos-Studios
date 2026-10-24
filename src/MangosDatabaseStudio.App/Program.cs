@@ -269,12 +269,8 @@ namespace MangosDatabaseStudio.App
                     || context.Request.Path.Equals(new PathString(DesktopSessionGate.StatusPath));
                 if (!startupEndpoint && !startupState.IsReady)
                 {
-                    if (startupState.HasFailed)
-                    {
-                        context.Response.Redirect(DesktopSessionGate.StartupPath);
-                        return;
-                    }
-
+                    // On failure, return the recovery screen only for navigational requests.
+                    // API requests are rejected with 503; no controller executes before startup.
                     if (context.Request.Method == HttpMethods.Get
                         && context.Request.Headers.Accept.ToString().Contains("text/html", StringComparison.OrdinalIgnoreCase))
                     {
@@ -308,6 +304,7 @@ namespace MangosDatabaseStudio.App
         {
             app.MapGet(DesktopSessionGate.StartupPath, async context =>
             {
+                context.Response.Headers["Cache-Control"] = "no-store";
                 context.Response.ContentType = "text/html; charset=utf-8";
                 await context.Response.WriteAsync(DesktopStartupPage.Html, context.RequestAborted).ConfigureAwait(false);
             });
@@ -315,6 +312,7 @@ namespace MangosDatabaseStudio.App
             app.MapGet(DesktopSessionGate.StatusPath, async context =>
             {
                 DesktopStartupSnapshot snapshot = startupState.GetSnapshot();
+                context.Response.Headers["Cache-Control"] = "no-store";
                 await context.Response.WriteAsJsonAsync(new
                 {
                     ready = snapshot.IsReady,
@@ -322,7 +320,16 @@ namespace MangosDatabaseStudio.App
                     progress = snapshot.Progress,
                     status = snapshot.Status,
                     detail = snapshot.Detail,
-                    message = snapshot.HasFailed ? snapshot.ErrorMessage : null
+                    message = snapshot.HasFailed ? snapshot.ErrorMessage : null,
+                    failureArea = snapshot.FailureArea,
+                    recoverySteps = snapshot.RecoverySteps,
+                    fieldData = new
+                    {
+                        visible = snapshot.FieldDataVisible,
+                        completed = snapshot.FieldDataCompleted,
+                        total = snapshot.FieldDataTotal,
+                        current = snapshot.FieldDataCurrent
+                    }
                 }, context.RequestAborted).ConfigureAwait(false);
             });
         }
@@ -340,7 +347,7 @@ namespace MangosDatabaseStudio.App
 
                 startupState.Report(8, "Starting secure workspace", "Preparing local application services and encrypted storage...");
                 await app.Services.GetRequiredService<ApplicationDatabase>()
-                    .InitializeAsync(cancellationToken, startupState.Report)
+                    .InitializeAsync(cancellationToken, startupState.Report, startupState.ReportFieldData)
                     .ConfigureAwait(false);
                 startupState.MarkReady();
             }
