@@ -9723,8 +9723,7 @@ html[data-studio-theme="premium"] :where(
     .double-spawn-pool-badge,
     .database-update-status,
     .change-storage-status,
-    .connection-method-status,
-    .operation-live-status
+    .connection-method-status
 ) {
     min-height: var(--studio-ui-pill-height);
     display: inline-flex;

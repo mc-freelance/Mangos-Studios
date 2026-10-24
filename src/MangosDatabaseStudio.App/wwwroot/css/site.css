@@ -4652,24 +4652,37 @@ html[data-theme="dark"] .desktop-zoom-shortcuts kbd {
     line-height: 1.55;
 }
 
+/* The live status is a two-line panel, not a badge. Allow changing backend
+   progress messages to wrap without spilling beyond the operation dialog. */
 .operation-live-status {
     display: grid;
-    gap: 4px;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: center;
+    gap: 5px;
+    width: 100%;
+    min-width: 0;
+    min-height: 76px;
     margin-top: 18px;
     padding: 12px 14px;
     border: 1px solid rgba(49, 89, 213, .18);
     border-radius: 12px;
     background: rgba(49, 89, 213, .055);
     text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
 }
 
 .operation-live-status strong {
+    display: block;
+    min-width: 0;
     color: var(--studio-text);
     font-size: .84rem;
     line-height: 1.35;
 }
 
 .operation-live-status span {
+    display: block;
+    min-width: 0;
     color: var(--studio-muted);
     font-size: .76rem;
     line-height: 1.45;
