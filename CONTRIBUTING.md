@@ -30,7 +30,7 @@ Common prefixes include `feat`, `fix`, `docs`, `refactor`, `test`, `build`, `cho
 
 1. Open a PR against the **default branch** (do not assume a permanent branch name).
 2. Fill in the PR template: summary, issue reference, behavior and database impact, security considerations, validation, and screenshots for visual changes.
-3. Run `dotnet restore`, `dotnet build -c Release`, and `dotnet test` on the .NET 9 solution; note any missing tests or platform-specific limitations. Run `python scripts/check_style.py` and the project's Roslyn format verification described in [CI.md](CI.md) before opening the PR.
+3. Run `dotnet restore`, `dotnet build -c Release`, and `dotnet test` on the .NET 10 solution; note any missing tests or platform-specific limitations. Run `python scripts/check_style.py` and Roslyn format verification (`dotnet format whitespace MangosDatabaseStudio.sln --verify-no-changes --no-restore`) before opening the PR.
 4. Run `node --check` on any modified standalone `.js` files if Node.js is available.
 5. Test native desktop behavior on the affected platform. For UI work, include desktop/narrow-view checks, modal overlays, and application zoom.
 6. For SQL and schema changes, explain permissions, affected tables/expansions, and recovery/rollback strategy.

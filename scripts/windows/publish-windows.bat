@@ -2,7 +2,7 @@
 rem Publish the Windows desktop application for release.
 setlocal EnableExtensions
 
-for %%I in ("%~dp0..") do set "ROOT_DIR=%%~fI\"
+for %%I in ("%~dp0..\..") do set "ROOT_DIR=%%~fI\"
 set "APP_PROJECT=%ROOT_DIR%src\MangosDatabaseStudio.App\MangosDatabaseStudio.App.csproj"
 if defined MDS_PUBLISH_DIR (set "OUTPUT_DIR=%MDS_PUBLISH_DIR%") else set "OUTPUT_DIR=%ROOT_DIR%.artifacts\windows-x64"
 if defined MDS_RUNTIME (set "RUNTIME=%MDS_RUNTIME%") else set "RUNTIME=win-x64"
@@ -35,9 +35,9 @@ call :Fail "Unknown option: %~1"
 exit /b 2
 
 :ArgumentsParsed
-where dotnet.exe >nul 2>&1 || (call :Fail "The .NET 9 SDK is not installed or is not in PATH." & exit /b 2)
+where dotnet.exe >nul 2>&1 || (call :Fail "The .NET 10 SDK is not installed or is not in PATH." & exit /b 2)
 for /f "tokens=1 delims=." %%V in ('dotnet --version 2^>nul') do set "DOTNET_MAJOR=%%V"
-if not "%DOTNET_MAJOR%"=="9" (call :Fail "This project requires the .NET 9 SDK." & exit /b 2)
+if not "%DOTNET_MAJOR%"=="10" (call :Fail "This project requires the .NET 10 SDK." & exit /b 2)
 if not exist "%APP_PROJECT%" (call :Fail "Application project was not found: %APP_PROJECT%" & exit /b 2)
 
 if exist "%OUTPUT_DIR%" rmdir /s /q "%OUTPUT_DIR%"

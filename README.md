@@ -1,9 +1,9 @@
 # MaNGOS Database Studio
 
-[![Build (Windows and Linux)](https://github.com/mc-freelance/Mangos-Studios/actions/workflows/build.yml/badge.svg)](https://github.com/mc-freelance/Mangos-Studios/actions/workflows/build.yml)
-[![Code style and source checks](https://github.com/mc-freelance/Mangos-Studios/actions/workflows/code-style.yml/badge.svg)](https://github.com/mc-freelance/Mangos-Studios/actions/workflows/code-style.yml)
+[![Build (Windows & Linux)](https://github.com/mc-freelance/Mangos-Studios/actions/workflows/build.yml/badge.svg)](https://github.com/mc-freelance/Mangos-Studios/actions/workflows/build.yml)
+[![Code Styling & Checks](https://github.com/mc-freelance/Mangos-Studios/actions/workflows/code-style.yml/badge.svg)](https://github.com/mc-freelance/Mangos-Studios/actions/workflows/code-style.yml)
 
-MaNGOS Database Studio is an open-source, desktop-only database workbench for **getMaNGOS** world databases and MySQL/MariaDB servers. It is written in **C# for .NET 9** and uses a native **Photino** desktop window with a private, loopback-only ASP.NET Core UI. It is **not intended to run as a publicly accessible web server**.
+MaNGOS Database Studio is an open-source, desktop-only database workbench for **getMaNGOS** world databases and MySQL/MariaDB servers. It is written in **C# for .NET 10** and uses a native **Photino** desktop window with a private, loopback-only ASP.NET Core UI. It is **not intended to run as a publicly accessible web server**.
 
 The application aims to let contributors inspect, manage, and prepare database changes through a consistent interface while respecting the schema differences between MaNGOS expansions.
 
@@ -33,12 +33,12 @@ See [REQUIREMENTS.md](REQUIREMENTS.md) for the .NET SDK, operating-system librar
 
 Every push and pull request runs two GitHub Actions workflows:
 
-- **Build (Windows and Linux)** — restores and builds the complete .NET 9 solution in Release configuration on Windows and Ubuntu, then invokes any .NET tests in the solution.
+- **Build (Windows and Linux)** — restores and builds the complete .NET 10 solution in Release configuration on Windows and Ubuntu, then invokes any .NET tests in the solution.
 - **Code style and source checks** — verifies the project-specific C#/JavaScript brace and block spacing rules, AGPL headers for C# files, the no-XML-documentation rule, source whitespace, JavaScript syntax, and Roslyn C# whitespace formatting.
 
-See [CI.md](CI.md) for the workflow status names, how to run the checks locally, and recommended branch protection settings. Both workflows use read-only repository access; neither launches the desktop application or enables the experimental Hardware Device feature.
+See [.github/workflows/build.yml](.github/workflows/build.yml) and [.github/workflows/code-style.yml](.github/workflows/code-style.yml) for the checks, and [REQUIREMENTS.md](REQUIREMENTS.md#validating-source-style-locally) for local validation commands. Both workflows use read-only repository access; neither launches the desktop application or enables the experimental Hardware Device feature.
 
-From the repository root, with **.NET 9 SDK** installed:
+From the repository root, with **.NET 10 SDK** installed:
 
 ```bash
 dotnet restore MangosDatabaseStudio.sln
@@ -48,14 +48,14 @@ dotnet build MangosDatabaseStudio.sln --configuration Release
 To launch on Linux:
 
 ```bash
-chmod +x scripts/run-linux.sh
-./scripts/run-linux.sh
+chmod +x scripts/linux/run-linux.sh
+./scripts/linux/run-linux.sh
 ```
 
 To launch on Windows:
 
 ```bat
-scripts\run-windows.bat
+scripts\windows\run-windows.bat
 ```
 
 The desktop process uses a private local HTTP listener for its UI and requires a per-launch desktop session. Do not expose that listener on the network.
@@ -74,9 +74,8 @@ The desktop process uses a private local HTTP listener for its UI and requires a
 ├── scripts/                                     # Run, validate, publish, and package scripts
 ├── packaging/linux/                             # Polkit policy and deployable helper scripts
 ├── .github/workflows/                           # Windows/Linux build and source style CI
-├── tests/                                       # Source-style checker regression tests
+├── tests/                                       # Style regression and Field Data integration checks
 ├── MangosDatabaseStudio.sln
-├── CI.md
 ├── REQUIREMENTS.md
 ├── PROJECT_RULES.md
 ├── CONTRIBUTING.md
@@ -87,11 +86,11 @@ The desktop process uses a private local HTTP listener for its UI and requires a
 
 | Task | Linux | Windows |
 | --- | --- | --- |
-| Run from source | `./scripts/run-linux.sh` | `scripts\run-windows.bat` |
-| Publish | `./scripts/publish-linux.sh --self-contained` | `scripts\publish-windows.bat --self-contained` |
-| Create release | `./scripts/package-app.sh --version 0.1.0` | `scripts\package-app.bat --version 0.1.0` |
-| Validate | `dotnet restore/build/test` | `scripts\validate-windows.bat` |
-| Optional firmware helper installation | `./scripts/install-linux-hardware-helper.sh` | Not applicable |
+| Run from source | `./scripts/linux/run-linux.sh` | `scripts\windows\run-windows.bat` |
+| Publish | `./scripts/linux/publish-linux.sh --self-contained` | `scripts\windows\publish-windows.bat --self-contained` |
+| Create release | `./scripts/linux/package-app.sh --version 0.1.0` | `scripts\windows\package-app.bat --version 0.1.0` |
+| Validate | `dotnet restore/build/test` | `scripts\windows\validate-windows.bat` |
+| Optional firmware helper installation | `./scripts/linux/install-linux-hardware-helper.sh` | Not applicable |
 
 Scripts resolve the repository root relative to their own location and may be invoked from any working directory. Installation of the optional Linux helper is **not required** to build or run the normal app.
 

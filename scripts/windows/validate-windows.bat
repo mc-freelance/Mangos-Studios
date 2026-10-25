@@ -2,7 +2,7 @@
 rem Restore, build, test, and check JavaScript before publishing.
 setlocal EnableExtensions
 
-for %%I in ("%~dp0..") do set "ROOT_DIR=%%~fI\"
+for %%I in ("%~dp0..\..") do set "ROOT_DIR=%%~fI\"
 set "SOLUTION=%ROOT_DIR%MangosDatabaseStudio.sln"
 set "JS_DIR=%ROOT_DIR%src\MangosDatabaseStudio.App\wwwroot\js"
 set "CONFIGURATION=Release"
@@ -16,12 +16,12 @@ if not "%~1"=="" if /I not "%~1"=="--debug" (
 )
 
 where dotnet.exe >nul 2>&1 || (
-    echo Error: The .NET 9 SDK is not installed or is not in PATH. 1>&2
+    echo Error: The .NET 10 SDK is not installed or is not in PATH. 1>&2
     exit /b 2
 )
 for /f "tokens=1 delims=." %%V in ('dotnet --version 2^>nul') do set "DOTNET_MAJOR=%%V"
-if not "%DOTNET_MAJOR%"=="9" (
-    echo Error: This project requires the .NET 9 SDK. 1>&2
+if not "%DOTNET_MAJOR%"=="10" (
+    echo Error: This project requires the .NET 10 SDK. 1>&2
     exit /b 2
 )
 if not exist "%SOLUTION%" (

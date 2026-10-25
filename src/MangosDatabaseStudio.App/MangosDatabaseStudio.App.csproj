@@ -1,15 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>MangosDatabaseStudio.App</RootNamespace>
     <AssemblyName>MangosDatabaseStudio</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="9.0.18" />
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="10.0.13" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlcipher" Version="2.1.11" />
     <PackageReference Include="Photino.NET" Version="4.0.16" />
-    <PackageReference Include="System.Management" Version="9.0.18" />
+    <PackageReference Include="System.Management" Version="10.0.13" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\MangosDatabaseStudio.Application\MangosDatabaseStudio.Application.csproj" />

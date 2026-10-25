@@ -11,7 +11,7 @@ These rules apply to source code, documentation, database operations, visual cha
 
 ## 2. C# style and maintainability
 
-- Continue targeting **.NET 9 (`net9.0`) and C# 9**, unless a separate approved change updates the tooling and target framework.
+- Continue targeting **.NET 10 (`net10.0`) and C# 14**, unless a separate approved change updates the tooling and target framework.
 - Open braces for all control statements on their **own line**, including `if`, `else if`, `else`, `for`, `foreach`, `while`, `do`, `switch`, `using`, and `try`/`catch`/`finally`.
 - Always include braces for control blocks; avoid compact single-line conditional statements.
 - Add a blank line after the **closing brace of a completed outer control block** before starting the next statement, where it improves separation. Do **not** insert blank lines between a nested block's final brace and its enclosing closing brace.
@@ -53,9 +53,9 @@ if (anotherCondition)
 
 ## 5. Testing and review
 
-- Build the affected solution with .NET 9; run existing tests and add tests for new logic where practicable.
+- Build the affected solution with .NET 10; run existing tests and add tests for new logic where practicable.
 - Perform manual checks for data modification, permission boundaries, and user-facing pages if there is no automated coverage.
 - Confirm that no secrets, runtime files, generated artifacts, or unexpected binary files are staged.
 - Include concise comments or documentation for new functions, complex operations, and noteworthy behavior changes.
-- Run `python scripts/check_style.py` and verify Roslyn formatting with `dotnet format whitespace MangosDatabaseStudio.sln --verify-no-changes --no-restore` after restoring dependencies. See [CI.md](CI.md).
+- Run `python scripts/check_style.py` and verify Roslyn formatting with `dotnet format whitespace MangosDatabaseStudio.sln --verify-no-changes --no-restore` after restoring dependencies. See [.github/workflows/code-style.yml](.github/workflows/code-style.yml).
 - Follow the branch, commit, and PR process in [CONTRIBUTING.md](CONTRIBUTING.md).

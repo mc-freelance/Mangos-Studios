@@ -2,7 +2,7 @@
 rem Package Windows desktop releases after validation.
 setlocal EnableExtensions
 
-for %%I in ("%~dp0..") do set "ROOT_DIR=%%~fI\"
+for %%I in ("%~dp0..\..") do set "ROOT_DIR=%%~fI\"
 set "VERSION="
 set "STAGE=Alpha"
 set "RUNTIME=win-x64"
@@ -57,7 +57,7 @@ exit /b 2
 
 :ArgumentsParsed
 if not defined VERSION (call :Fail "--version is required, for example --version 0.1.3." & exit /b 2)
-where dotnet.exe >nul 2>&1 || (call :Fail "The .NET 9 SDK is not installed or is not in PATH." & exit /b 2)
+where dotnet.exe >nul 2>&1 || (call :Fail "The .NET 10 SDK is not installed or is not in PATH." & exit /b 2)
 where powershell.exe >nul 2>&1 || (call :Fail "Windows PowerShell is required for checksums and ZIP creation." & exit /b 2)
 
 set "PACKAGE_NAME=MangosDatabaseStudio-%VERSION%-%STAGE%-%RUNTIME%"
@@ -95,7 +95,7 @@ for %%F in (LICENSE README.md REQUIREMENTS.md DEVICE_IDENTITY.md PRIVACY.md) do 
 >>"%PACKAGE_DIR%\README-PACKAGE.txt" echo SQL imports require mysql.exe or mariadb.exe in PATH.
 >>"%PACKAGE_DIR%\README-PACKAGE.txt" echo SQL exports require mysqldump.exe or mariadb-dump.exe in PATH.
 
-powershell -NoProfile -Command "$utc=[DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'); @('Mangos Database Studio','Application version: %VERSION%','Release stage: %STAGE%','Runtime identifier: %RUNTIME%','Build time (UTC): '+$utc,'Framework: .NET 9 self-contained','Configuration: Release') | Set-Content -Encoding UTF8 -Path '%PACKAGE_DIR%\BUILD-INFO.txt'"
+powershell -NoProfile -Command "$utc=[DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'); @('Mangos Database Studio','Application version: %VERSION%','Release stage: %STAGE%','Runtime identifier: %RUNTIME%','Build time (UTC): '+$utc,'Framework: .NET 10 self-contained','Configuration: Release') | Set-Content -Encoding UTF8 -Path '%PACKAGE_DIR%\BUILD-INFO.txt'"
 if errorlevel 1 exit /b %ERRORLEVEL%
 
 powershell -NoProfile -Command "$root=(Resolve-Path '%PACKAGE_DIR%').Path; Get-ChildItem -LiteralPath $root -File -Recurse | Where-Object Name -ne 'SHA256SUMS.txt' | Sort-Object FullName | ForEach-Object { $h=(Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant(); $r=$_.FullName.Substring($root.Length+1).Replace('\','/'); $h+'  '+$r } | Set-Content -Encoding ASCII -Path (Join-Path $root 'SHA256SUMS.txt')"

@@ -2,7 +2,7 @@
 # Publish the Linux desktop binary and optional hardware-helper integration.
 set -Eeuo pipefail
 
-ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 APP_PROJECT="$ROOT_DIR/src/MangosDatabaseStudio.App/MangosDatabaseStudio.App.csproj"
 HELPER_PROJECT="$ROOT_DIR/src/MangosDatabaseStudio.HardwareIdentityHelper/MangosDatabaseStudio.HardwareIdentityHelper.csproj"
 LINUX_INTEGRATION="$ROOT_DIR/packaging/linux"
@@ -44,8 +44,8 @@ while (($# > 0)); do
     esac
 done
 
-command -v dotnet >/dev/null 2>&1 || fail "The .NET 9 SDK is not installed or is not in PATH."
-[[ "$(dotnet --version | cut -d. -f1)" == "9" ]] || fail "This project requires the .NET 9 SDK."
+command -v dotnet >/dev/null 2>&1 || fail "The .NET 10 SDK is not installed or is not in PATH."
+[[ "$(dotnet --version | cut -d. -f1)" == "10" ]] || fail "This project requires the .NET 10 SDK."
 [[ -f "$APP_PROJECT" ]] || fail "Application project was not found: $APP_PROJECT"
 [[ -f "$HELPER_PROJECT" ]] || fail "Hardware identity helper project was not found: $HELPER_PROJECT"
 

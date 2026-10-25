@@ -36,10 +36,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install .NET 9 SDK
+      - name: Install .NET 10 SDK
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '9.0.x'
+          dotnet-version: '10.0.x'
           skip-lts-prepass: true
           check-latest: false
 

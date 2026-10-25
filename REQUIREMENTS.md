@@ -5,13 +5,13 @@ This file lists the dependencies of the supplied source tree, not a promise of c
 ## Required for building
 
 - **64-bit Windows or Linux** with a graphical desktop session for running the application.
-- **.NET SDK 9.0**, selected by `global.json` (`9.0.100` with `latestFeature` roll-forward). The project targets **`net9.0`** and pins C# **9.0** in `Directory.Build.props`; do not silently upgrade its target framework or language version.
+- **.NET SDK 10.x**, selected by `global.json` (`10.0.100` with `latestFeature` roll-forward). Every project targets **`net10.0`**, with C# **14.0** in `Directory.Build.props`. The roll-forward policy stays within SDK 10; other projects can continue using an installed .NET 9 SDK independently.
 - Internet access during the first `dotnet restore` to obtain NuGet dependencies, or a fully configured offline NuGet cache.
 - No Node.js, npm, Java, PHP, or external browser is required to build the core C# solution. **Node.js is optional** for checking JavaScript syntax.
 
-The main desktop host uses **Photino.NET 4.0.16**, **Microsoft.Data.Sqlite.Core 9.0.18**, **SQLitePCLRaw.bundle_e_sqlcipher 2.1.11**, **System.Management 9.0.18**, and **MySqlConnector 2.6.1** in its project references. `dotnet restore` obtains transitive dependencies.
+The main desktop host uses **Photino.NET 4.0.16**, **Microsoft.Data.Sqlite.Core 10.0.13**, **SQLitePCLRaw.bundle_e_sqlcipher 2.1.11**, **System.Management 10.0.13**, and **MySqlConnector 2.6.1** in its project references. `dotnet restore` obtains transitive dependencies.
 
-> **Maintenance note:** .NET 9 is a short-term support release. Assess its support and security status before shipping public binaries; an upgrade should be reviewed and tested separately rather than hidden in a documentation-only change.
+> **Framework policy:** This repository targets .NET 10 LTS. Do not upgrade the SDK, target framework, or C# language version without a reviewed change that also updates CI and documentation.
 
 ## Runtime requirements
 
@@ -37,7 +37,11 @@ dotnet build MangosDatabaseStudio.sln -c Release --no-restore
 dotnet test MangosDatabaseStudio.sln -c Release --no-build --no-restore
 ```
 
-The solution has no dedicated test project in the supplied snapshot; `dotnet test` may complete without executing application tests. For meaningful contributions, add automated tests and document manual checks for affected database operations and views.
+The solution does not contain a conventional VSTest test assembly. `dotnet test` can complete without executing application tests; run the separate Field Data integration-check console project explicitly as shown below, and document manual checks for database operations and views.
+
+```bash
+dotnet run --project tests/MangosDatabaseStudio.FieldDataChecks/MangosDatabaseStudio.FieldDataChecks.csproj --configuration Release
+```
 
 ## Validating source style locally
 
@@ -52,20 +56,20 @@ dotnet format whitespace MangosDatabaseStudio.sln --verify-no-changes --no-resto
 
 To validate JavaScript syntax, run `node --check` on each `.js` file under `src/MangosDatabaseStudio.App/wwwroot/js`. GitHub Actions performs this automatically. Windows contributors can use `py -3` for the Python commands.
 
-See [CI.md](CI.md) for the detailed style rules, workflow design, and troubleshooting notes.
+For style requirements, see [PROJECT_RULES.md](PROJECT_RULES.md); for automated checks, see [.github/workflows/code-style.yml](.github/workflows/code-style.yml) and [.github/workflows/build.yml](.github/workflows/build.yml).
 
 ## Running
 
 Linux:
 
 ```bash
-./scripts/run-linux.sh
+./scripts/linux/run-linux.sh
 ```
 
 Windows:
 
 ```bat
-scripts\run-windows.bat
+scripts\windows\run-windows.bat
 ```
 
 On Linux, ensure `DISPLAY` or `WAYLAND_DISPLAY` is set in a graphical session. Do **not** launch the main desktop app with `sudo`.
@@ -75,24 +79,24 @@ On Linux, ensure `DISPLAY` or `WAYLAND_DISPLAY` is set in a graphical session. D
 Linux:
 
 ```bash
-./scripts/publish-linux.sh --self-contained
-./scripts/package-app.sh --version 0.1.0 --platform linux
+./scripts/linux/publish-linux.sh --self-contained
+./scripts/linux/package-app.sh --version 0.1.0 --platform linux
 ```
 
 Windows:
 
 ```bat
-scripts\publish-windows.bat --self-contained
-scripts\package-app.bat --version 0.1.0
+scripts\windows\publish-windows.bat --self-contained
+scripts\windows\package-app.bat --version 0.1.0
 ```
 
-Published binaries are desktop applications, not a separate HTTP server. If you use a framework-dependent publish, the corresponding **.NET 9 runtime** must also be installed on the target system. Self-contained publish bundles that runtime, but native desktop libraries may still be needed.
+Published binaries are desktop applications, not a separate HTTP server. If you use a framework-dependent publish, the corresponding **.NET 10 runtime** must also be installed on the target system. Self-contained publish bundles that runtime, but native desktop libraries may still be needed.
 
 Application data is created under `App_Data/`. **Never include populated `App_Data` when committing or distributing source/packages.** For the optional firmware helper consult [DEVICE_IDENTITY.md](DEVICE_IDENTITY.md).
 
 ## Troubleshooting
 
-- **SDK mismatch:** Verify `dotnet --list-sdks`, `global.json`, and that SDK 9.0 is selected.
+- **SDK mismatch:** Verify `dotnet --list-sdks`, `global.json`, and that SDK 10.x is selected.
 - **Native window won't start on Linux:** Check GTK 3, WebKitGTK, and a graphical session.
 - **Database tools not found:** Install the matching MySQL/MariaDB CLI client tools and configure their executable paths.
 - **Import/export permission issues:** Confirm your server account's database privileges and filesystem permissions.

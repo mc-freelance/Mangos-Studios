@@ -2,7 +2,7 @@
 # Create reproducible desktop release packages for both target platforms.
 set -Eeuo pipefail
 
-ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 SOLUTION="$ROOT_DIR/MangosDatabaseStudio.sln"
 APP_PROJECT="$ROOT_DIR/src/MangosDatabaseStudio.App/MangosDatabaseStudio.App.csproj"
 HELPER_PROJECT="$ROOT_DIR/src/MangosDatabaseStudio.HardwareIdentityHelper/MangosDatabaseStudio.HardwareIdentityHelper.csproj"
@@ -75,8 +75,8 @@ done
 
 [[ -n "$APP_VERSION" ]] || fail "--version is required, for example --version 0.1.3."
 [[ "$PLATFORM" == "all" || "$PLATFORM" == "linux" || "$PLATFORM" == "windows" ]] || fail "Platform must be all, linux, or windows."
-command -v dotnet >/dev/null 2>&1 || fail "The .NET 9 SDK is not installed or is not in PATH."
-[[ "$(dotnet --version | cut -d. -f1)" == "9" ]] || fail "This project requires the .NET 9 SDK."
+command -v dotnet >/dev/null 2>&1 || fail "The .NET 10 SDK is not installed or is not in PATH."
+[[ "$(dotnet --version | cut -d. -f1)" == "10" ]] || fail "This project requires the .NET 10 SDK."
 for file in "$SOLUTION" "$APP_PROJECT" "$HELPER_PROJECT"; do [[ -f "$file" ]] || fail "Required file was not found: $file"; done
 mkdir -p "$OUTPUT_ROOT"
 export DOTNET_NOLOGO=1 DOTNET_CLI_TELEMETRY_OPTOUT=1
@@ -119,7 +119,7 @@ Application version: $APP_VERSION
 Release stage: $RELEASE_STAGE
 Runtime identifier: $runtime
 Platform: $os_name
-Framework: .NET 9 self-contained
+Framework: .NET 10 self-contained
 Configuration: Release
 Build time (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF_INFO

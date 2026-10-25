@@ -48,10 +48,10 @@ jobs:
               node --check "$file"
           done < <(find src/MangosDatabaseStudio.App/wwwroot/js -type f -name '*.js' -print0)
 
-      - name: Install .NET 9 SDK
+      - name: Install .NET 10 SDK
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '9.0.x'
+          dotnet-version: '10.0.x'
           skip-lts-prepass: true
           check-latest: false
 

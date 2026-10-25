@@ -3,7 +3,7 @@
 
 set -Eeuo pipefail
 
-ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 PROJECT="$ROOT_DIR/src/MangosDatabaseStudio.HardwareIdentityHelper/MangosDatabaseStudio.HardwareIdentityHelper.csproj"
 INSTALLER="$ROOT_DIR/packaging/linux/install-hardware-helper.sh"
 POLICY="$ROOT_DIR/packaging/linux/org.mangosdatabasestudio.deviceidentity.policy"
@@ -17,9 +17,9 @@ fail() {
 }
 
 [[ "$(uname -s)" == "Linux" ]] || fail "The privileged DMI helper is supported only on Linux."
-command -v dotnet >/dev/null 2>&1 || fail "The .NET 9 SDK is required to build the helper."
+command -v dotnet >/dev/null 2>&1 || fail "The .NET 10 SDK is required to build the helper."
 command -v sudo >/dev/null 2>&1 || fail "sudo is required for the one-time system installation."
-[[ "$(dotnet --version | cut -d. -f1)" == "9" ]] || fail "The .NET 9 SDK is required."
+[[ "$(dotnet --version | cut -d. -f1)" == "10" ]] || fail "The .NET 10 SDK is required."
 [[ -f "$PROJECT" ]] || fail "Helper project was not found: $PROJECT"
 [[ -f "$INSTALLER" ]] || fail "Helper installer was not found: $INSTALLER"
 [[ -f "$POLICY" ]] || fail "Polkit policy was not found: $POLICY"
