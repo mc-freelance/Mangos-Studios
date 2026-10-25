@@ -10788,3 +10788,425 @@ html[data-studio-theme="premium"]:has(.modal-backdrop) {
     background-image: linear-gradient(var(--mangos-canvas), var(--mangos-canvas));
 }
 
+/* Viewer and form alignment refinement ----------------------------------
+   Keep compact metadata sized to its text, controls on shared baselines,
+   and action columns consistent across the World Viewers and administration
+   screens. Data-specific column widths remain owned by their respective views. */
+
+html[data-studio-theme="premium"] :where(
+    .viewer-search-form,
+    .world-filter-bar,
+    .field-data-filter-bar,
+    .table-toolbar,
+    .form-grid,
+    .viewer-editor-form-grid,
+    .gossip-option-form-grid
+) > * {
+    min-width: 0;
+}
+
+/* Inputs, selectors and adjacent buttons share control heights, including
+   within grouped inputs. Do not resize multiline textareas. */
+
+html[data-studio-theme="premium"] :where(
+    .world-filter-search,
+    .world-filter-select .form-select,
+    .viewer-search-field .input-group,
+    .viewer-search-field .input-group-text,
+    .viewer-search-field .form-control,
+    .viewer-search-button
+) {
+    min-height: var(--studio-ui-control);
+}
+
+html[data-studio-theme="premium"] .viewer-search-field .input-group {
+    display: flex;
+    align-items: stretch;
+    min-width: 0;
+    flex-wrap: nowrap;
+}
+
+html[data-studio-theme="premium"] .viewer-search-field .input-group > .form-control {
+    flex: 1 1 auto;
+    width: 1%;
+    min-width: 0;
+    height: var(--studio-ui-control);
+}
+
+html[data-studio-theme="premium"] .viewer-search-field .input-group > .input-group-text {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+html[data-studio-theme="premium"] .viewer-context-card {
+    min-height: 64px;
+    height: 100%;
+    align-content: center;
+}
+
+html[data-studio-theme="premium"] .viewer-search-button {
+    align-self: center;
+    height: var(--studio-ui-control);
+    min-height: var(--studio-ui-control);
+    margin: 0;
+}
+
+html[data-studio-theme="premium"] :where(
+    .panel-header-actions,
+    .record-command-actions,
+    .viewer-record-actions,
+    .viewer-results-toolbar,
+    .viewer-record-pagination-wrap,
+    .form-actions
+) :where(.btn, .form-select, .form-control) {
+    vertical-align: middle;
+}
+
+/* Keep pagination labels and selectors grouped rather than letting their
+   controls drift when their corresponding result description wraps. */
+
+html[data-studio-theme="premium"] .viewer-results-toolbar {
+    align-items: center;
+}
+
+html[data-studio-theme="premium"] :where(
+    .viewer-results-toolbar,
+    .viewer-record-page-size,
+    .world-filter-select
+) > label {
+    margin-bottom: 0;
+}
+
+html[data-studio-theme="premium"] :where(
+    .viewer-results-toolbar,
+    .viewer-record-page-size
+) .world-filter-select {
+    min-width: 0;
+}
+
+html[data-studio-theme="premium"] :where(
+    .viewer-results-toolbar,
+    .viewer-record-page-size
+) .form-select {
+    min-height: var(--studio-ui-control);
+}
+
+/* Relationship type labels must stay content-sized. A grid item defaults
+   to stretch, which previously produced very wide, mostly empty code badges
+   in Quest chains, Pool members, Events and related World Viewer tables. */
+
+html[data-studio-theme="premium"] .viewer-member-type > div {
+    align-content: center;
+    justify-items: start;
+}
+
+html[data-studio-theme="premium"] .viewer-member-type strong {
+    display: block;
+    max-width: 100%;
+    white-space: normal;
+}
+
+html[data-studio-theme="premium"] .viewer-member-type code {
+    display: inline-block;
+    box-sizing: border-box;
+    width: max-content;
+    max-width: 100%;
+    min-height: 0;
+    padding: 2px 6px;
+    border: 1px solid var(--studio-border-soft);
+    border-radius: 5px;
+    color: var(--studio-muted);
+    background: var(--studio-panel-soft);
+    font-size: .62rem;
+    font-weight: 500;
+    line-height: 1.25;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+}
+
+/* A stored reference is a short inline data token, not a cell-wide banner. */
+
+html[data-studio-theme="premium"] .viewer-record-table td.viewer-table-center > code {
+    display: inline-block;
+    box-sizing: border-box;
+    max-width: 100%;
+    padding: 3px 7px;
+    border: 1px solid var(--studio-border-soft);
+    border-radius: 5px;
+    color: var(--workspace-accent);
+    background: rgba(var(--workspace-accent-rgb), .045);
+    font-size: .63rem;
+    font-weight: 500;
+    line-height: 1.3;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: left;
+    text-overflow: clip;
+}
+
+/* Short state badges should hug their label and match the common pill
+   rhythm without sacrificing readability for the dense viewer tables. */
+
+html[data-studio-theme="premium"] .viewer-resolved-entity > span {
+    box-sizing: border-box;
+    width: fit-content;
+    min-height: 21px;
+    max-width: 100%;
+    align-items: center;
+    justify-self: start;
+    padding: 3px 7px;
+    font-size: .61rem;
+    line-height: 1.2;
+    white-space: normal;
+}
+
+html[data-studio-theme="premium"] :where(
+    .viewer-record-section-header,
+    .viewer-results-header
+) > .badge {
+    width: max-content;
+    max-width: 100%;
+    min-height: var(--studio-ui-pill-height);
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 3px 9px;
+    border: 1px solid rgba(var(--workspace-accent-rgb), .15);
+    color: var(--workspace-accent);
+    background: rgba(var(--workspace-accent-rgb), .07);
+    font-size: var(--studio-ui-pill-font);
+    line-height: 1.2;
+}
+
+/* Equal action targets and consistent vertical centering in all viewer
+   directories and selected-record tables. */
+
+html[data-studio-theme="premium"] :where(
+    .viewer-results-table,
+    .viewer-record-table
+) tbody td {
+    vertical-align: middle;
+}
+
+html[data-studio-theme="premium"] :where(
+    .viewer-results-table,
+    .viewer-record-table
+) .viewer-action-column {
+    vertical-align: middle;
+    text-align: center;
+}
+
+html[data-studio-theme="premium"] :where(
+    .viewer-results-table,
+    .viewer-record-table
+) td.viewer-action-column > :where(a.icon-button, button.icon-button) {
+    display: inline-grid;
+    place-items: center;
+    width: var(--studio-ui-icon-button);
+    height: var(--studio-ui-icon-button);
+    padding: 0;
+    vertical-align: middle;
+}
+
+html[data-studio-theme="premium"] .viewer-record-table .viewer-member-type {
+    min-width: 0;
+}
+
+/* At narrower sizes keep the search button in its own predictable row,
+   and scroll wide data tables instead of compressing their action buttons. */
+
+@media (max-width: 1260px) {
+    html[data-studio-theme="premium"] .viewer-search-form > .viewer-search-button {
+        justify-self: stretch;
+    }
+}
+
+@media (max-width: 700px) {
+    html[data-studio-theme="premium"] .viewer-search-form > .viewer-search-button {
+        width: 100%;
+    }
+
+    html[data-studio-theme="premium"] .viewer-record-section-header > .badge {
+        align-self: flex-start;
+    }
+}
+
+/* Unified search fields -------------------------------------------------
+   Viewer filters and other icon-led searches should read as one control.
+   Keep the icon, input, outline, and focus treatment aligned at every zoom. */
+
+html[data-studio-theme="premium"] :is(
+    .viewer-search-field,
+    .double-spawn-name-search,
+    .change-storage-search
+) > .input-group {
+    --studio-search-height: var(--studio-ui-control);
+    display: flex;
+    align-items: stretch;
+    flex-wrap: nowrap;
+    width: 100%;
+    min-width: 0;
+    height: var(--studio-search-height);
+    min-height: var(--studio-search-height);
+    border: 1px solid var(--mangos-surface-edge-strong);
+    border-radius: var(--studio-ui-radius-sm);
+    background: var(--studio-input);
+    box-shadow: var(--mangos-control-shadow);
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+html[data-studio-theme="premium"] .double-spawn-name-search > .input-group {
+    --studio-search-height: 38px;
+}
+
+html[data-studio-theme="premium"] .change-storage-search > .input-group {
+    --studio-search-height: var(--studio-ui-control-sm);
+}
+
+html[data-studio-theme="premium"] :is(
+    .viewer-search-field,
+    .double-spawn-name-search,
+    .change-storage-search
+) > .input-group > .input-group-text {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 36px;
+    width: 36px;
+    height: auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-right: 1px solid var(--studio-border-soft);
+    border-radius: var(--studio-ui-radius-sm) 0 0 var(--studio-ui-radius-sm);
+    color: var(--studio-muted);
+    background: var(--studio-panel-soft);
+    box-shadow: none;
+}
+
+html[data-studio-theme="premium"] .change-storage-search > .input-group > .input-group-text {
+    flex-basis: 30px;
+    width: 30px;
+}
+
+html[data-studio-theme="premium"] :is(
+    .viewer-search-field,
+    .double-spawn-name-search,
+    .change-storage-search
+) > .input-group > .form-control {
+    flex: 1 1 auto;
+    width: 1%;
+    min-width: 0;
+    height: auto;
+    min-height: 0;
+    margin: 0;
+    padding-inline: 11px;
+    border: 0;
+    border-radius: 0 var(--studio-ui-radius-sm) var(--studio-ui-radius-sm) 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+html[data-studio-theme="premium"] :is(
+    .viewer-search-field,
+    .double-spawn-name-search,
+    .change-storage-search
+) > .input-group:hover {
+    border-color: rgba(var(--workspace-accent-rgb), .34);
+}
+
+html[data-studio-theme="premium"] :is(
+    .viewer-search-field,
+    .double-spawn-name-search,
+    .change-storage-search
+) > .input-group:focus-within {
+    border-color: rgba(var(--workspace-accent-rgb), .6);
+    box-shadow: 0 0 0 3px rgba(var(--workspace-accent-rgb), .12), var(--mangos-control-shadow);
+}
+
+html[data-studio-theme="premium"] :is(
+    .viewer-search-field,
+    .double-spawn-name-search,
+    .change-storage-search
+) > .input-group > .form-control:focus {
+    border: 0;
+    outline: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+
+/* Viewer search filters -------------------------------------------------
+   A search input with a trailing filter is a single compound control.
+   Give the select a shared outline and height instead of a second, floating
+   field; plain search controls keep their existing appearance. */
+
+html[data-studio-theme="premium"] .viewer-search-field > .input-group > .form-control:has(+ .form-select) {
+    border-radius: 0;
+}
+
+html[data-studio-theme="premium"] .viewer-search-field > .input-group > .form-select {
+    flex: 0 1 178px;
+    width: auto;
+    min-width: 125px;
+    max-width: 44%;
+    height: auto;
+    min-height: 0;
+    align-self: stretch;
+    margin: 0;
+    padding: 0 2rem 0 .7rem;
+    border: 0;
+    border-left: 1px solid var(--studio-border-soft);
+    border-radius: 0 var(--studio-ui-radius-sm) var(--studio-ui-radius-sm) 0;
+    color: var(--studio-text);
+    background-color: var(--studio-panel-soft);
+    background-position: right .7rem center;
+    box-shadow: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+html[data-studio-theme="premium"] .viewer-search-field > .input-group > .form-select:hover:not(:disabled) {
+    border-color: var(--studio-border-soft);
+    background-color: var(--studio-panel-soft);
+}
+
+html[data-studio-theme="premium"] .viewer-search-field > .input-group > .form-select:focus {
+    border-color: var(--studio-border-soft);
+    outline: 0;
+    background-color: var(--studio-panel-soft);
+    box-shadow: none;
+}
+
+/* On narrow screens, keep both controls usable without squeezing the
+   search input or pushing the filter outside the panel. */
+
+@media (max-width: 640px) {
+    html[data-studio-theme="premium"] .viewer-search-field > .input-group:has(> .form-select) {
+        height: auto;
+        flex-wrap: wrap;
+    }
+
+    html[data-studio-theme="premium"] .viewer-search-field > .input-group:has(> .form-select) > .input-group-text {
+        height: var(--studio-search-height);
+    }
+
+    html[data-studio-theme="premium"] .viewer-search-field > .input-group:has(> .form-select) > .form-control {
+        flex: 1 1 calc(100% - 36px);
+        width: calc(100% - 36px);
+        height: var(--studio-search-height);
+        border-radius: 0 var(--studio-ui-radius-sm) 0 0;
+    }
+
+    html[data-studio-theme="premium"] .viewer-search-field > .input-group > .form-select {
+        flex: 1 0 100%;
+        width: 100%;
+        max-width: 100%;
+        height: var(--studio-search-height);
+        border: 0;
+        border-top: 1px solid var(--studio-border-soft);
+        border-radius: 0 0 var(--studio-ui-radius-sm) var(--studio-ui-radius-sm);
+    }
+}

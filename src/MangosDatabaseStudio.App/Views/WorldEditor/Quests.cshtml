@@ -124,7 +124,11 @@
                             <strong>None</strong>
                             <p>Select a quest below</p>
                         }
-                        else { <strong>Quest @Model.SelectedQuest.Quest.Entry</strong><p>@Model.SelectedQuest.Quest.TotalRelationCount.ToString("N0") world relationship@(Model.SelectedQuest.Quest.TotalRelationCount == 1 ? string.Empty : "s")</p> }
+                        else
+                        {
+                            <strong>Quest @Model.SelectedQuest.Quest.Entry</strong>
+                            <p>@Model.SelectedQuest.Quest.TotalRelationCount.ToString("N0") world relationship@(Model.SelectedQuest.Quest.TotalRelationCount == 1 ? string.Empty : "s")</p>
+                        }
                     </div>
                 </article>
                 <article class="panel viewer-summary-card">
