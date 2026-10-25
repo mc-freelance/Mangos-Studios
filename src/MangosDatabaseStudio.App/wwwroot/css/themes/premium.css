@@ -6595,9 +6595,10 @@ html[data-studio-theme="premium"] .sidebar-signout {
 }
 
 html[data-studio-theme="premium"] .sidebar-footer .application-version {
-    margin-top: 4px;
-    color: #576963;
-    font-size: .54rem;
+    margin-top: 6px;
+    color: #91a39b;
+    font-size: .63rem;
+    font-weight: 500;
 }
 
 /* Main application column ---------------------------------------------- */
@@ -7025,7 +7026,8 @@ html[data-studio-theme="premium"] :where(
         padding-top: 7px;
     }
     html[data-studio-theme="premium"] .sidebar-footer .application-version {
-        display: none;
+        display: block;
+        margin-top: 3px;
     }
 }
 

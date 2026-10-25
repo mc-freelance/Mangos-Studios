@@ -438,7 +438,7 @@
             <form asp-controller="Account" asp-action="Logout" method="post">
                 <button class="btn btn-sm btn-outline-light w-100 sidebar-signout" type="submit"><i class="bi bi-box-arrow-right"></i> Sign out</button>
             </form>
-            <div class="application-version" title="Build @ApplicationVersion.InformationalVersion">
+            <div class="application-version" title="Build @ApplicationVersion.InformationalVersion | Commit @ApplicationVersion.CommitHash">
                 @ApplicationVersion.DisplayText
             </div>
         </div>

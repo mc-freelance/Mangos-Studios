@@ -12,10 +12,11 @@ namespace MangosDatabaseStudio.App.Services
     public sealed class ApplicationVersionInfo
     {
         // Initialize the application version info dependencies and state.
-        public ApplicationVersionInfo(string version, string stage, string informationalVersion)
+        public ApplicationVersionInfo(string version, string stage, string informationalVersion, string? commitHash)
         {
             Version = NormalizeVersion(version);
             Stage = NormalizeStage(stage);
+            CommitHash = NormalizeCommitHash(commitHash);
             InformationalVersion = string.IsNullOrWhiteSpace(informationalVersion)
                 ? Version + "-" + Stage.ToLowerInvariant()
                 : informationalVersion.Trim();
@@ -36,11 +37,16 @@ namespace MangosDatabaseStudio.App.Services
             get;
         }
 
+        public string CommitHash
+        {
+            get;
+        }
+
         public string DisplayText
         {
             get
             {
-                return "Application: v." + Version + " (" + Stage + ")";
+                return "Application: v" + Version + " (" + CommitHash + ")";
             }
         }
 
@@ -51,6 +57,7 @@ namespace MangosDatabaseStudio.App.Services
 
             string? displayVersion = GetMetadata(assembly, "ApplicationDisplayVersion");
             string? releaseStage = GetMetadata(assembly, "ApplicationReleaseStage");
+            string? commitHash = GetMetadata(assembly, "ApplicationCommitHash");
             string? informationalVersion = assembly
                 .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
                 ?.InformationalVersion;
@@ -65,10 +72,18 @@ namespace MangosDatabaseStudio.App.Services
                 displayVersion = assembly.GetName().Version?.ToString(3);
             }
 
+            // SDK Source Link appends a revision to InformationalVersion when Git is available.
+            // The fallback also supports builds made before the custom metadata existed.
+            if (string.IsNullOrWhiteSpace(commitHash))
+            {
+                commitHash = ExtractCommitHash(informationalVersion);
+            }
+
             return new ApplicationVersionInfo(
                 displayVersion ?? "0.0.0",
                 releaseStage ?? "Development",
-                informationalVersion ?? string.Empty);
+                informationalVersion ?? string.Empty,
+                commitHash);
         }
 
         // Read metadata according to the available model or service contract.
@@ -107,6 +122,48 @@ namespace MangosDatabaseStudio.App.Services
             }
 
             return value;
+        }
+
+        // Extract Source Link's revision without requiring a Git executable at runtime.
+        private static string? ExtractCommitHash(string? informationalVersion)
+        {
+            if (string.IsNullOrWhiteSpace(informationalVersion))
+            {
+                return null;
+            }
+
+            int separatorIndex = informationalVersion.LastIndexOf('+');
+            if (separatorIndex < 0)
+            {
+                return null;
+            }
+
+            return informationalVersion[(separatorIndex + 1)..];
+        }
+
+        // Show only the first eight hexadecimal commit characters in the sidebar.
+        private static string NormalizeCommitHash(string? commitHash)
+        {
+            if (string.IsNullOrWhiteSpace(commitHash))
+            {
+                return "unknown";
+            }
+
+            string value = commitHash.Trim();
+            foreach (char character in value)
+            {
+                if (!Uri.IsHexDigit(character))
+                {
+                    return "unknown";
+                }
+            }
+
+            if (value.Length < 7)
+            {
+                return "unknown";
+            }
+
+            return value[..Math.Min(8, value.Length)].ToLowerInvariant();
         }
 
         // Normalize version according to the available model or service contract.

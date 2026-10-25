@@ -22,11 +22,11 @@ usage() {
 Package Mangos Database Studio desktop binaries for Linux and Windows.
 
 Usage:
-  ./scripts/package-app.sh --version <major.minor.patch> [options]
+  ./scripts/linux/package-app.sh [options]
 
 Options:
   --output <directory>       Output root. Default: .artifacts/packages
-  --version <version>        Required application version, for example 0.1.3
+  --version <version>        Override the latest Git tag, for example 0.2.5-beta
   --stage <name>             Release stage. Default: Alpha
   --platform <value>         all, linux, or windows. Default: all
   --linux-only               Same as --platform linux
@@ -73,7 +73,20 @@ while (($# > 0)); do
     esac
 done
 
-[[ -n "$APP_VERSION" ]] || fail "--version is required, for example --version 0.1.3."
+# Use the nearest reachable version tag; accept both v1.2.3 and v.1.2.3-beta.
+# An explicit --version remains available for untagged release preparation.
+if [[ -z "$APP_VERSION" ]]; then
+    command -v git >/dev/null 2>&1 || fail "Git is required to detect a release tag; pass --version instead."
+    RELEASE_TAG="$(git -C "$ROOT_DIR" describe --tags --abbrev=0 --match='v[0-9]*' --match='v.[0-9]*' 2>/dev/null || true)"
+    [[ -n "$RELEASE_TAG" ]] || fail "No version tag was found; create v.0.2.5-beta or pass --version."
+    APP_VERSION="$RELEASE_TAG"
+fi
+# Strip the optional Git tag prefix without discarding prerelease labels.
+APP_VERSION="${APP_VERSION#v}"
+APP_VERSION="${APP_VERSION#.}"
+[[ "$APP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z-]+)*)?$ ]] || fail "Version must use major.minor.patch with an optional prerelease label, for example 0.2.5-beta."
+VERSION_CORE="${APP_VERSION%%-*}"
+BUILD_COMMIT="$(git -C "$ROOT_DIR" rev-parse --short=8 HEAD 2>/dev/null || printf 'unknown')"
 [[ "$PLATFORM" == "all" || "$PLATFORM" == "linux" || "$PLATFORM" == "windows" ]] || fail "Platform must be all, linux, or windows."
 command -v dotnet >/dev/null 2>&1 || fail "The .NET 10 SDK is not installed or is not in PATH."
 [[ "$(dotnet --version | cut -d. -f1)" == "10" ]] || fail "This project requires the .NET 10 SDK."
@@ -83,9 +96,11 @@ export DOTNET_NOLOGO=1 DOTNET_CLI_TELEMETRY_OPTOUT=1
 
 VERSION_PROPERTIES=(
     "-p:Version=$APP_VERSION"
-    "-p:AssemblyVersion=$APP_VERSION.0"
-    "-p:FileVersion=$APP_VERSION.0"
-    "-p:InformationalVersion=$APP_VERSION-$RELEASE_STAGE"
+    "-p:StudioVersionOverride=$APP_VERSION"
+    "-p:StudioReleaseStage=$RELEASE_STAGE"
+    "-p:AssemblyVersion=$VERSION_CORE.0"
+    "-p:FileVersion=$VERSION_CORE.0"
+    "-p:InformationalVersion=$APP_VERSION"
 )
 
 if $RUN_TESTS; then
@@ -116,6 +131,7 @@ write_metadata() {
     cat > "$dir/BUILD-INFO.txt" <<EOF_INFO
 Mangos Database Studio
 Application version: $APP_VERSION
+Source commit: $BUILD_COMMIT
 Release stage: $RELEASE_STAGE
 Runtime identifier: $runtime
 Platform: $os_name
@@ -128,6 +144,7 @@ Mangos Database Studio - $RELEASE_STAGE
 =====================================
 
 Version: $APP_VERSION
+Commit: $BUILD_COMMIT
 Runtime: $runtime
 
 STARTUP

@@ -26,6 +26,7 @@ namespace MangosDatabaseStudio.FieldDataChecks
 
             try
             {
+                CheckVersionPresentation();
                 CheckSourceDiscovery();
                 await CheckMultiTableSynchronizationAsync();
                 await CheckProgressAndRollbackAsync();
@@ -38,6 +39,49 @@ namespace MangosDatabaseStudio.FieldDataChecks
                 Console.Error.WriteLine(exception);
                 return 1;
             }
+        }
+
+        // Confirm the version footer accepts embedded release tags and short revisions.
+        private static void CheckVersionPresentation()
+        {
+            ApplicationVersionInfo tagged = new(
+                "v1.2.3",
+                "Release",
+                "1.2.3+abcdef1234567890",
+                "abcdef1234567890");
+
+            Check(tagged.DisplayText == "Application: v1.2.3 (abcdef12)",
+                "The sidebar is not displaying the tag and short commit hash.");
+
+            // Preserve prerelease suffixes and normalize the repository's v. tag prefix.
+            ApplicationVersionInfo prerelease = new(
+                "v.0.2.5-beta",
+                "Beta",
+                "0.2.5-beta+abcdef1234567890",
+                "abcdef1234567890");
+
+            Check(prerelease.DisplayText == "Application: v0.2.5-beta (abcdef12)",
+                "The sidebar removed the prerelease label or did not normalize a v. tag.");
+
+            ApplicationVersionInfo untagged = new(
+                "0.0.0",
+                "Development",
+                string.Empty,
+                null);
+
+            Check(untagged.DisplayText == "Application: v0.0.0 (unknown)",
+                "Missing Git metadata should use the explicit unknown fallback.");
+
+            ApplicationVersionInfo embedded = ApplicationVersionInfo.FromAssembly(
+                typeof(ApplicationVersionInfo).Assembly);
+
+            Check(!string.IsNullOrWhiteSpace(embedded.Version),
+                "The application must expose a version even without Git metadata.");
+            Check(!embedded.Version.Contains("@(", StringComparison.Ordinal) &&
+                !embedded.Version.Contains("$(", StringComparison.Ordinal),
+                "Unevaluated MSBuild expressions were embedded in the application version.");
+            Check(embedded.DisplayText.Contains(embedded.CommitHash, StringComparison.Ordinal),
+                "The version footer does not contain the embedded commit hash.");
         }
 
         // Validate the automatic registry includes both special faction factories.

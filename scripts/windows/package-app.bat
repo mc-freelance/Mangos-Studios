@@ -56,7 +56,23 @@ call :Fail "Unknown option: %~1"
 exit /b 2
 
 :ArgumentsParsed
-if not defined VERSION (call :Fail "--version is required, for example --version 0.1.3." & exit /b 2)
+rem Resolve the nearest reachable release tag when --version was not supplied.
+if not defined VERSION (
+    where git.exe >nul 2>&1 || (call :Fail "Git is required to detect a release tag; pass --version instead." & exit /b 2)
+    for /f "delims=" %%T in ('git -C "%ROOT_DIR%" describe --tags --abbrev=0 --match=v[0-9]* --match=v.[0-9]* 2^>nul') do set "VERSION=%%T"
+)
+if not defined VERSION (call :Fail "No version tag was found; create v.0.2.5-beta or pass --version." & exit /b 2)
+rem Support version tags beginning with either v or v., retaining the prerelease label.
+if /I "%VERSION:~0,2%"=="v." (
+    set "VERSION=%VERSION:~2%"
+) else if /I "%VERSION:~0,1%"=="v" (
+    set "VERSION=%VERSION:~1%"
+)
+rem Validate SemVer, including an optional prerelease suffix such as -beta.
+powershell -NoProfile -Command "if ($env:VERSION -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z-]+)*)?$') { exit 1 }"
+if errorlevel 1 (call :Fail "Version must use major.minor.patch with optional prerelease, for example 0.2.5-beta." & exit /b 2)
+set "COMMIT_HASH=unknown"
+for /f "delims=" %%H in ('git -C "%ROOT_DIR%" rev-parse --short=8 HEAD 2^>nul') do set "COMMIT_HASH=%%H"
 where dotnet.exe >nul 2>&1 || (call :Fail "The .NET 10 SDK is not installed or is not in PATH." & exit /b 2)
 where powershell.exe >nul 2>&1 || (call :Fail "Windows PowerShell is required for checksums and ZIP creation." & exit /b 2)
 
@@ -73,7 +89,7 @@ if "%RUN_TESTS%"=="1" (
 
 echo.
 echo Publishing self-contained Windows application...
-call "%~dp0publish-windows.bat" --output "%PACKAGE_DIR%" --runtime "%RUNTIME%" --self-contained
+call "%~dp0publish-windows.bat" --output "%PACKAGE_DIR%" --runtime "%RUNTIME%" --self-contained --version "%VERSION%" --stage "%STAGE%"
 if errorlevel 1 exit /b %ERRORLEVEL%
 
 for %%F in (LICENSE README.md REQUIREMENTS.md DEVICE_IDENTITY.md PRIVACY.md) do if exist "%ROOT_DIR%%%F" copy /y "%ROOT_DIR%%%F" "%PACKAGE_DIR%\%%F" >nul
@@ -82,6 +98,7 @@ for %%F in (LICENSE README.md REQUIREMENTS.md DEVICE_IDENTITY.md PRIVACY.md) do 
 >>"%PACKAGE_DIR%\README-PACKAGE.txt" echo =====================================
 >>"%PACKAGE_DIR%\README-PACKAGE.txt" echo.
 >>"%PACKAGE_DIR%\README-PACKAGE.txt" echo Version: %VERSION%
+>>"%PACKAGE_DIR%\README-PACKAGE.txt" echo Commit: %COMMIT_HASH%
 >>"%PACKAGE_DIR%\README-PACKAGE.txt" echo Runtime: %RUNTIME%
 >>"%PACKAGE_DIR%\README-PACKAGE.txt" echo.
 >>"%PACKAGE_DIR%\README-PACKAGE.txt" echo STARTUP
@@ -95,7 +112,7 @@ for %%F in (LICENSE README.md REQUIREMENTS.md DEVICE_IDENTITY.md PRIVACY.md) do 
 >>"%PACKAGE_DIR%\README-PACKAGE.txt" echo SQL imports require mysql.exe or mariadb.exe in PATH.
 >>"%PACKAGE_DIR%\README-PACKAGE.txt" echo SQL exports require mysqldump.exe or mariadb-dump.exe in PATH.
 
-powershell -NoProfile -Command "$utc=[DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'); @('Mangos Database Studio','Application version: %VERSION%','Release stage: %STAGE%','Runtime identifier: %RUNTIME%','Build time (UTC): '+$utc,'Framework: .NET 10 self-contained','Configuration: Release') | Set-Content -Encoding UTF8 -Path '%PACKAGE_DIR%\BUILD-INFO.txt'"
+powershell -NoProfile -Command "$utc=[DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'); @('Mangos Database Studio','Application version: %VERSION%','Source commit: %COMMIT_HASH%','Release stage: %STAGE%','Runtime identifier: %RUNTIME%','Build time (UTC): '+$utc,'Framework: .NET 10 self-contained','Configuration: Release') | Set-Content -Encoding UTF8 -Path '%PACKAGE_DIR%\BUILD-INFO.txt'"
 if errorlevel 1 exit /b %ERRORLEVEL%
 
 powershell -NoProfile -Command "$root=(Resolve-Path '%PACKAGE_DIR%').Path; Get-ChildItem -LiteralPath $root -File -Recurse | Where-Object Name -ne 'SHA256SUMS.txt' | Sort-Object FullName | ForEach-Object { $h=(Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant(); $r=$_.FullName.Substring($root.Length+1).Replace('\','/'); $h+'  '+$r } | Set-Content -Encoding ASCII -Path (Join-Path $root 'SHA256SUMS.txt')"
@@ -126,10 +143,10 @@ exit /b 2
 echo Package Mangos Database Studio for Windows
 echo.
 echo Usage:
-echo   scripts\package-app.bat --version ^<major.minor.patch^> [options]
+echo   scripts\windows\package-app.bat [options]
 echo.
 echo Options:
-echo   --version ^<version^>      Required application version
+echo   --version ^<version^>      Override the latest Git tag
  echo   --stage ^<name^>          Release stage. Default: Alpha
  echo   --runtime ^<rid^>         Windows runtime. Default: win-x64
  echo   --output ^<directory^>    Package output root
@@ -138,5 +155,5 @@ echo   --version ^<version^>      Required application version
  echo   -h, --help               Show this help
  echo.
  echo Example:
- echo   scripts\package-app.bat --version 0.1.3 --stage Alpha
+ echo   scripts\windows\package-app.bat --version 0.2.5-beta --stage Beta
 exit /b 0

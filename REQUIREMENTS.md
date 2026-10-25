@@ -80,14 +80,14 @@ Linux:
 
 ```bash
 ./scripts/linux/publish-linux.sh --self-contained
-./scripts/linux/package-app.sh --version 0.1.0 --platform linux
+./scripts/linux/package-app.sh --platform linux
 ```
 
 Windows:
 
 ```bat
 scripts\windows\publish-windows.bat --self-contained
-scripts\windows\package-app.bat --version 0.1.0
+scripts\windows\package-app.bat
 ```
 
 Published binaries are desktop applications, not a separate HTTP server. If you use a framework-dependent publish, the corresponding **.NET 10 runtime** must also be installed on the target system. Self-contained publish bundles that runtime, but native desktop libraries may still be needed.
@@ -101,3 +101,9 @@ Application data is created under `App_Data/`. **Never include populated `App_Da
 - **Database tools not found:** Install the matching MySQL/MariaDB CLI client tools and configure their executable paths.
 - **Import/export permission issues:** Confirm your server account's database privileges and filesystem permissions.
 - **Windows window remains blank:** Verify the WebView2 runtime and native desktop prerequisites.
+
+### Git-based application versioning
+
+Use annotated release tags such as `v.0.2.5-beta` or `v1.2.0` (both formats are supported). Run `git fetch --tags` before building if the tag was created remotely. Builds embed the latest reachable tag and short Git commit hash in the desktop application's assembly metadata. **Git is not needed to run the published application.** In an untagged source checkout the build displays `v0.0.0`; without Git metadata, the commit identifier is `unknown`.
+
+Release packaging commands read the Git tag automatically, including prerelease suffixes. To package an untagged source tree, supply `--version 0.2.5-beta` explicitly. Details and examples appear in [README.md](README.md#application-versioning).

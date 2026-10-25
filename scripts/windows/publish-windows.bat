@@ -7,8 +7,24 @@ set "APP_PROJECT=%ROOT_DIR%src\MangosDatabaseStudio.App\MangosDatabaseStudio.App
 if defined MDS_PUBLISH_DIR (set "OUTPUT_DIR=%MDS_PUBLISH_DIR%") else set "OUTPUT_DIR=%ROOT_DIR%.artifacts\windows-x64"
 if defined MDS_RUNTIME (set "RUNTIME=%MDS_RUNTIME%") else set "RUNTIME=win-x64"
 set "SELF_CONTAINED=false"
+set "PUBLISH_VERSION="
+set "PUBLISH_STAGE="
 
 :ParseArguments
+if /I "%~1"=="--version" (
+    if "%~2"=="" (call :Fail "--version requires a value." & exit /b 2)
+    set "PUBLISH_VERSION=%~2"
+    shift
+    shift
+    goto ParseArguments
+)
+if /I "%~1"=="--stage" (
+    if "%~2"=="" (call :Fail "--stage requires a value." & exit /b 2)
+    set "PUBLISH_STAGE=%~2"
+    shift
+    shift
+    goto ParseArguments
+)
 if "%~1"=="" goto ArgumentsParsed
 if /I "%~1"=="--output" (
     if "%~2"=="" (call :Fail "--output requires a directory." & exit /b 2)
@@ -46,13 +62,16 @@ set "DOTNET_NOLOGO=1"
 set "DOTNET_CLI_TELEMETRY_OPTOUT=1"
 
 echo Publishing single-process MaNGOS Database Studio for %RUNTIME%...
+set "VERSION_PROPERTIES="
+if defined PUBLISH_VERSION set "VERSION_PROPERTIES=-p:Version=%PUBLISH_VERSION% -p:StudioVersionOverride=%PUBLISH_VERSION%"
+if defined PUBLISH_STAGE set "VERSION_PROPERTIES=%VERSION_PROPERTIES% -p:StudioReleaseStage=%PUBLISH_STAGE%"
 dotnet publish "%APP_PROJECT%" ^
     --configuration Release ^
     --runtime "%RUNTIME%" ^
     --self-contained %SELF_CONTAINED% ^
     --output "%OUTPUT_DIR%" ^
     -p:UseAppHost=true ^
-    -p:PublishTrimmed=false
+    -p:PublishTrimmed=false %VERSION_PROPERTIES%
 if errorlevel 1 exit /b %ERRORLEVEL%
 
 if exist "%OUTPUT_DIR%\App_Data" rmdir /s /q "%OUTPUT_DIR%\App_Data"
@@ -86,6 +105,8 @@ echo Options:
 echo   --output ^<directory^>   Publish destination
 echo   --runtime ^<rid^>        Runtime identifier. Default: win-x64
 echo   --self-contained       Include the .NET runtime
+echo   --version ^<version^>    Override the Git tag for the embedded version
+echo   --stage ^<name^>         Set the release stage for package builds
 echo   -h, --help             Show this help
 echo.
 echo The published package is desktop-only. Run MangosDatabaseStudio.exe directly.

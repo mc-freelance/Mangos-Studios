@@ -1,0 +1,53 @@
+<Project>
+  <!-- Capture the Git release tag and commit while compiling the desktop host.
+       The compiled application never needs Git or access to GitHub. -->
+  <Target Name="EmbedStudioGitVersion"
+          BeforeTargets="GetAssemblyAttributes"
+          Condition="'$(MSBuildProjectName)' == 'MangosDatabaseStudio.App' and '$(GenerateAssemblyInfo)' != 'false'">
+    <Exec Command="git -C &quot;$(MSBuildThisFileDirectory)&quot; describe --tags --abbrev=0 --match=&quot;v[0-9]*&quot; --match=&quot;v.[0-9]*&quot;"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          StandardOutputImportance="Low"
+          StandardErrorImportance="Low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_StudioTagOutput" />
+      <Output TaskParameter="ExitCode" PropertyName="_StudioTagExitCode" />
+    </Exec>
+
+    <Exec Command="git -C &quot;$(MSBuildThisFileDirectory)&quot; rev-parse --short=8 HEAD"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          StandardOutputImportance="Low"
+          StandardErrorImportance="Low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_StudioCommitOutput" />
+      <Output TaskParameter="ExitCode" PropertyName="_StudioCommitExitCode" />
+    </Exec>
+
+    <PropertyGroup>
+      <!-- Explicit package versions take precedence over automatically discovered tags. -->
+      <_StudioDisplayVersion Condition="'$(StudioVersionOverride)' != ''">$(StudioVersionOverride)</_StudioDisplayVersion>
+      <!-- Capture the original Git tag as a property. C# normalizes v and v. prefixes. -->
+      <_StudioDisplayVersion Condition="'$(_StudioDisplayVersion)' == '' and '$(_StudioTagExitCode)' == '0' and '$(_StudioTagOutput)' != ''">$(_StudioTagOutput)</_StudioDisplayVersion>
+      <_StudioDisplayVersion Condition="'$(_StudioDisplayVersion)' == ''">0.0.0</_StudioDisplayVersion>
+      <_StudioCommitHash Condition="'$(_StudioCommitExitCode)' == '0' and '$(_StudioCommitOutput)' != ''">$(_StudioCommitOutput)</_StudioCommitHash>
+      <_StudioCommitHash Condition="'$(_StudioCommitHash)' == ''">unknown</_StudioCommitHash>
+      <_StudioReleaseStage Condition="'$(StudioReleaseStage)' != ''">$(StudioReleaseStage)</_StudioReleaseStage>
+      <_StudioReleaseStage Condition="'$(_StudioReleaseStage)' == ''">Development</_StudioReleaseStage>
+    </PropertyGroup>
+
+    <!-- These values are embedded in generated assembly metadata by the .NET SDK. -->
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>ApplicationDisplayVersion</_Parameter1>
+        <_Parameter2>$(_StudioDisplayVersion)</_Parameter2>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>ApplicationCommitHash</_Parameter1>
+        <_Parameter2>$(_StudioCommitHash)</_Parameter2>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>ApplicationReleaseStage</_Parameter1>
+        <_Parameter2>$(_StudioReleaseStage)</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
+</Project>

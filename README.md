@@ -88,11 +88,40 @@ The desktop process uses a private local HTTP listener for its UI and requires a
 | --- | --- | --- |
 | Run from source | `./scripts/linux/run-linux.sh` | `scripts\windows\run-windows.bat` |
 | Publish | `./scripts/linux/publish-linux.sh --self-contained` | `scripts\windows\publish-windows.bat --self-contained` |
-| Create release | `./scripts/linux/package-app.sh --version 0.1.0` | `scripts\windows\package-app.bat --version 0.1.0` |
+| Create release | `./scripts/linux/package-app.sh` | `scripts\windows\package-app.bat` |
 | Validate | `dotnet restore/build/test` | `scripts\windows\validate-windows.bat` |
 | Optional firmware helper installation | `./scripts/linux/install-linux-hardware-helper.sh` | Not applicable |
 
 Scripts resolve the repository root relative to their own location and may be invoked from any working directory. Installation of the optional Linux helper is **not required** to build or run the normal app.
+
+## Application versioning
+
+The version shown below **Sign out** is embedded when the .NET 10 application is built:
+
+```text
+Application: v0.2.5-beta (a1b2c3d4)
+```
+
+The version comes from the **nearest reachable Git tag**, supporting `v.MAJOR.MINOR.PATCH-SUFFIX` (for example `v.0.2.5-beta`) as well as `vMAJOR.MINOR.PATCH` (for example `v1.2.0`). The prerelease suffix is retained, and the eight-character hexadecimal value identifies the commit compiled into the application. Commits after a tag retain that release version but show a different commit hash. The executable does not need Git or internet access to display its version.
+
+Create and push an annotated release tag **on the commit you intend to release**:
+
+```bash
+git tag -a v.0.2.5-beta -m "Release v.0.2.5-beta"
+git push origin v.0.2.5-beta
+```
+
+If a tag was created on GitHub, run `git fetch --tags` locally before building. The Windows/Linux build workflow fetches Git history and tags automatically. When no valid tag is available, normal builds display `v0.0.0` with the current commit hash; without Git information the hash is `unknown`. For release packaging, the scripts use the latest reachable tag by default, or accept `--version` explicitly when building without tags.
+
+```bash
+./scripts/linux/package-app.sh --platform linux
+```
+
+```bat
+scripts\windows\package-app.bat
+```
+
+You can use `--version 0.2.5-beta` to override Git-derived versioning when preparing an untagged package. The version is also embedded into published binaries, so copying the executable to another machine does not change the displayed version. Local uncommitted changes are not represented in the hash; commit the desired sources before creating a release.
 
 ## Data protection and local state
 
