@@ -67,14 +67,14 @@
                     <input type="hidden" name="database" value="@Model.Database" />
                     <input type="hidden" name="show" value="true" />
                     <input type="hidden" name="pageSize" value="@Model.Quests.PageSize" />
-                    <label class="viewer-search-field" for="questSearch">
-                        <span>Quest entry or title</span>
+                    <div class="viewer-search-field">
+                        <label for="questSearch">Quest entry or title</label>
                         <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <label class="input-group-text" for="questSearch" aria-hidden="true"><i class="bi bi-search"></i></label>
                             <input id="questSearch" type="search" name="search" class="form-control" value="@Model.Search" placeholder="Example: 783 or A Threat Within" autocomplete="off" />
                         </div>
                         <small>The directory query searches quest_template first; relation counts are loaded only for the current page.</small>
-                    </label>
+                    </div>
                     <div class="viewer-context-card">
                         <span class="viewer-context-icon"><i class="bi bi-diagram-3"></i></span>
                         <div>

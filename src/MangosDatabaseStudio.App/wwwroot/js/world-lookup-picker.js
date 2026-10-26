@@ -232,6 +232,15 @@
 
         activePicker = picker;
         toggle(picker)?.setAttribute("aria-expanded", "true");
+
+        // Bootstrap traps keyboard focus inside an open modal. Keep the shared
+        // search popover in that modal so its input remains editable.
+        const host = picker.closest(".modal") || document.body;
+        if (popover.parentElement !== host)
+        {
+            host.appendChild(popover);
+        }
+
         popover.hidden = false;
         searchInput.placeholder = picker.dataset.worldLookupSearchPlaceholder || `Search ${pluralLabel(picker)} by name or ID`;
         searchInput.setAttribute("aria-label", searchInput.placeholder);
@@ -306,6 +315,16 @@
     });
     window.addEventListener("resize", position);
     window.addEventListener("scroll", position, true);
+
+    // Restore the shared popover when its modal closes. Other viewers can
+    // then open the same picker without depending on the previous dialog.
+    document.addEventListener("hide.bs.modal", event => {
+        if (popover.parentElement === event.target)
+        {
+            close();
+            document.body.appendChild(popover);
+        }
+    });
 
     document.querySelectorAll("form").forEach(form => {
         form.addEventListener("submit", event => {

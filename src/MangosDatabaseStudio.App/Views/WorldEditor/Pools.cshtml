@@ -71,10 +71,10 @@
                     <input type="hidden" name="show" value="true" />
                     <input type="hidden" name="pageSize" value="@Model.Pools.PageSize" />
 
-                    <label class="viewer-search-field" for="poolSearch">
-                        <span>Pool entry or description</span>
+                    <div class="viewer-search-field">
+                        <label for="poolSearch">Pool entry or description</label>
                         <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <label class="input-group-text" for="poolSearch" aria-hidden="true"><i class="bi bi-search"></i></label>
                             <input id="poolSearch" type="search" name="search" class="form-control" value="@Model.Search"
                                    placeholder="Example: 100 or rare spawn" autocomplete="off" />
                             <select name="population" class="form-select pool-population-select" aria-label="Pool population filter" onchange="this.form.submit()">
@@ -105,7 +105,7 @@
                             </select>
                         </div>
                         <small>Search all pools, or narrow the directory to populated or empty pool templates.</small>
-                    </label>
+                    </div>
 
                     <div class="viewer-context-card">
                         <span class="viewer-context-icon"><i class="bi bi-diagram-2"></i></span>

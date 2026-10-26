@@ -64,14 +64,14 @@
                     <input type="hidden" name="database" value="@Model.Database" />
                     <input type="hidden" name="show" value="true" />
                     <input type="hidden" name="pageSize" value="@Model.Events.PageSize" />
-                    <label class="viewer-search-field" for="eventSearch">
-                        <span>Event ID or name</span>
+                    <div class="viewer-search-field">
+                        <label for="eventSearch">Event ID or name</label>
                         <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <label class="input-group-text" for="eventSearch" aria-hidden="true"><i class="bi bi-search"></i></label>
                             <input id="eventSearch" type="search" name="search" class="form-control" value="@Model.Search" placeholder="Example: 2 or Darkmoon Faire" autocomplete="off" />
                         </div>
                         <small>Search is limited to game_event ID and description so directory lookups stay fast.</small>
-                    </label>
+                    </div>
                     <div class="viewer-context-card">
                         <span class="viewer-context-icon"><i class="bi bi-link-45deg"></i></span>
                         <div>

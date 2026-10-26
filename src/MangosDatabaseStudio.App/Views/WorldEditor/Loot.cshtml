@@ -129,10 +129,10 @@
                     <input type="hidden" name="show" value="true" />
                     <input type="hidden" name="pageSize" value="@currentPageSize" />
 
-                    <label class="viewer-search-field" for="lootSearch">
-                        <span>@(Model.Mode == LootViewerModes.Sources ? "Creature, GameObject, or loot ID" : "Loot entry or table name")</span>
+                    <div class="viewer-search-field">
+                        <label for="lootSearch">@(Model.Mode == LootViewerModes.Sources ? "Creature, GameObject, or loot ID" : "Loot entry or table name")</label>
                         <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <label class="input-group-text" for="lootSearch" aria-hidden="true"><i class="bi bi-search"></i></label>
                             <input id="lootSearch" type="search" name="search" class="form-control" value="@Model.Search"
                                    placeholder="@(Model.Mode == LootViewerModes.Sources ? "Example: Ragnaros or 12345" : "Example: 100 or creature")" autocomplete="off" />
                             @if (Model.Mode == LootViewerModes.Templates)
@@ -184,7 +184,7 @@
                             }
                         </div>
                         <small>@(Model.Mode == LootViewerModes.Templates ? "The table filter controls which loot families participate in the unified directory." : "Creature loot includes corpse, pickpocket, and skinning links. GameObject loot includes chest and fishing-hole definitions.")</small>
-                    </label>
+                    </div>
 
                     <div class="viewer-context-card">
                         <span class="viewer-context-icon"><i class="bi bi-collection"></i></span>

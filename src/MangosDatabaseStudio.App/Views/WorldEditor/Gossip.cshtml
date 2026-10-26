@@ -74,10 +74,10 @@
                     <input type="hidden" name="database" value="@Model.Database" />
                     <input type="hidden" name="show" value="true" />
                     <input type="hidden" name="pageSize" value="@directoryPageSize" />
-                    <label class="viewer-search-field" for="gossipSearch">
-                        <span>Source name, entry, or menu ID</span>
+                    <div class="viewer-search-field">
+                        <label for="gossipSearch">Source name, entry, or menu ID</label>
                         <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <label class="input-group-text" for="gossipSearch" aria-hidden="true"><i class="bi bi-search"></i></label>
                             <input id="gossipSearch" type="search" name="search" class="form-control" value="@Model.Search" placeholder="Example: Innkeeper or 68" autocomplete="off" />
                             <select name="sourceFilter" class="form-select gossip-source-filter" aria-label="Gossip source filter">
                                 @if (Model.SourceFilter == GossipSourceFilters.All)
@@ -107,7 +107,7 @@
                             </select>
                         </div>
                         <small>Creature links come from the template gossip-menu field; supported questgiver and goober GameObjects are traced from their menu data fields.</small>
-                    </label>
+                    </div>
 
                     <div class="viewer-context-card">
                         <span class="viewer-context-icon"><i class="bi bi-person-bounding-box"></i></span>

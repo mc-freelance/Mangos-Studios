@@ -75,10 +75,10 @@
                     <input type="hidden" name="show" value="true" />
                     <input type="hidden" name="pageSize" value="@Model.Vendors.PageSize" />
 
-                    <label class="viewer-search-field" for="vendorSearch">
-                        <span>NPC name or entry</span>
+                    <div class="viewer-search-field">
+                        <label for="vendorSearch">NPC name or entry</label>
                         <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <label class="input-group-text" for="vendorSearch" aria-hidden="true"><i class="bi bi-search"></i></label>
                             <input id="vendorSearch"
                                    type="search"
                                    name="search"
@@ -88,7 +88,7 @@
                                    autocomplete="off" />
                         </div>
                         <small>Leave the search empty to browse every vendor in the current catalog.</small>
-                    </label>
+                    </div>
 
                     <div class="viewer-context-card">
                         <span class="viewer-context-icon"><i class="bi bi-bezier2"></i></span>

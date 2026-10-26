@@ -12006,7 +12006,8 @@ html[data-theme="dark"] .record-bitmask-option-unmapped strong {
     min-height: 38px;
 }
 
-.double-spawn-filter-field > span {
+.double-spawn-filter-field > span,
+.double-spawn-filter-field > label {
     display: block;
     margin-bottom: 6px;
     color: var(--studio-text);

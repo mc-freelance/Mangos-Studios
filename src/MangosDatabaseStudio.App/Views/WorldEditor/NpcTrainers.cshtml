@@ -71,14 +71,14 @@
                     <input type="hidden" name="show" value="true" />
                     <input type="hidden" name="pageSize" value="@Model.Trainers.PageSize" />
 
-                    <label class="viewer-search-field" for="trainerSearch">
-                        <span>NPC name or entry</span>
+                    <div class="viewer-search-field">
+                        <label for="trainerSearch">NPC name or entry</label>
                         <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <label class="input-group-text" for="trainerSearch" aria-hidden="true"><i class="bi bi-search"></i></label>
                             <input id="trainerSearch" type="search" name="search" class="form-control" value="@Model.Search" placeholder="Example: Alchemist or 5499" autocomplete="off" />
                         </div>
                         <small>Leave the search empty to browse every trainer in the current catalog.</small>
-                    </label>
+                    </div>
 
                     <div class="viewer-context-card">
                         <span class="viewer-context-icon"><i class="bi bi-bezier2"></i></span>

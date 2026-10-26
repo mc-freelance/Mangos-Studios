@@ -7250,7 +7250,7 @@ html[data-studio-theme="premium"] .viewer-search-field {
     margin: 0;
 }
 
-html[data-studio-theme="premium"] .viewer-search-field > span {
+html[data-studio-theme="premium"] .viewer-search-field > label {
     color: var(--studio-text);
     font-size: .67rem;
     font-weight: 720;
@@ -7264,6 +7264,19 @@ html[data-studio-theme="premium"] .viewer-search-field > small {
 
 html[data-studio-theme="premium"] .viewer-search-field .input-group {
     align-self: start;
+}
+
+/* The search title and the icon both target the same input.
+   Keep the icon inside the control without obstructing typing or selection. */
+
+html[data-studio-theme="premium"] .viewer-search-field > label,
+html[data-studio-theme="premium"] .double-spawn-name-search > label {
+    cursor: text;
+}
+
+html[data-studio-theme="premium"] :is(.viewer-search-field, .double-spawn-name-search) .input-group > label.input-group-text {
+    cursor: text;
+    user-select: none;
 }
 
 html[data-studio-theme="premium"] .viewer-context-card {

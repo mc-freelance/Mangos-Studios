@@ -84,14 +84,14 @@
                 <input type="hidden" name="scan" value="true" />
 
                 <div class="double-spawn-filter-grid">
-                    <label class="double-spawn-filter-field double-spawn-name-search">
-                        <span>Name search</span>
+                    <div class="double-spawn-filter-field double-spawn-name-search">
+                        <label for="doubleSpawnNameSearch">Name search</label>
                         <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-search"></i></span>
-                            <input type="search" name="search" class="form-control" value="@Model.Search" placeholder="Creature or GameObject name" maxlength="120" autocomplete="off" />
+                            <label class="input-group-text" for="doubleSpawnNameSearch" aria-hidden="true"><i class="bi bi-search"></i></label>
+                            <input id="doubleSpawnNameSearch" type="search" name="search" class="form-control" value="@Model.Search" placeholder="Creature or GameObject name" maxlength="120" autocomplete="off" />
                         </div>
                         <small>Match either spawn by creature or GameObject name. Leave blank for all names.</small>
-                    </label>
+                    </div>
 
                     <label class="double-spawn-filter-field">
                         <span>Spawn type</span>

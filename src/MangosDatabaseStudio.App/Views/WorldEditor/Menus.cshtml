@@ -80,14 +80,14 @@
                     <input type="hidden" name="database" value="@Model.Database" />
                     <input type="hidden" name="show" value="true" />
                     <input type="hidden" name="pageSize" value="@directoryPageSize" />
-                    <label class="viewer-search-field" for="gossipSearch">
-                        <span>Menu ID or option text</span>
+                    <div class="viewer-search-field">
+                        <label for="gossipSearch">Menu ID or option text</label>
                         <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <label class="input-group-text" for="gossipSearch" aria-hidden="true"><i class="bi bi-search"></i></label>
                             <input id="gossipSearch" type="search" name="search" class="form-control" value="@Model.Search" placeholder="Example: 68 or greetings" autocomplete="off" />
                         </div>
                         <small>Menu search covers menu IDs and option text. Source-name lookup is handled by Gossip Sources.</small>
-                    </label>
+                    </div>
 
                     <div class="viewer-context-card">
                         <span class="viewer-context-icon"><i class="bi bi-table"></i></span>
