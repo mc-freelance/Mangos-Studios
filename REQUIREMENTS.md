@@ -107,3 +107,9 @@ Application data is created under `App_Data/`. **Never include populated `App_Da
 Use annotated release tags such as `v.0.2.5-beta` or `v1.2.0` (both formats are supported). Run `git fetch --tags` before building if the tag was created remotely. Builds embed the latest reachable tag and short Git commit hash in the desktop application's assembly metadata. **Git is not needed to run the published application.** In an untagged source checkout the build displays `v0.0.0`; without Git metadata, the commit identifier is `unknown`.
 
 Release packaging commands read the Git tag automatically, including prerelease suffixes. To package an untagged source tree, supply `--version 0.2.5-beta` explicitly. Details and examples appear in [README.md](README.md#application-versioning).
+
+## Precompiled release packages
+
+Users who only want to try MaNGOS Database Studio can download self-contained archives from the [GitHub Releases page](https://github.com/mc-freelance/Mangos-Studios/releases). Each supported Windows, Linux, and macOS architecture gets its own archive when a new version tag is pushed. Users of these packages do **not** need the .NET SDK or .NET 10 runtime installed separately, although native desktop dependencies still apply. Mac releases are portable unsigned archives; Linux requires a compatible GTK 3 and WebKitGTK runtime.
+
+Maintainers should follow [RELEASES.md](RELEASES.md) for packaging prerequisites, version tags, checksum verification, GitHub Actions, and release procedures. The dedicated packager uses Python 3.12+, Git, and the .NET 10 SDK on the build host.
