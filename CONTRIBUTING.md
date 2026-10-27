@@ -1,6 +1,6 @@
 # Contributing to MaNGOS Database Studio
 
-Thank you for contributing. Review [PROJECT_RULES.md](PROJECT_RULES.md) and [REQUIREMENTS.md](REQUIREMENTS.md) before beginning development.
+Thank you for contributing. Review [PROJECT_RULES.md](docs/PROJECT_RULES.md) and [REQUIREMENTS.md](docs/REQUIREMENTS.md) before beginning development.
 
 ## Before opening an issue or pull request
 
