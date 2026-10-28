@@ -11,6 +11,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MangosDatabaseStudio.Application.Schema;
+using MangosDatabaseStudio.App.Services.FieldData.MapNames;
 using Microsoft.Data.Sqlite;
 
 namespace MangosDatabaseStudio.App.Services.FieldData
@@ -107,7 +108,7 @@ namespace MangosDatabaseStudio.App.Services.FieldData
                 try
                 {
                     long categoryId = await EnsureBuiltInCategoryAsync(
-                    connection, transaction, definition.TableName, result, cancellationToken);
+                    connection, transaction, definition, result, cancellationToken);
 
                     ExistingDefinition? existing = await ReadDefinitionAsync(
                         connection, transaction, definition.SourceKey, cancellationToken);
@@ -138,21 +139,175 @@ namespace MangosDatabaseStudio.App.Services.FieldData
                     "Completed " + fieldName + ".");
             }
 
+            // Older releases installed Map Names twice. Consolidate the old GameObject
+            // dataset into the shared Creature dataset inside the same transaction.
+            await ConsolidateLegacyMapNamesAsync(
+                connection, transaction, currentDefinitions, cancellationToken, reportProgress);
+
             return result;
         }
 
-        // Create one built-in category for each source table. Existing category names,
-        // visibility and icons are administrator-editable and are never overwritten.
+        // A legacy copy should also cause synchronization when the source fingerprint
+        // happens to match (for example, after an interrupted manual upgrade).
+        public static async Task<bool> HasLegacyMapDefinitionAsync(
+            SqliteConnection connection,
+            CancellationToken cancellationToken)
+        {
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = "SELECT EXISTS(SELECT 1 FROM field_definitions WHERE source_key = $key);";
+            command.Parameters.AddWithValue("$key", MapNamesFieldData.LegacyGameObjectMapSourceKey);
+            return Convert.ToInt64(
+                await command.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture) != 0;
+        }
+
+        // Merge the old duplicate Map Names definition without discarding custom map IDs.
+        // Matching built-in IDs stay source-authoritative in the shared dataset. Any
+        // additional legacy variants or unique option values are carried forward.
+        private static async Task ConsolidateLegacyMapNamesAsync(
+            SqliteConnection connection,
+            SqliteTransaction transaction,
+            IReadOnlyList<FieldDefinitionSeed> currentDefinitions,
+            CancellationToken cancellationToken,
+            Action<int, int, string>? reportProgress)
+        {
+            if (!currentDefinitions.Any(definition => string.Equals(
+                definition.SourceKey, MapNamesFieldData.CreatureMapSourceKey,
+                StringComparison.OrdinalIgnoreCase)))
+            {
+                return;
+            }
+
+            long? legacyId = await FindDefinitionIdAsync(
+                connection, transaction, MapNamesFieldData.LegacyGameObjectMapSourceKey, cancellationToken);
+            if (legacyId == null)
+            {
+                return;
+            }
+
+            long? sharedId = await FindDefinitionIdAsync(
+                connection, transaction, MapNamesFieldData.CreatureMapSourceKey, cancellationToken);
+            if (sharedId == null)
+            {
+                throw new InvalidOperationException("Cannot consolidate Map Names: the shared definition is missing.");
+            }
+
+            reportProgress?.Invoke(currentDefinitions.Count, currentDefinitions.Count,
+                "Consolidating duplicate Map Names data into one shared dataset...");
+
+            try
+            {
+                // Retain custom variants in full, including their expansion mappings and options.
+                // Unique variant keys can be moved without recreating their existing records.
+                await ExecuteMapMigrationSqlAsync(connection, transaction, @"
+UPDATE field_variants
+SET field_definition_id = $sharedId
+WHERE field_definition_id = $legacyId
+  AND NOT EXISTS (
+      SELECT 1 FROM field_variants AS shared
+      WHERE shared.field_definition_id = $sharedId
+        AND shared.variant_key = field_variants.variant_key COLLATE NOCASE
+  );", legacyId.Value, sharedId.Value, cancellationToken);
+
+                // Combine custom map IDs from expansion variants common to both datasets.
+                // Duplicate built-in values remain in the canonical source dataset.
+                await ExecuteMapMigrationSqlAsync(connection, transaction, @"
+INSERT OR IGNORE INTO field_options(field_variant_id, value, label, description, sort_order)
+SELECT shared.id, options.value, options.label, options.description, options.sort_order
+FROM field_variants AS legacy
+INNER JOIN field_variants AS shared
+    ON shared.field_definition_id = $sharedId
+   AND shared.variant_key = legacy.variant_key COLLATE NOCASE
+INNER JOIN field_options AS options ON options.field_variant_id = legacy.id
+WHERE legacy.field_definition_id = $legacyId;", legacyId.Value, sharedId.Value, cancellationToken);
+
+                // Preserve any administrator-added generation associations as well.
+                await ExecuteMapMigrationSqlAsync(connection, transaction, @"
+INSERT OR IGNORE INTO field_variant_generations(field_variant_id, generation)
+SELECT shared.id, generations.generation
+FROM field_variants AS legacy
+INNER JOIN field_variants AS shared
+    ON shared.field_definition_id = $sharedId
+   AND shared.variant_key = legacy.variant_key COLLATE NOCASE
+INNER JOIN field_variant_generations AS generations
+    ON generations.field_variant_id = legacy.id
+WHERE legacy.field_definition_id = $legacyId;", legacyId.Value, sharedId.Value, cancellationToken);
+
+                // Explicitly clean up remaining duplicate children for databases that do
+                // not have foreign key cascading enabled in their SQLite configuration.
+                await ExecuteMapMigrationSqlAsync(connection, transaction, @"
+DELETE FROM field_options
+WHERE field_variant_id IN (
+    SELECT id FROM field_variants WHERE field_definition_id = $legacyId
+);", legacyId.Value, sharedId.Value, cancellationToken);
+                await ExecuteMapMigrationSqlAsync(connection, transaction, @"
+DELETE FROM field_variant_generations
+WHERE field_variant_id IN (
+    SELECT id FROM field_variants WHERE field_definition_id = $legacyId
+);", legacyId.Value, sharedId.Value, cancellationToken);
+                await ExecuteMapMigrationSqlAsync(connection, transaction,
+                    "DELETE FROM field_variants WHERE field_definition_id = $legacyId;",
+                    legacyId.Value, sharedId.Value, cancellationToken);
+                await ExecuteMapMigrationSqlAsync(connection, transaction,
+                    "DELETE FROM field_definitions WHERE id = $legacyId;",
+                    legacyId.Value, sharedId.Value, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                throw new InvalidOperationException("Could not consolidate duplicate Map Names datasets.", exception);
+            }
+        }
+
+        // Read the ID of a built-in definition without loading its options.
+        private static async Task<long?> FindDefinitionIdAsync(
+            SqliteConnection connection,
+            SqliteTransaction transaction,
+            string sourceKey,
+            CancellationToken cancellationToken)
+        {
+            await using SqliteCommand command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = "SELECT id FROM field_definitions WHERE source_key = $key LIMIT 1;";
+            command.Parameters.AddWithValue("$key", sourceKey);
+            object? value = await command.ExecuteScalarAsync(cancellationToken);
+            return value == null ? null : Convert.ToInt64(value, CultureInfo.InvariantCulture);
+        }
+
+        // Execute a parameterized legacy Map Names migration statement.
+        private static async Task ExecuteMapMigrationSqlAsync(
+            SqliteConnection connection,
+            SqliteTransaction transaction,
+            string sql,
+            long legacyId,
+            long sharedId,
+            CancellationToken cancellationToken)
+        {
+            await using SqliteCommand command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = sql;
+            command.Parameters.AddWithValue("$legacyId", legacyId);
+            command.Parameters.AddWithValue("$sharedId", sharedId);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        // Group ordinary definitions by their source table and shared map definitions
+        // under Map Names. Existing category names, visibility and icons are never overwritten.
         private static async Task<long> EnsureBuiltInCategoryAsync(
             SqliteConnection connection,
             SqliteTransaction transaction,
-            string tableName,
+            FieldDefinitionSeed definition,
             FieldDataBuiltInMergeResult result,
             CancellationToken cancellationToken)
         {
-            string categoryKey = "world." + tableName.Replace('_', '-').ToLowerInvariant();
-            string displayName = CultureInfo.InvariantCulture.TextInfo.ToTitleCase(
-                tableName.Replace('_', ' ').ToLowerInvariant());
+            string tableName = definition.TableName;
+            bool isMapNames = definition.SourceKey.StartsWith(
+                "builtin.map_names.", StringComparison.OrdinalIgnoreCase);
+            string categoryKey = isMapNames
+                ? "reference.map-names"
+                : "world." + tableName.Replace('_', '-').ToLowerInvariant();
+            string displayName = isMapNames
+                ? "Map Names"
+                : CultureInfo.InvariantCulture.TextInfo.ToTitleCase(
+                    tableName.Replace('_', ' ').ToLowerInvariant());
             bool isCreatureTemplate = string.Equals(
                 tableName, "creature_template", StringComparison.OrdinalIgnoreCase);
 
@@ -163,9 +318,17 @@ INSERT OR IGNORE INTO field_categories(category_key, name, description, icon, so
 VALUES ($key, $name, $description, $icon, $sortOrder, 1);";
             command.Parameters.AddWithValue("$key", categoryKey);
             command.Parameters.AddWithValue("$name", displayName);
-            command.Parameters.AddWithValue("$description", "Editor data for " + tableName + " fields.");
-            command.Parameters.AddWithValue("$icon", isCreatureTemplate ? "bi-person-badge" : "bi-collection");
-            command.Parameters.AddWithValue("$sortOrder", isCreatureTemplate ? 10 : 100);
+            command.Parameters.AddWithValue(
+                "$description",
+                isMapNames
+                    ? "Map.dbc names for world spawn map selectors, grouped by expansion."
+                    : "Editor data for " + tableName + " fields.");
+            command.Parameters.AddWithValue(
+                "$icon",
+                isMapNames ? "bi-map" : isCreatureTemplate ? "bi-person-badge" : "bi-collection");
+            command.Parameters.AddWithValue(
+                "$sortOrder",
+                isMapNames ? 20 : isCreatureTemplate ? 10 : 100);
             if (await command.ExecuteNonQueryAsync(cancellationToken) > 0)
             {
                 result.CategoriesInserted++;
@@ -192,7 +355,8 @@ VALUES ($key, $name, $description, $icon, $sortOrder, 1);";
             // definitions that an administrator moved into a custom category.
             if (existing.CategoryId != categoryId &&
                 (existing.CategoryKey == null ||
-                    existing.CategoryKey.StartsWith("world.", StringComparison.OrdinalIgnoreCase)))
+                    existing.CategoryKey.StartsWith("world.", StringComparison.OrdinalIgnoreCase) ||
+                    existing.CategoryKey.StartsWith("reference.", StringComparison.OrdinalIgnoreCase)))
             {
                 await UpdateDefinitionIntegerAsync(
                     connection, transaction, existing.Id, "category_id", categoryId, cancellationToken);

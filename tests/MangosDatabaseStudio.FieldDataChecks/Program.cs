@@ -28,6 +28,7 @@ namespace MangosDatabaseStudio.FieldDataChecks
             {
                 CheckVersionPresentation();
                 CheckSourceDiscovery();
+                await CheckMapNamesSynchronizationAsync();
                 await CheckMultiTableSynchronizationAsync();
                 await CheckProgressAndRollbackAsync();
                 CheckFailedStartupGate();
@@ -92,9 +93,186 @@ namespace MangosDatabaseStudio.FieldDataChecks
                 definitions.Select(definition => definition.SourceKey),
                 StringComparer.OrdinalIgnoreCase);
 
-            Check(keys.Count >= 23, "The registered CreatureTemplate source list is incomplete.");
+            Check(keys.Count >= 22, "The registered CreatureTemplate source list is incomplete.");
             Check(keys.Contains("builtin.creature_template.faction_alliance"), "Alliance faction data is missing.");
             Check(keys.Contains("builtin.creature_template.faction_horde"), "Horde faction data is missing.");
+            Check(keys.Contains("builtin.map_names.creature.map"), "Creature Map Names were not discovered.");
+            Check(!keys.Contains("builtin.map_names.gameobject.map"),
+                "GameObject Map Names must use the shared dataset, not a duplicate definition.");
+        }
+
+        // Ensure map names share a category while retaining expansion-specific choices
+        // and preserving administrator-added entries in the existing SQLite catalog.
+        private static async Task CheckMapNamesSynchronizationAsync()
+        {
+            IReadOnlyList<FieldDefinitionSeed> maps = FieldDataSeedRegistry.Discover()
+                .Where(definition => definition.SourceKey.StartsWith(
+                    "builtin.map_names.", StringComparison.Ordinal))
+                .ToArray();
+
+            Check(maps.Count == 1, "Map Names must have only one shared definition.");
+            foreach (FieldDefinitionSeed map in maps)
+            {
+                Check(map.ColumnName == "map", "The Map Names definition must target the map column.");
+                Check(map.Variants.Count == 5, "Map Names must provide variants for all five generations.");
+                Check(map.Variants[0].Options.Any(option => option.Value == "0" &&
+                    option.Label == "Eastern Kingdoms"), "The Vanilla Map Names baseline is missing.");
+                Check(!map.Variants[0].Options.Any(option => option.Value == "530"),
+                    "Outland must not be offered on a Vanilla server.");
+                Check(map.Variants[1].Options.Any(option => option.Value == "530" &&
+                    option.Label == "Outland"), "The Burning Crusade map baseline is missing.");
+                Check(!map.Variants[1].Options.Any(option => option.Value == "571"),
+                    "Northrend must not be offered on a Burning Crusade server.");
+                Check(map.Variants[2].Options.Any(option => option.Value == "571" &&
+                    option.Label == "Northrend"), "The Wrath map baseline is missing.");
+                Check(map.Variants[3].Options.Any(option => option.Value == "646" &&
+                    option.Label == "Deepholm"), "The Cataclysm map baseline is missing.");
+                Check(!map.Variants[3].Options.Any(option => option.Value == "870"),
+                    "Pandaria must not be offered on a Cataclysm server.");
+                Check(map.Variants[4].Options.Any(option => option.Value == "870" &&
+                    option.Label == "Pandaria"), "The MoP map baseline is missing.");
+            }
+
+            await using SqliteConnection connection = new("Data Source=:memory:");
+            await connection.OpenAsync();
+            await CreateCatalogSchemaAsync(connection);
+            await MangosFieldDataSeed.ApplyAsync(connection, maps, CancellationToken.None);
+
+            Check(await CountAsync(connection, "field_categories") == 1,
+                "Both spawn tables must share one Map Names category.");
+            Check(await CountAsync(connection, "field_definitions") == 1,
+                "Map Names must have one shared column definition.");
+            Check(await CountAsync(connection, "field_variants") == 5,
+                "Map Names requires five expansion variants, not duplicated variants.");
+            Check(await CountAsync(connection, "field_variant_generations") == 5,
+                "Map Names expansion mappings were not stored.");
+            Check(await ScalarStringAsync(connection,
+                "SELECT name FROM field_categories WHERE category_key = 'reference.map-names';") == "Map Names",
+                "The Map Names category was not created.");
+            Check(await ScalarStringAsync(connection,
+                "SELECT label FROM field_options WHERE value = '530' AND field_variant_id IN " +
+                "(SELECT id FROM field_variants WHERE variant_key = 'generation-1') LIMIT 1;") == "Outland",
+                "Map names were not written to SQLite.");
+
+            // New administrator options must survive an unchanged-source restart.
+            await ExecuteAsync(connection, @"
+INSERT INTO field_options(field_variant_id, value, label, sort_order)
+SELECT v.id, '987654', 'Custom server map', 999
+FROM field_variants AS v
+JOIN field_definitions AS d ON d.id = v.field_definition_id
+WHERE d.table_name = 'creature' AND v.variant_key = 'generation-4';");
+            await MangosFieldDataSeed.ApplyAsync(connection, maps, CancellationToken.None);
+            Check(await ScalarStringAsync(connection,
+                "SELECT label FROM field_options WHERE value = '987654';") == "Custom server map",
+                "A custom map entry was lost after startup synchronization.");
+
+            // Respect administrator edits to the category's display properties.
+            await ExecuteAsync(connection, @"
+UPDATE field_categories SET name = 'Custom Map Labels' WHERE category_key = 'reference.map-names';
+UPDATE application_metadata SET value = '13' WHERE name = 'field_catalog_version';");
+            await MangosFieldDataSeed.ApplyAsync(connection, maps, CancellationToken.None);
+            Check(await ScalarStringAsync(connection,
+                "SELECT name FROM field_categories WHERE category_key = 'reference.map-names';") ==
+                "Custom Map Labels", "The administrator's Map Names category label was overwritten.");
+            Check(await ScalarStringAsync(connection,
+                "SELECT label FROM field_options WHERE value = '987654';") == "Custom server map",
+                "A custom map option was removed during a catalog update.");
+
+            // An administrator can remove one built-in category or all built-in
+            // categories. The unchanged C# fingerprint must not prevent restoration.
+            await ExecuteAsync(connection, @"
+UPDATE field_definitions SET category_id = NULL
+WHERE category_id = (SELECT id FROM field_categories WHERE category_key = 'reference.map-names');
+DELETE FROM field_categories WHERE category_key = 'reference.map-names';");
+            await MangosFieldDataSeed.ApplyAsync(connection, maps, CancellationToken.None);
+            Check(await CountAsync(connection, "field_categories") == 1,
+                "Deleted Map Names category was not restored at startup.");
+            Check(await ScalarStringAsync(connection, @"
+SELECT category_key FROM field_categories
+WHERE id = (SELECT category_id FROM field_definitions
+            WHERE source_key = 'builtin.map_names.creature.map');") == "reference.map-names",
+                "The map definition was not reattached to its recreated category.");
+            Check(await ScalarStringAsync(connection,
+                "SELECT label FROM field_options WHERE value = '987654';") == "Custom server map",
+                "Recreating a category removed a custom map option.");
+
+            // Simulate the old release creating a second, identical Map Names dataset.
+            // Additional options and variants added to the old copy must be transferred.
+            await ExecuteAsync(connection, @"
+INSERT INTO field_definitions(
+    source_key, category_id, display_name, table_name, column_name, editor_kind,
+    selection_mode, value_handling, preserve_unknown_values, description,
+    is_system, is_enabled, priority)
+SELECT 'builtin.map_names.gameobject.map', category_id, display_name,
+       'gameobject', column_name, editor_kind, selection_mode, value_handling,
+       preserve_unknown_values, description, is_system, is_enabled, priority
+FROM field_definitions WHERE source_key = 'builtin.map_names.creature.map';
+INSERT INTO field_variants(field_definition_id, variant_key, description)
+SELECT (SELECT id FROM field_definitions WHERE source_key = 'builtin.map_names.gameobject.map'),
+       variant_key, description
+FROM field_variants WHERE field_definition_id =
+    (SELECT id FROM field_definitions WHERE source_key = 'builtin.map_names.creature.map');
+INSERT INTO field_variant_generations(field_variant_id, generation)
+SELECT legacy.id, generations.generation
+FROM field_variants AS shared
+JOIN field_variant_generations AS generations ON generations.field_variant_id = shared.id
+JOIN field_variants AS legacy ON legacy.variant_key = shared.variant_key
+WHERE shared.field_definition_id =
+    (SELECT id FROM field_definitions WHERE source_key = 'builtin.map_names.creature.map')
+AND legacy.field_definition_id =
+    (SELECT id FROM field_definitions WHERE source_key = 'builtin.map_names.gameobject.map');
+INSERT INTO field_options(field_variant_id, value, label, description, sort_order)
+SELECT legacy.id, options.value, options.label, options.description, options.sort_order
+FROM field_variants AS shared
+JOIN field_options AS options ON options.field_variant_id = shared.id
+JOIN field_variants AS legacy ON legacy.variant_key = shared.variant_key
+WHERE shared.field_definition_id =
+    (SELECT id FROM field_definitions WHERE source_key = 'builtin.map_names.creature.map')
+AND legacy.field_definition_id =
+    (SELECT id FROM field_definitions WHERE source_key = 'builtin.map_names.gameobject.map');
+INSERT INTO field_options(field_variant_id, value, label, sort_order)
+SELECT id, '999999', 'Legacy custom map', 999
+FROM field_variants WHERE variant_key = 'generation-4'
+AND field_definition_id =
+    (SELECT id FROM field_definitions WHERE source_key = 'builtin.map_names.gameobject.map');
+INSERT INTO field_variants(field_definition_id, variant_key, description)
+VALUES ((SELECT id FROM field_definitions WHERE source_key = 'builtin.map_names.gameobject.map'),
+        'legacy-custom-variant', 'Custom generation dataset');
+INSERT INTO field_variant_generations(field_variant_id, generation)
+SELECT id, 4 FROM field_variants WHERE variant_key = 'legacy-custom-variant';
+INSERT INTO field_options(field_variant_id, value, label, sort_order)
+SELECT id, '999998', 'Legacy custom variant map', 0
+FROM field_variants WHERE variant_key = 'legacy-custom-variant';");
+            await MangosFieldDataSeed.ApplyAsync(connection, maps, CancellationToken.None);
+            Check(await CountAsync(connection, "field_definitions") == 1,
+                "Legacy duplicate map definition was not consolidated.");
+            Check(await CountAsync(connection, "field_variants") == 6,
+                "The legacy custom variant was not preserved during consolidation.");
+            Check(await ScalarStringAsync(connection,
+                "SELECT label FROM field_options WHERE value = '999999';") == "Legacy custom map",
+                "The unique custom map ID from the duplicate dataset was lost.");
+            Check(await ScalarStringAsync(connection,
+                "SELECT label FROM field_options WHERE value = '999998';") == "Legacy custom variant map",
+                "The legacy custom variant was lost during consolidation.");
+            await MangosFieldDataSeed.ApplyAsync(connection, maps, CancellationToken.None);
+            Check(await CountAsync(connection, "field_definitions") == 1,
+                "Restarting after consolidation duplicated Map Names.");
+
+            // Deleting every category and its children must bootstrap the current built-ins
+            // even if the saved fingerprint still matches the C# source.
+            await ExecuteAsync(connection, @"
+DELETE FROM field_options;
+DELETE FROM field_variant_generations;
+DELETE FROM field_variants;
+DELETE FROM field_definitions;
+DELETE FROM field_categories;");
+            await MangosFieldDataSeed.ApplyAsync(connection, maps, CancellationToken.None);
+            Check(await CountAsync(connection, "field_categories") == 1,
+                "Clearing all categories did not reinstall the Map Names category.");
+            Check(await CountAsync(connection, "field_definitions") == 1,
+                "Clearing all Field Data did not reinstall the map definition.");
+            Check(await CountAsync(connection, "field_variants") == 5,
+                "Reinstalled Map Names must contain all expansion variants.");
         }
 
         // Exercise new tables, labels, generation mappings, additional options, and idempotency.
@@ -162,6 +340,24 @@ VALUES ('user.demo.extra', 'demo_table', 'Extra', 'Select',
             Check((await ScalarStringAsync(connection,
                 "SELECT value FROM application_metadata WHERE name = 'field_catalog_source_sha256';"))?.Length == 64,
                 "The source fingerprint was not persisted.");
+
+            // Delete only a built-in category, leaving the associated definition in
+            // place. Startup must re-create and reattach it without touching user data.
+            await ExecuteAsync(connection, @"
+UPDATE field_definitions SET category_id = NULL
+WHERE category_id = (SELECT id FROM field_categories WHERE category_key = 'world.demo-table');
+DELETE FROM field_categories WHERE category_key = 'world.demo-table';");
+            await MangosFieldDataSeed.ApplyAsync(connection, second, CancellationToken.None);
+            Check(await CountAsync(connection, "field_categories") == 3,
+                "Missing built-in category was not restored with an unchanged fingerprint.");
+            Check(await ScalarStringAsync(connection,
+                "SELECT label FROM field_options WHERE value = '99';") == "User custom value",
+                "Restoring a deleted category removed administrator-added options.");
+
+            // Repeated runs must not create duplicates after repairing missing categories.
+            await MangosFieldDataSeed.ApplyAsync(connection, second, CancellationToken.None);
+            Check(await CountAsync(connection, "field_categories") == 3,
+                "Re-running the repair created duplicate categories.");
 
             // An upgrade from a previously versioned catalog must still reconcile source rows.
             await ExecuteAsync(connection, @"

@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MangosDatabaseStudio.Application.Schema;
 using Microsoft.Data.Sqlite;
+using MangosDatabaseStudio.App.Services.FieldData.MapNames;
 
 namespace MangosDatabaseStudio.App.Services
 {
@@ -70,7 +71,13 @@ LEFT JOIN field_options AS o
     ON o.field_variant_id = v.id
 LEFT JOIN field_categories AS c
     ON c.id = d.category_id
-WHERE d.table_name = $tableName COLLATE NOCASE
+WHERE (
+        d.table_name = $tableName COLLATE NOCASE
+        OR (
+            $tableName = 'gameobject' COLLATE NOCASE
+            AND d.source_key = $sharedMapSourceKey
+        )
+    )
   AND d.is_enabled = 1
   AND (c.id IS NULL OR c.is_enabled = 1)
   AND g.generation = $generation
@@ -82,6 +89,7 @@ ORDER BY
     o.sort_order,
     o.id;";
             command.Parameters.AddWithValue("$tableName", tableName);
+            command.Parameters.AddWithValue("$sharedMapSourceKey", MapNamesFieldData.CreatureMapSourceKey);
             command.Parameters.AddWithValue("$generation", (int)generation);
 
             Dictionary<string, EditorBuilder> builders = new(StringComparer.OrdinalIgnoreCase);

@@ -23,7 +23,7 @@ namespace MangosDatabaseStudio.App.Services
     {
         private const string CatalogVersionMetadataKey = "field_catalog_version";
         private const string CatalogFingerprintMetadataKey = "field_catalog_source_sha256";
-        private const int CurrentCatalogVersion = 14;
+        private const int CurrentCatalogVersion = 15;
 
         // Synchronize all discovered C# FieldData sources into the encrypted SQLite catalog.
         public static Task ApplyAsync(
@@ -63,44 +63,44 @@ namespace MangosDatabaseStudio.App.Services
                     "automatic catalog downgrades are not supported.");
             }
 
+            // The fingerprint only tracks C# changes, not deleted SQLite rows. Always
+            // check that each required built-in category and definition still exists.
+            // This check is intentionally cheap and does not read every option.
+            bool missingBuiltIns = await HasMissingBuiltInsAsync(
+                connection, definitions, cancellationToken);
+            bool legacyMapDefinition = definitions.Any(definition => string.Equals(
+                definition.SourceKey, FieldData.MapNames.MapNamesFieldData.CreatureMapSourceKey,
+                StringComparison.OrdinalIgnoreCase)) &&
+                await FieldDataBuiltInMerge.HasLegacyMapDefinitionAsync(
+                    connection, cancellationToken);
+
             if (installedVersion == CurrentCatalogVersion &&
-                string.Equals(installedFingerprint, fingerprint, StringComparison.Ordinal))
+                string.Equals(installedFingerprint, fingerprint, StringComparison.Ordinal) &&
+                !missingBuiltIns && !legacyMapDefinition)
             {
                 reportProgress?.Invoke(definitions.Count, definitions.Count,
                     "Field Data is already up to date; no changes were needed.");
                 return;
             }
 
-            bool hasDefinitions = await HasDefinitionsAsync(connection, cancellationToken);
             await using SqliteTransaction transaction = connection.BeginTransaction();
             try
             {
-                if (hasDefinitions || installedVersion <= 0)
-                {
-                    // Apply every coded definition, including new tables, variants, generation
-                    // mappings and options. The merge never deletes administrator-added rows.
-                    // An established catalog that was deliberately emptied remains empty.
-                    FieldDataBuiltInMergeResult merge = await FieldDataBuiltInMerge.ApplyCurrentAsync(
-                        connection,
-                        transaction,
-                        definitions,
-                        cancellationToken,
-                        reportProgress);
+                // Restore built-in data even after categories and definitions were deleted.
+                // The merge is idempotent and preserves independent administrator additions.
+                FieldDataBuiltInMergeResult merge = await FieldDataBuiltInMerge.ApplyCurrentAsync(
+                    connection,
+                    transaction,
+                    definitions,
+                    cancellationToken,
+                    reportProgress);
 
-                    await SetMetadataAsync(
-                        connection,
-                        transaction,
-                        "field_catalog_last_update_summary",
-                        merge.ToString(),
-                        cancellationToken);
-                }
-                else
-                {
-                    // An administrator intentionally cleared an established catalog.
-                    // Respect that choice while updating version metadata.
-                    reportProgress?.Invoke(definitions.Count, definitions.Count,
-                        "Field Data was intentionally emptied; built-in entries were not restored.");
-                }
+                await SetMetadataAsync(
+                    connection,
+                    transaction,
+                    "field_catalog_last_update_summary",
+                    merge.ToString(),
+                    cancellationToken);
 
                 await SetMetadataAsync(
                     connection,
@@ -258,15 +258,52 @@ namespace MangosDatabaseStudio.App.Services
             return Convert.ToString(result, CultureInfo.InvariantCulture);
         }
 
-        // Distinguish a new catalog from one an administrator intentionally emptied.
-        private static async Task<bool> HasDefinitionsAsync(
+        // Detect deleted built-in definitions or categories independently of the source hash.
+        // Only category keys and definition source keys are inspected, keeping the normal
+        // startup path fast even for catalogs with thousands of options.
+        private static async Task<bool> HasMissingBuiltInsAsync(
             SqliteConnection connection,
+            IReadOnlyList<FieldDefinitionSeed> definitions,
             CancellationToken cancellationToken)
         {
-            await using SqliteCommand command = connection.CreateCommand();
-            command.CommandText = "SELECT EXISTS(SELECT 1 FROM field_definitions LIMIT 1);";
-            object? value = await command.ExecuteScalarAsync(cancellationToken);
-            return Convert.ToInt32(value, CultureInfo.InvariantCulture) != 0;
+            HashSet<string> categoryKeys = new(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> definitionKeys = new(StringComparer.OrdinalIgnoreCase);
+
+            await using (SqliteCommand command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT category_key FROM field_categories;";
+                await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    categoryKeys.Add(reader.GetString(0));
+                }
+            }
+
+            await using (SqliteCommand command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT source_key FROM field_definitions;";
+                await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    definitionKeys.Add(reader.GetString(0));
+                }
+            }
+
+            foreach (FieldDefinitionSeed definition in definitions)
+            {
+                string categoryKey = definition.SourceKey.StartsWith(
+                    "builtin.map_names.", StringComparison.OrdinalIgnoreCase)
+                    ? "reference.map-names"
+                    : "world." + definition.TableName.Replace('_', '-').ToLowerInvariant();
+
+                if (!definitionKeys.Contains(definition.SourceKey) ||
+                    !categoryKeys.Contains(categoryKey))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         // Persist migration state and the source fingerprint atomically with the merge.
