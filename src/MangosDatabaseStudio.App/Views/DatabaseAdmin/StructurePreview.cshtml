@@ -6,13 +6,39 @@
     ViewData["Section"] = "Database Administration / " + Model.Request.Database + " / " + Model.Request.Table;
 }
 
+@* Keep the editor context and return action aligned with the form below. *@
 <div class="page-actions schema-editor-page-heading">
-    <div>
-        <span class="eyebrow">SQL confirmation</span>
-        <h1>Review schema change</h1>
-        <p class="page-lead">Nothing has been changed yet. Review the server-generated ALTER TABLE statement before execution.</p>
+    <div class="schema-editor-heading-leading">
+        <span class="schema-editor-heading-symbol" aria-hidden="true">
+            <i class="bi bi-code-square"></i>
+        </span>
+        <div class="schema-editor-heading-copy">
+            <span class="eyebrow">Schema review</span>
+            <h2>Review pending changes</h2>
+            <p class="page-lead">Nothing has been changed yet. Inspect the generated SQL before confirming the operation.</p>
+            <div class="schema-editor-heading-context" aria-label="Current database and table">
+                <span class="schema-editor-heading-context-item" title="Database">
+                    <i class="bi bi-database" aria-hidden="true"></i>
+                    @Model.Request.Database
+                </span>
+                <span class="schema-editor-heading-context-separator" aria-hidden="true">/</span>
+                <span class="schema-editor-heading-context-item" title="Table">
+                    <i class="bi bi-table" aria-hidden="true"></i>
+                    @Model.Request.Table
+                </span>
+            </div>
+        </div>
     </div>
-    <a class="btn btn-outline-secondary" asp-action="Structure" asp-route-database="@Model.Request.Database" asp-route-table="@Model.Request.Table"><i class="bi bi-x-lg"></i> Cancel</a>
+    <div class="schema-editor-heading-actions">
+        <span class="schema-editor-heading-status">
+            <i class="bi bi-shield-check" aria-hidden="true"></i>
+            Confirmation required
+        </span>
+        <a class="btn btn-outline-secondary" asp-action="Structure" asp-route-database="@Model.Request.Database" asp-route-table="@Model.Request.Table">
+            <i class="bi bi-x-lg" aria-hidden="true"></i>
+            Cancel review
+        </a>
+    </div>
 </div>
 
 <section class="panel schema-preview-panel">

@@ -11225,3 +11225,784 @@ html[data-studio-theme="premium"] .viewer-search-field > .input-group > .form-se
         border-radius: 0 0 var(--studio-ui-radius-sm) var(--studio-ui-radius-sm);
     }
 }
+
+/* Schema editor context header ------------------------------------------
+   Keep the editor summary, target path, and return action aligned to the
+   editing surface instead of stretching them across the whole workspace. */
+
+html[data-studio-theme="premium"] .studio-workspace-body > .schema-editor-page-heading:first-child {
+    width: min(100%, 72rem);
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+    margin: 0 auto 1rem;
+    padding: 1rem 1.15rem;
+    border: 1px solid var(--mangos-line);
+    border-left: 3px solid var(--workspace-accent);
+    border-radius: 11px;
+    background: linear-gradient(110deg, rgba(var(--workspace-accent-rgb), .055), transparent 44%),
+        var(--studio-panel);
+    box-shadow: var(--studio-shadow-xs);
+}
+
+html[data-studio-theme="premium"] .schema-editor-heading-leading {
+    display: flex;
+    align-items: flex-start;
+    flex: 1 1 auto;
+    gap: .85rem;
+    min-width: 0;
+}
+
+html[data-studio-theme="premium"] .schema-editor-heading-symbol {
+    display: grid;
+    place-items: center;
+    flex: 0 0 2.6rem;
+    width: 2.6rem;
+    height: 2.6rem;
+    border: 1px solid rgba(var(--workspace-accent-rgb), .16);
+    border-radius: .75rem;
+    background: rgba(var(--workspace-accent-rgb), .08);
+    color: var(--workspace-accent);
+    font-size: 1.05rem;
+}
+
+html[data-studio-theme="premium"] .schema-editor-heading-copy {
+    min-width: 0;
+}
+
+html[data-studio-theme="premium"] .schema-editor-heading-copy .eyebrow {
+    display: block;
+    margin: 1px 0 .25rem;
+}
+
+html[data-studio-theme="premium"] .schema-editor-heading-copy h2 {
+    margin: 0;
+    color: var(--studio-text);
+    font-size: clamp(1rem, 1.4vw, 1.28rem);
+    font-weight: 760;
+    letter-spacing: -.025em;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+}
+
+html[data-studio-theme="premium"] .schema-editor-heading-copy .page-lead {
+    margin: .22rem 0 0;
+    max-width: 44rem;
+    font-size: .75rem;
+    line-height: 1.5;
+}
+
+html[data-studio-theme="premium"] .schema-editor-heading-context {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .35rem;
+    margin-top: .65rem;
+    color: var(--studio-muted);
+}
+
+html[data-studio-theme="premium"] .schema-editor-heading-context-item {
+    display: inline-flex;
+    align-items: center;
+    gap: .34rem;
+    min-width: 0;
+    max-width: 100%;
+    padding: .24rem .48rem;
+    border: 1px solid var(--mangos-line);
+    border-radius: .45rem;
+    background: var(--studio-panel-soft);
+    color: var(--studio-muted);
+    font-size: .68rem;
+    font-weight: 650;
+    overflow-wrap: anywhere;
+}
+
+html[data-studio-theme="premium"] .schema-editor-heading-context-item i {
+    flex: 0 0 auto;
+    color: var(--workspace-accent);
+}
+
+html[data-studio-theme="premium"] .schema-editor-heading-context-separator {
+    color: var(--studio-subtle);
+    font-size: .65rem;
+}
+
+html[data-studio-theme="premium"] .schema-editor-heading-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    gap: .65rem;
+}
+
+html[data-studio-theme="premium"] .schema-editor-heading-status {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    color: var(--studio-muted);
+    font-size: .68rem;
+    font-weight: 680;
+    white-space: nowrap;
+}
+
+html[data-studio-theme="premium"] .schema-editor-heading-status i {
+    color: var(--workspace-accent);
+}
+
+html[data-studio-theme="premium"] .schema-editor-heading-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .4rem;
+    min-height: 2.3rem;
+    margin: 0;
+    white-space: nowrap;
+}
+
+@media (max-width: 1050px) {
+    html[data-studio-theme="premium"] .schema-editor-heading-actions {
+        flex-direction: column;
+        align-items: flex-end;
+    }
+}
+
+@media (max-width: 700px) {
+    html[data-studio-theme="premium"] .studio-workspace-body > .schema-editor-page-heading:first-child {
+        align-items: stretch;
+        gap: .95rem;
+        padding: .95rem;
+    }
+
+    html[data-studio-theme="premium"] .schema-editor-heading-leading {
+        gap: .7rem;
+    }
+
+    html[data-studio-theme="premium"] .schema-editor-heading-symbol {
+        flex-basis: 2.25rem;
+        width: 2.25rem;
+        height: 2.25rem;
+    }
+
+    html[data-studio-theme="premium"] .schema-editor-heading-actions {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        gap: .65rem;
+    }
+}
+
+@media (max-width: 420px) {
+    html[data-studio-theme="premium"] .schema-editor-heading-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    html[data-studio-theme="premium"] .schema-editor-heading-actions .btn {
+        width: 100%;
+    }
+}
+
+/* Shared workspace finishing pass ----------------------------------------
+   Keep this intentionally restrained. The schema editor, directory viewers,
+   and administration pages share visual rhythm, but search groups and modal
+   sizing remain under their established feature-specific rules. */
+
+/* Keep a section's description and its tools on the same visual baseline.
+   Long titles wrap without squeezing the action buttons or result count. */
+
+html[data-studio-theme="premium"] :where(.panel-header, .section-heading, .viewer-results-header) > :first-child {
+    min-width: 0;
+}
+
+html[data-studio-theme="premium"] :where(.panel-header, .section-heading) :where(h2, h3) {
+    margin-bottom: 0;
+    line-height: 1.3;
+}
+
+html[data-studio-theme="premium"] :where(.panel-header, .section-heading) p {
+    max-width: 72ch;
+    margin-bottom: 0;
+    line-height: 1.5;
+}
+
+html[data-studio-theme="premium"] .viewer-results-header {
+    gap: 12px 18px;
+}
+
+html[data-studio-theme="premium"] .viewer-results-header > :first-child {
+    flex: 1 1 260px;
+}
+
+html[data-studio-theme="premium"] .viewer-results-header p {
+    max-width: 76ch;
+    line-height: 1.5;
+}
+
+html[data-studio-theme="premium"] .viewer-results-count {
+    min-width: 76px;
+    align-self: center;
+    padding: 8px 11px;
+    border: 1px solid rgba(var(--workspace-accent-rgb), .12);
+    border-radius: var(--studio-ui-radius-sm);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Give shared editor forms consistent breathing room. Labels, controls,
+   helper text and validation each occupy a predictable position. */
+
+html[data-studio-theme="premium"] .schema-editor-form .form-group {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+html[data-studio-theme="premium"] .schema-editor-form .form-group > :where(.form-control, .form-select) {
+    width: 100%;
+    min-width: 0;
+}
+
+html[data-studio-theme="premium"] .schema-editor-form .form-group > small {
+    max-width: 75ch;
+    margin-bottom: 0;
+}
+
+html[data-studio-theme="premium"] .schema-editor-form .form-group > .text-danger:not(:empty) {
+    display: block;
+    margin-top: 5px;
+    font-size: .68rem;
+    line-height: 1.4;
+}
+
+/* Keep section dividers and the final action row visually related to the
+   editor panel rather than resembling another unrelated card. */
+
+html[data-studio-theme="premium"] .schema-editor-form-panel > .section-heading {
+    gap: 12px;
+    margin-bottom: 17px;
+}
+
+html[data-studio-theme="premium"] .schema-editor-form > .form-actions {
+    margin-top: 4px;
+    padding-top: 14px;
+    border-top: 1px solid var(--studio-border-soft);
+}
+
+html[data-studio-theme="premium"] .schema-editor-form > .form-actions .btn {
+    min-width: 88px;
+}
+
+/* Make contextual labels and descriptions easier to scan without turning
+   compact viewer cards into oversized dashboard tiles. */
+
+html[data-studio-theme="premium"] .viewer-context-card {
+    gap: 11px;
+    padding-inline: 12px;
+}
+
+html[data-studio-theme="premium"] .viewer-context-card small {
+    font-size: .61rem;
+}
+
+html[data-studio-theme="premium"] .viewer-context-card span:not(.viewer-context-icon) {
+    font-size: .63rem;
+    line-height: 1.4;
+}
+
+html[data-studio-theme="premium"] .viewer-summary-card small {
+    font-size: .62rem;
+}
+
+html[data-studio-theme="premium"] .viewer-summary-card p {
+    font-size: .63rem;
+}
+
+/* Align compact table actions and row-size selectors without changing the
+   table's fixed action-column widths or the established search controls. */
+
+html[data-studio-theme="premium"] :where(.viewer-results-toolbar, .viewer-record-pagination-wrap) {
+    gap: 10px;
+}
+
+html[data-studio-theme="premium"] :where(.viewer-results-toolbar, .viewer-record-page-size) :where(label, .world-filter-hint) {
+    line-height: 1.4;
+}
+
+html[data-studio-theme="premium"] :where(.viewer-results-toolbar, .viewer-record-page-size) .form-select {
+    vertical-align: middle;
+}
+
+html[data-studio-theme="premium"] :where(.viewer-results-table, .viewer-record-table, .field-data-table) .viewer-action-column .icon-button:focus-visible,
+html[data-studio-theme="premium"] :where(.viewer-results-table, .viewer-record-table, .field-data-table) .viewer-action-column .btn:focus-visible {
+    outline: 2px solid var(--workspace-accent);
+    outline-offset: 2px;
+}
+
+/* Small viewports retain distinct actions and compact counts; nothing may
+   grow beyond the available panel width or overlap its neighboring control. */
+
+@media (max-width: 700px) {
+    html[data-studio-theme="premium"] .viewer-results-header {
+        align-items: flex-start;
+    }
+
+    html[data-studio-theme="premium"] .viewer-results-header > :first-child {
+        flex-basis: auto;
+        width: 100%;
+    }
+
+    html[data-studio-theme="premium"] .viewer-results-count {
+        width: auto;
+        align-self: flex-start;
+    }
+
+    html[data-studio-theme="premium"] .schema-editor-form > .form-actions {
+        gap: 8px;
+    }
+}
+
+@media (max-width: 420px) {
+    html[data-studio-theme="premium"] .schema-editor-form > .form-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    html[data-studio-theme="premium"] .schema-editor-form > .form-actions .btn {
+        width: 100%;
+    }
+}
+
+/* Spawn analyzer filter alignment --------------------------------------
+   Align labels, editable controls, and helper text to the same vertical
+   rhythm throughout both filter rows. Keep this specific to the analyzer
+   so the shared World Viewer search controls retain their own styling. */
+
+html[data-studio-theme="premium"] .double-spawn-filter-grid {
+    --spawn-filter-control-height: 38px;
+    column-gap: 14px;
+    row-gap: 20px;
+    align-items: stretch;
+}
+
+html[data-studio-theme="premium"] .double-spawn-filter-grid > .double-spawn-filter-field {
+    display: grid;
+    grid-template-rows: minmax(16px, auto) var(--spawn-filter-control-height) minmax(0, 1fr);
+    align-content: start;
+    row-gap: 6px;
+    min-width: 0;
+}
+
+html[data-studio-theme="premium"] .double-spawn-filter-field > :is(label, span) {
+    align-self: end;
+    margin: 0;
+    line-height: 1.35;
+}
+
+html[data-studio-theme="premium"] .double-spawn-filter-field > :is(.form-select, .input-group) {
+    align-self: stretch;
+    width: 100%;
+    min-width: 0;
+    height: var(--spawn-filter-control-height);
+    min-height: var(--spawn-filter-control-height);
+    margin: 0;
+}
+
+html[data-studio-theme="premium"] .double-spawn-filter-field > .input-group {
+    display: flex;
+    align-items: stretch;
+    flex-wrap: nowrap;
+}
+
+html[data-studio-theme="premium"] .double-spawn-filter-field > .input-group > :is(.form-control, .input-group-text) {
+    height: 100%;
+    min-height: 0;
+    margin: 0;
+}
+
+html[data-studio-theme="premium"] .double-spawn-filter-field > .input-group > .form-control {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+html[data-studio-theme="premium"] .double-spawn-filter-field > small {
+    align-self: start;
+    margin: 0;
+    line-height: 1.45;
+}
+
+@media (max-width: 720px) {
+    html[data-studio-theme="premium"] .double-spawn-filter-grid {
+        row-gap: 16px;
+    }
+}
+
+/* Database Updates and Change Storage workspace polish -------------------
+   The page-specific class is on .studio-content, while Razor content renders
+   inside .studio-workspace-body. Apply the vertical rhythm to the actual
+   sibling panels rather than to the outer workspace wrapper. */
+
+html[data-studio-theme="premium"] :is(
+    .database-updates-page,
+    .change-storage-page
+) .studio-workspace-body {
+    display: grid;
+    align-content: start;
+    gap: 18px;
+    min-width: 0;
+}
+
+html[data-studio-theme="premium"] :is(
+    .database-updates-page,
+    .change-storage-page
+) .studio-workspace-body > :is(.panel, .form-shell, .data-table-wrap) {
+    min-width: 0;
+    margin-top: 0;
+}
+
+/* Keep page introductions and their database context aligned and visually
+   separate from editable forms and the data/results panels below. */
+
+html[data-studio-theme="premium"] :is(
+    .database-updates-header,
+    .change-storage-header
+) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 16px 24px;
+    min-width: 0;
+    padding: 16px 18px;
+    border: 1px solid var(--studio-border);
+    border-radius: var(--studio-radius-surface);
+    background: var(--studio-panel);
+    box-shadow: var(--studio-shadow-surface);
+}
+
+html[data-studio-theme="premium"] :is(
+    .database-updates-header,
+    .change-storage-header
+) > div:first-child {
+    min-width: 0;
+}
+
+html[data-studio-theme="premium"] :is(
+    .database-updates-header,
+    .change-storage-header
+) .page-lead {
+    max-width: 780px;
+    margin: 0 0 6px;
+    color: var(--studio-text);
+    font-size: .87rem;
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+html[data-studio-theme="premium"] :is(
+    .database-updates-header,
+    .change-storage-header
+) .form-text {
+    max-width: 800px;
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* The selector and Scan action form one compact toolbar. The label sits
+   above its own select instead of spanning the button column. */
+
+html[data-studio-theme="premium"] .database-updates-database-picker {
+    display: grid;
+    grid-template-columns: minmax(190px, 245px) auto;
+    gap: 6px 9px;
+    align-items: end;
+    min-width: 0;
+    margin: 0;
+}
+
+html[data-studio-theme="premium"] .database-updates-database-picker > label {
+    grid-column: 1;
+    margin: 0;
+    align-self: end;
+    line-height: 1.35;
+}
+
+html[data-studio-theme="premium"] .database-updates-database-picker > .form-select {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+}
+
+html[data-studio-theme="premium"] .database-updates-database-picker > .btn {
+    grid-column: 2;
+    grid-row: 2;
+    white-space: nowrap;
+}
+
+html[data-studio-theme="premium"] .database-updates-database-picker > :is(.form-select, .btn),
+html[data-studio-theme="premium"] .database-update-source-form > .btn,
+html[data-studio-theme="premium"] .database-update-source-form .form-control {
+    height: 38px;
+    min-height: 38px;
+}
+
+/* Source path and save action share a baseline; the helper text belongs
+   below the input and does not push the action up or down. */
+
+html[data-studio-theme="premium"] .database-update-source-form {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 12px;
+}
+
+html[data-studio-theme="premium"] .database-update-source-form > .form-group {
+    min-width: 0;
+    margin: 0;
+}
+
+html[data-studio-theme="premium"] .database-update-source-form > .btn {
+    align-self: start;
+    margin-top: 25px;
+    white-space: nowrap;
+}
+
+html[data-studio-theme="premium"] .database-update-source-panel .section-heading,
+html[data-studio-theme="premium"] .database-update-plan-panel .section-heading,
+html[data-studio-theme="premium"] .change-storage-history-panel .section-heading {
+    margin-bottom: 16px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--studio-border-soft);
+}
+
+/* The three update summary cards use matched heights and aligned details.
+   Long database version descriptions and patch filenames may wrap safely. */
+
+html[data-studio-theme="premium"] .database-update-version-grid {
+    gap: 14px;
+    align-items: stretch;
+}
+
+html[data-studio-theme="premium"] .database-update-version-grid > .panel {
+    height: 100%;
+    min-width: 0;
+    min-height: 204px;
+    margin: 0;
+}
+
+html[data-studio-theme="premium"] .database-update-version-card dl {
+    gap: 9px;
+}
+
+html[data-studio-theme="premium"] .database-update-version-card dl > div {
+    min-width: 0;
+    background: var(--studio-panel-soft);
+}
+
+html[data-studio-theme="premium"] .database-update-version-card dd {
+    margin-bottom: 0;
+    overflow-wrap: anywhere;
+}
+
+html[data-studio-theme="premium"] .database-update-summary-card {
+    justify-content: flex-start;
+}
+
+html[data-studio-theme="premium"] .database-update-summary-card .database-update-file-stats {
+    margin-top: auto;
+    padding-top: 12px;
+}
+
+html[data-studio-theme="premium"] .database-update-patch-list {
+    gap: 10px;
+}
+
+html[data-studio-theme="premium"] .database-update-patch {
+    min-width: 0;
+    padding: 13px 15px;
+}
+
+html[data-studio-theme="premium"] .database-update-patch-title {
+    flex-wrap: wrap;
+    gap: 7px 10px;
+}
+
+html[data-studio-theme="premium"] .database-update-patch-title strong {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.4;
+}
+
+/* Change Storage: avoid crowded five-column filter rows, and give search
+   enough room for the full input and its search icon. */
+
+html[data-studio-theme="premium"] .change-storage-filters {
+    grid-template-columns: repeat(3, minmax(130px, 1fr)) minmax(220px, 1.5fr);
+    gap: 12px;
+    align-items: end;
+    margin-bottom: 18px;
+}
+
+html[data-studio-theme="premium"] .change-storage-filters > label {
+    display: grid;
+    align-content: end;
+    gap: 6px;
+    min-width: 0;
+    margin: 0;
+}
+
+html[data-studio-theme="premium"] .change-storage-filters > label > span:first-child {
+    margin: 0;
+    line-height: 1.35;
+}
+
+html[data-studio-theme="premium"] .change-storage-filters > label > :is(.form-select, .input-group) {
+    height: 38px;
+    min-height: 38px;
+    min-width: 0;
+    width: 100%;
+    margin: 0;
+}
+
+html[data-studio-theme="premium"] .change-storage-filters > label > .input-group > .form-control {
+    min-width: 0;
+}
+
+html[data-studio-theme="premium"] .change-storage-filter-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid var(--studio-border-soft);
+}
+
+html[data-studio-theme="premium"] .change-storage-filter-actions > .btn,
+html[data-studio-theme="premium"] .change-storage-reviewbar .btn {
+    min-height: 34px;
+}
+
+html[data-studio-theme="premium"] .change-storage-context {
+    min-width: 180px;
+    max-width: 280px;
+    padding: 11px 14px;
+    overflow-wrap: anywhere;
+    background: var(--studio-panel-soft);
+}
+
+html[data-studio-theme="premium"] .change-storage-reviewbar {
+    gap: 12px;
+    padding: 12px 14px;
+    background: var(--studio-panel-soft);
+}
+
+html[data-studio-theme="premium"] .change-storage-reviewbar > div {
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+html[data-studio-theme="premium"] .change-storage-list {
+    gap: 9px;
+}
+
+html[data-studio-theme="premium"] .change-storage-entry-main {
+    gap: 11px;
+    align-items: center;
+    padding: 12px 14px;
+}
+
+html[data-studio-theme="premium"] .change-storage-entry-title {
+    gap: 7px 9px;
+}
+
+html[data-studio-theme="premium"] .change-storage-entry-title > strong {
+    line-height: 1.45;
+}
+
+html[data-studio-theme="premium"] .change-storage-pagination {
+    gap: 12px;
+    margin-top: 15px;
+    padding-top: 15px;
+}
+
+/* Break at the content width of the application, not the desktop display.
+   Keep the form fields accessible when the sidebar or zoom narrows the page. */
+
+@media (max-width: 1180px) {
+    html[data-studio-theme="premium"] .change-storage-filters {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    html[data-studio-theme="premium"] .change-storage-search {
+        grid-column: auto;
+    }
+}
+
+@media (max-width: 800px) {
+    html[data-studio-theme="premium"] :is(.database-updates-header, .change-storage-header) {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    html[data-studio-theme="premium"] .database-updates-database-picker {
+        grid-template-columns: minmax(0, 1fr) auto;
+        width: 100%;
+    }
+
+    html[data-studio-theme="premium"] .change-storage-context {
+        max-width: none;
+    }
+
+    html[data-studio-theme="premium"] .database-update-version-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    html[data-studio-theme="premium"] .database-update-summary-card {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 600px) {
+    html[data-studio-theme="premium"] :is(.database-updates-header, .change-storage-header) {
+        padding: 14px;
+    }
+
+    html[data-studio-theme="premium"] .database-update-version-grid,
+    html[data-studio-theme="premium"] .change-storage-filters {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    html[data-studio-theme="premium"] .database-update-summary-card,
+    html[data-studio-theme="premium"] .change-storage-search {
+        grid-column: auto;
+    }
+
+    html[data-studio-theme="premium"] .database-update-source-form {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    html[data-studio-theme="premium"] .database-update-source-form > .btn {
+        width: 100%;
+        margin-top: 0;
+    }
+
+    html[data-studio-theme="premium"] .change-storage-filter-actions,
+    html[data-studio-theme="premium"] .change-storage-reviewbar > div {
+        justify-content: stretch;
+    }
+
+    html[data-studio-theme="premium"] .change-storage-filter-actions > .btn {
+        flex: 1 1 120px;
+    }
+}
+
+/* Mobile filter actions use a column layout in the base theme. Avoid a
+   flex-basis measured along that column, which made the buttons too tall. */
+
+@media (max-width: 760px) {
+    html[data-studio-theme="premium"] .change-storage-filter-actions > .btn {
+        flex: 0 0 auto;
+        width: 100%;
+        min-height: 38px;
+        height: auto;
+    }
+}

@@ -2,17 +2,43 @@
 
 @model SchemaColumnEditorViewModel
 @{
-    ViewData["Title"] = (Model.IsNew ? "Add column" : "Edit " + Model.OriginalColumnName);
+    ViewData["Title"] = Model.IsNew ? "Add table column" : "Edit table column";
     ViewData["Section"] = "Database Administration / " + Model.Database + " / " + Model.Table;
 }
 
+@* Keep the editor context and return action aligned with the form below. *@
 <div class="page-actions schema-editor-page-heading">
-    <div>
-        <span class="eyebrow">Restricted schema editor</span>
-        <h1>@(Model.IsNew ? "Add table column" : "Edit table column")</h1>
-        <p class="page-lead">Define the column using guarded MySQL/MariaDB options. Nothing is executed until you review the generated SQL.</p>
+    <div class="schema-editor-heading-leading">
+        <span class="schema-editor-heading-symbol" aria-hidden="true">
+            <i class="bi bi-layout-text-sidebar-reverse"></i>
+        </span>
+        <div class="schema-editor-heading-copy">
+            <span class="eyebrow">Column editor</span>
+            <h2>@(Model.IsNew ? "Configure a new column" : "Editing " + Model.OriginalColumnName)</h2>
+            <p class="page-lead">Define the column and review the generated SQL before applying any changes.</p>
+            <div class="schema-editor-heading-context" aria-label="Current database and table">
+                <span class="schema-editor-heading-context-item" title="Database">
+                    <i class="bi bi-database" aria-hidden="true"></i>
+                    @Model.Database
+                </span>
+                <span class="schema-editor-heading-context-separator" aria-hidden="true">/</span>
+                <span class="schema-editor-heading-context-item" title="Table">
+                    <i class="bi bi-table" aria-hidden="true"></i>
+                    @Model.Table
+                </span>
+            </div>
+        </div>
     </div>
-    <a class="btn btn-outline-secondary" asp-action="Structure" asp-route-database="@Model.Database" asp-route-table="@Model.Table"><i class="bi bi-arrow-left"></i> Back to structure</a>
+    <div class="schema-editor-heading-actions">
+        <span class="schema-editor-heading-status">
+            <i class="bi bi-shield-check" aria-hidden="true"></i>
+            SQL preview required
+        </span>
+        <a class="btn btn-outline-secondary" asp-action="Structure" asp-route-database="@Model.Database" asp-route-table="@Model.Table">
+            <i class="bi bi-arrow-left" aria-hidden="true"></i>
+            Back to structure
+        </a>
+    </div>
 </div>
 
 <section class="panel schema-editor-form-panel">
