@@ -1,6 +1,7 @@
 @* Present the Connections workspace and its available actions. *@
 
 @model ConnectionsIndexViewModel
+@using MangosDatabaseStudio.Domain.Connections
 @{
     ViewData["Title"] = "Connections";
     ViewData["Section"] = "System";
@@ -32,6 +33,14 @@ else
     @foreach (var profile in Model.Profiles)
     {
         bool active = Model.ActiveId == profile.Id;
+        string tlsStatus = profile.SslMode switch
+        {
+            "VerifyCA" => "Hostname not verified",
+            "Required" => "Certificate not verified",
+            "Preferred" => "May connect without TLS",
+            "Disabled" or "None" => "No TLS — local use only",
+            _ => "Review TLS settings"
+        };
         <article class="connection-card @(active ? "active" : "")">
             <div class="connection-card-header">
                 <div class="connection-icon">
@@ -59,6 +68,16 @@ else
                     <dt>SSL</dt>
                     <dd>@profile.SslMode</dd>
                 </div>
+                @if (ConnectionTlsSecurity.RequiresRiskAcknowledgement(profile.SslMode))
+                {
+                    <div>
+                        <dt>Security</dt>
+                        <dd class="connection-security-note">
+                            <i class="bi bi-shield-exclamation" aria-hidden="true"></i>
+                            <span>@tlsStatus</span>
+                        </dd>
+                    </div>
+                }
             </dl>
             <div class="connection-actions">
                 @if (active && Model.CanSelect)

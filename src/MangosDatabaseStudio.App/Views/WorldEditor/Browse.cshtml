@@ -152,7 +152,7 @@
                         </span>
                         <label class="world-filter-select">
                             <span>Rows per page</span>
-                            <select name="pageSize" class="form-select" onchange="this.form.submit()">
+                            <select name="pageSize" class="form-select" data-auto-submit-on-change>
                                 @foreach (int pageSize in pageSizes)
                                 {
                                     if (Model.Page.PageSize == pageSize)

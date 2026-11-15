@@ -9,7 +9,6 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Security.Claims;
-using System.Text.RegularExpressions;
 using MangosDatabaseStudio.Application.Connections;
 using MangosDatabaseStudio.Application.Schema;
 using MangosDatabaseStudio.Application.Operations;
@@ -32,7 +31,6 @@ namespace MangosDatabaseStudio.App.Controllers
         private readonly IAuthorizationService _authorization;
         private readonly IChangeStorageStore _changeStorage;
         private readonly OperationProgressReporter _operationProgress;
-        private static readonly Regex MutationPattern = new(@"\b(INSERT|UPDATE|DELETE|REPLACE|CREATE|ALTER|DROP|TRUNCATE|RENAME)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
         // Initialize the sql console controller dependencies and state.
         public SqlConsoleController(
@@ -91,7 +89,16 @@ namespace MangosDatabaseStudio.App.Controllers
                 ModelState.AddModelError(nameof(model.Database), "Select a visible user database.");
             }
 
-            bool destructive = _sql.IsDestructive(model.Sql);
+            // A crafted or malformed form submission can bind a null SQL value despite
+            // the view model's non-nullable default. Never pass it to the SQL service.
+            string sql = model.Sql ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(sql))
+            {
+                ModelState.AddModelError(nameof(model.Sql), "Enter a SQL statement.");
+            }
+
+            SqlStatementSafety safety = SqlStatementSafety.Analyze(sql);
+            bool destructive = safety.RequiresDestructivePermission;
             if (destructive)
             {
                 AuthorizationResult destructiveAuthorization = await _authorization.AuthorizeAsync(User, AppPermissions.SqlConsoleDestructive);
@@ -116,36 +123,44 @@ namespace MangosDatabaseStudio.App.Controllers
             IProgress<OperationProgressUpdate>? progress = _operationProgress.Begin(
                 "Preparing SQL statement",
                 "The SQL Console is validating the request and opening the database connection.");
+            StoredDatabaseChange? audit = null;
             try
             {
-                model.Result = await _sql.ExecuteAsync(profile, model.Database, model.Sql, model.MaximumRows, progress, cancellationToken);
-                Match mutation = MutationPattern.Match(model.Sql ?? string.Empty);
-                if (model.Result.Succeeded && mutation.Success)
+                if (safety.ContainsMutation)
+                {
+                    // A durable audit entry is mandatory BEFORE executing mutating or ambiguous SQL.
+                    // This avoids an unrecorded database change when SQLite storage is unavailable.
+                    audit = new StoredDatabaseChange
+                    {
+                        UserId = GetCurrentUserId(),
+                        Username = User.Identity?.Name ?? string.Empty,
+                        ConnectionId = profile.Id,
+                        ConnectionName = profile.Name,
+                        DatabaseName = model.Database,
+                        Source = StoredChangeSources.SqlConsole,
+                        Operation = string.IsNullOrEmpty(safety.MutationOperation) ? "UNCLASSIFIED" : safety.MutationOperation,
+                        ObjectName = "SQL statement",
+                        Summary = "SQL Console execution requested; execution outcome not yet confirmed.",
+                        SqlText = sql.Trim(),
+                        ContributionEligible = false
+                    };
+                    await _changeStorage.RecordAsync(audit, cancellationToken);
+                }
+
+                model.Result = await _sql.ExecuteAsync(profile, model.Database, sql, model.MaximumRows, progress, cancellationToken);
+                if (audit != null)
                 {
                     try
                     {
-                        string operation = mutation.Groups[1].Value.ToUpperInvariant();
                         string summary = model.Result.AffectedRows > 0
-                            ? "Executed " + operation + " from SQL Console; " + model.Result.AffectedRows + " row(s) affected."
-                            : "Executed " + operation + " from SQL Console.";
-                        await _changeStorage.RecordAsync(new StoredDatabaseChange
-                        {
-                            UserId = GetCurrentUserId(),
-                            Username = User.Identity?.Name ?? string.Empty,
-                            ConnectionId = profile.Id,
-                            ConnectionName = profile.Name,
-                            DatabaseName = model.Database,
-                            Source = StoredChangeSources.SqlConsole,
-                            Operation = operation,
-                            ObjectName = "SQL statement",
-                            Summary = summary,
-                            SqlText = (model.Sql ?? string.Empty).Trim(),
-                            ContributionEligible = true
-                        }, cancellationToken);
+                            ? "Executed " + audit.Operation + " from SQL Console; " + model.Result.AffectedRows + " row(s) affected."
+                            : "Executed " + audit.Operation + " from SQL Console.";
+                        await _changeStorage.UpdateExecutionSummaryAsync(
+                            profile.Id, audit.Id, summary, model.Result.Succeeded, cancellationToken);
                     }
                     catch (Exception)
                     {
-                        TempData["Warning"] = "The SQL statement completed, but its history could not be saved to Change Storage.";
+                        TempData["Warning"] = "The SQL request was audited before execution, but its completion status could not be saved.";
                     }
                 }
 
@@ -154,6 +169,23 @@ namespace MangosDatabaseStudio.App.Controllers
             catch (Exception exception)
             {
                 _operationProgress.Fail(exception.Message);
+                if (audit != null)
+                {
+                    try
+                    {
+                        await _changeStorage.UpdateExecutionSummaryAsync(
+                            profile.Id,
+                            audit.Id,
+                            "SQL Console execution failed or was interrupted; verify the database before retrying.",
+                            false,
+                            CancellationToken.None);
+                    }
+                    catch (Exception)
+                    {
+                        // Preserve the durable, pre-execution audit record if status updates fail.
+                    }
+                }
+
                 ModelState.AddModelError(string.Empty, exception.Message);
             }
 

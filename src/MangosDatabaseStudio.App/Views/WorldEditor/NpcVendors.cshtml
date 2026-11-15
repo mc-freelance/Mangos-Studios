@@ -214,7 +214,7 @@
                         <span class="world-filter-hint">Page @Model.Vendors.Page of @Math.Max(Model.Vendors.TotalPages, 1)</span>
                         <label class="world-filter-select">
                             <span>Rows per page</span>
-                            <select name="pageSize" class="form-select" onchange="this.form.submit()">
+                            <select name="pageSize" class="form-select" data-auto-submit-on-change>
                                 @foreach (int pageSize in pageSizes)
                                 {
                                     if (Model.Vendors.PageSize == pageSize)
@@ -578,7 +578,7 @@
                                     <input type="hidden" name="itemPage" value="1" />
                                     <label class="world-filter-select">
                                         <span>Rows per page</span>
-                                        <select name="itemPageSize" class="form-select" onchange="this.form.submit()">
+                                        <select name="itemPageSize" class="form-select" data-auto-submit-on-change>
                                             @foreach (int pageSize in pageSizes)
                                             {
                                                 if (Model.SelectedVendor.Items.PageSize == pageSize)

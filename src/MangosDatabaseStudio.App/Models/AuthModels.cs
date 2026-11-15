@@ -11,10 +11,12 @@ namespace MangosDatabaseStudio.App.Models
     public sealed class LoginViewModel
     {
         [Required]
+        [StringLength(64)]
         public string Username { get; set; } = string.Empty;
 
         [Required]
         [DataType(DataType.Password)]
+        [StringLength(128)]
         public string Password { get; set; } = string.Empty;
 
         public bool RememberMe

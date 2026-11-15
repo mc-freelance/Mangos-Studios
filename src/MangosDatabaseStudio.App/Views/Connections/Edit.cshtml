@@ -6,6 +6,18 @@
     ViewData["Title"] = isNew ? "Add Connection" : "Edit Connection";
     ViewData["Section"] = "System / Connections";
     string submitAction = isNew ? "Create" : "Edit";
+    bool tlsDisabled = MangosDatabaseStudio.Domain.Connections.ConnectionTlsSecurity.IsTlsDisabled(Model.SslMode);
+    bool verifiedTls = string.Equals(Model.SslMode, "VerifyFull", StringComparison.OrdinalIgnoreCase);
+    bool caRequired = string.Equals(Model.SslMode, "VerifyFull", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(Model.SslMode, "VerifyCA", StringComparison.OrdinalIgnoreCase);
+    string tlsRiskMessage = Model.SslMode switch
+    {
+        "VerifyCA" => "The server hostname is not verified.",
+        "Required" => "The server certificate is not verified.",
+        "Preferred" => "The connection may use plaintext.",
+        "Disabled" or "None" => "No TLS. Use only with trusted local servers.",
+        _ => "Server identity is not fully verified."
+    };
 }
 <div class="form-shell narrow connection-profile-editor">
     <form method="post" asp-action="@submitAction" asp-route-id="@(isNew ? (Guid?)null : Model.Id)" class="panel">
@@ -44,7 +56,7 @@
             </div>
         </div>
 
-        <div class="connection-editor-section">
+        <div class="connection-editor-section" data-connection-tls-editor>
             <div class="connection-editor-section-heading">
                 <div>
                     <span class="eyebrow">Direct connection</span>
@@ -90,14 +102,38 @@
                 </div>
                 <div class="form-group">
                     <label asp-for="SslMode" class="form-label">SSL mode</label>
-                    <select asp-for="SslMode" class="form-select">
-                        <option>None</option>
-                        <option>Preferred</option>
-                        <option>Required</option>
-                        <option>VerifyCA</option>
-                        <option>VerifyFull</option>
+                    <select asp-for="SslMode" class="form-select" data-tls-mode>
+                        <option value="VerifyFull">VerifyFull — certificate and hostname</option>
+                        <option value="VerifyCA">VerifyCA — certificate only</option>
+                        <option value="Required">Required — unverified TLS</option>
+                        <option value="Preferred">Preferred — TLS optional</option>
+                        <option value="Disabled">Disabled — no TLS</option>
+                        <option value="None">None — no TLS (legacy)</option>
                     </select>
                     <span asp-validation-for="SslMode" class="text-danger"></span>
+                </div>
+                <div class="form-group span-2 connection-tls-ca" data-tls-ca-group hidden="@tlsDisabled">
+                    <label asp-for="SslCa" class="form-label"></label>
+                    <input asp-for="SslCa"
+                           class="form-control"
+                           autocomplete="off"
+                           placeholder="/absolute/path/to/ca.pem"
+                           required="@caRequired"
+                           disabled="@tlsDisabled"
+                           data-tls-ca-input />
+                    <span asp-validation-for="SslCa" class="text-danger"></span>
+                    <div class="form-text">Trusted PEM file on this computer; required for VerifyFull and VerifyCA.</div>
+                </div>
+                <div class="form-group span-2 connection-tls-risk" data-tls-risk-group hidden="@verifiedTls">
+                    <div class="connection-tls-alert" role="status" aria-live="polite">
+                        <i class="bi bi-shield-exclamation" aria-hidden="true"></i>
+                        <span data-tls-risk-message>@tlsRiskMessage</span>
+                    </div>
+                    <label class="connection-tls-consent" for="AcknowledgeInsecureTls">
+                        <input asp-for="AcknowledgeInsecureTls" class="form-check-input" data-tls-risk-acknowledgment />
+                        <span>I understand and accept this connection risk.</span>
+                    </label>
+                    <span asp-validation-for="AcknowledgeInsecureTls" class="text-danger"></span>
                 </div>
             </div>
         </div>
@@ -110,3 +146,8 @@
         </div>
     </form>
 </div>
+
+@section Scripts
+{
+    <script src="~/js/connection-tls.js" asp-append-version="true"></script>
+}

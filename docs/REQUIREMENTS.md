@@ -113,3 +113,10 @@ Release packaging commands read the Git tag automatically, including prerelease 
 Users who only want to try MaNGOS Database Studio can download self-contained archives from the [GitHub Releases page](https://github.com/mc-freelance/Mangos-Studios/releases). Each supported Windows, Linux, and macOS architecture gets its own archive when a new version tag is pushed. Users of these packages do **not** need the .NET SDK or .NET 10 runtime installed separately, although native desktop dependencies still apply. Mac releases are portable unsigned archives; Linux requires a compatible GTK 3 and WebKitGTK runtime.
 
 Maintainers should follow [RELEASES.md](RELEASES.md) for packaging prerequisites, version tags, checksum verification, GitHub Actions, and release procedures. The dedicated packager uses Python 3.12+, Git, and the .NET 10 SDK on the build host.
+
+
+## MySQL / MariaDB TLS certificates
+
+New connection profiles use `VerifyFull`. Set the connection host to the DNS name (or IP) included in the database server certificate and provide the **absolute path** to the trusted CA certificate in PEM format. The same CA file is used by MySqlConnector and the external SQL import/export utilities. The certificate file is referenced on disk, not copied into the SQLite profile.
+
+Existing connection profiles retain their selected TLS mode after the schema update. Modes that do not verify server identity are flagged as less secure and require explicit confirmation when saving. Use a weaker mode only where the security tradeoff is understood, such as an isolated development server. Both MySQL and MariaDB command-line clients must be available locally for the configured import/export executable paths; unknown client versions fail closed.

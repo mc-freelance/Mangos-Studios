@@ -893,7 +893,7 @@
                         <input type="hidden" name="page" value="1" />
                         <label class="world-filter-select">
                             <span>Rows per page</span>
-                            <select name="pageSize" class="form-select" onchange="this.form.submit()">
+                            <select name="pageSize" class="form-select" data-auto-submit-on-change>
                                 @foreach (int size in pageSizes)
                                 {
                                     if (Model.Result.Matches.PageSize == size) { <option value="@size" selected>@size</option> } else { <option value="@size">@size</option> }

@@ -48,7 +48,14 @@ namespace MangosDatabaseStudio.App.Models
         public string DefaultDatabase { get; set; } = "mangos_world";
 
         [Required]
-        public string SslMode { get; set; } = "Preferred";
+        public string SslMode { get; set; } = "VerifyFull";
+
+        [Display(Name = "Trusted CA certificate (PEM)")]
+        [StringLength(2048)]
+        public string SslCa { get; set; } = string.Empty;
+
+        // Weaker TLS must be explicitly acknowledged when a connection is saved.
+        public bool AcknowledgeInsecureTls { get; set; }
 
         // Handle to domain within the connection models workflow.
         public ConnectionProfile ToDomain()
@@ -62,7 +69,9 @@ namespace MangosDatabaseStudio.App.Models
                 Username = Username.Trim(),
                 Password = Password ?? string.Empty,
                 DefaultDatabase = DefaultDatabase.Trim(),
-                SslMode = SslMode
+                SslMode = SslMode,
+                // Ignore previously entered CA paths when the connection disables TLS.
+                SslCa = ConnectionTlsSecurity.IsTlsDisabled(SslMode) ? string.Empty : SslCa?.Trim() ?? string.Empty
             };
         }
 
@@ -78,7 +87,8 @@ namespace MangosDatabaseStudio.App.Models
                 Username = profile.Username,
                 Password = null,
                 DefaultDatabase = profile.DefaultDatabase,
-                SslMode = profile.SslMode
+                SslMode = profile.SslMode,
+                SslCa = profile.SslCa
             };
         }
     }

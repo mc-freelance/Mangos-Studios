@@ -4,6 +4,8 @@
 
 // MySQL/MariaDB queries and schema-adaptive data operations.
 
+using System;
+
 namespace MangosDatabaseStudio.Infrastructure.MySql
 {
     public sealed class MySqlOptions
@@ -12,7 +14,7 @@ namespace MangosDatabaseStudio.Infrastructure.MySql
         public int CommandTimeoutSeconds { get; set; } = 60;
         public int MaximumBrowsePageSize { get; set; } = 250;
         public int MaximumSqlRows { get; set; } = 1000;
-        public string ImportClientPath { get; set; } = "mysql";
-        public string ExportClientPath { get; set; } = "mysqldump";
+        public string ImportClientPath { get; set; } = string.Empty;
+        public string ExportClientPath { get; set; } = string.Empty;
     }
 }

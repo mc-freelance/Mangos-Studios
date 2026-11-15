@@ -75,6 +75,8 @@ namespace MangosDatabaseStudio.App.Controllers
                 ModelState.AddModelError(nameof(model.Password), "A password is required for a new connection.");
             }
 
+            ValidateTlsSettings(model);
+
             if (!ModelState.IsValid)
             {
                 return View("Edit", model);
@@ -146,6 +148,8 @@ namespace MangosDatabaseStudio.App.Controllers
             }
 
             model.Id = existing.Id;
+            ValidateTlsSettings(model);
+
             if (!ModelState.IsValid)
             {
                 return View(model);
@@ -272,7 +276,33 @@ namespace MangosDatabaseStudio.App.Controllers
             return RedirectToAction("Index");
         }
 
-        // Handle matches saved values within the connections controller workflow.
+        // Reject unsupported modes and require explicit consent for weaker TLS modes.
+        private void ValidateTlsSettings(ConnectionProfileViewModel model)
+        {
+            // A disabled TLS connection must not retain or validate an unused CA path.
+            if (ConnectionTlsSecurity.IsTlsDisabled(model.SslMode))
+            {
+                model.SslCa = string.Empty;
+                ModelState.Remove(nameof(model.SslCa));
+            }
+
+            try
+            {
+                ConnectionTlsSecurity.ValidateProfile(model.ToDomain());
+                if (ConnectionTlsSecurity.RequiresRiskAcknowledgement(model.SslMode)
+                    && !model.AcknowledgeInsecureTls)
+                {
+                    ModelState.AddModelError(nameof(model.AcknowledgeInsecureTls),
+                        "Confirm the risk of connecting without verified server identity.");
+                }
+            }
+            catch (InvalidOperationException exception)
+            {
+                ModelState.AddModelError(nameof(model.SslMode), exception.Message);
+            }
+        }
+
+        // Compare every persisted connection field after saving an edit.
         private static bool MatchesSavedValues(ConnectionProfile saved, ConnectionProfile requested)
         {
             return saved.Id == requested.Id
@@ -282,7 +312,8 @@ namespace MangosDatabaseStudio.App.Controllers
                 && string.Equals(saved.Username, requested.Username, StringComparison.Ordinal)
                 && string.Equals(saved.Password, requested.Password, StringComparison.Ordinal)
                 && string.Equals(saved.DefaultDatabase, requested.DefaultDatabase, StringComparison.Ordinal)
-                && string.Equals(saved.SslMode, requested.SslMode, StringComparison.Ordinal);
+                && string.Equals(saved.SslMode, requested.SslMode, StringComparison.Ordinal)
+                && string.Equals(saved.SslCa, requested.SslCa, StringComparison.Ordinal);
         }
     }
 }

@@ -169,6 +169,7 @@ namespace MangosDatabaseStudio.App.Services
     public interface IChangeStorageStore
     {
         Task RecordAsync(StoredDatabaseChange change, CancellationToken cancellationToken);
+        Task UpdateExecutionSummaryAsync(Guid connectionId, Guid id, string summary, bool contributionEligible, CancellationToken cancellationToken);
         Task<ChangeStoragePage> SearchAsync(ChangeStorageQuery query, CancellationToken cancellationToken);
         Task<ChangeStorageCounts> GetCountsAsync(Guid connectionId, string? databaseName, CancellationToken cancellationToken);
         Task<IReadOnlyList<string>> GetDatabaseNamesAsync(Guid connectionId, CancellationToken cancellationToken);
@@ -271,6 +272,30 @@ VALUES (
             command.Parameters.AddWithValue("$reviewedByUserId", change.ReviewedByUserId.HasValue ? change.ReviewedByUserId.Value.ToString("D") : (object)DBNull.Value);
             command.Parameters.AddWithValue("$reviewedByUsername", change.ReviewedByUsername);
             await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        // Update the existing pre-execution audit record without creating duplicate history rows.
+        public async Task UpdateExecutionSummaryAsync(
+            Guid connectionId,
+            Guid id,
+            string summary,
+            bool contributionEligible,
+            CancellationToken cancellationToken)
+        {
+            await using SqliteConnection connection = await _database.OpenConnectionAsync(cancellationToken);
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = @"
+UPDATE database_changes
+SET summary = $summary, contribution_eligible = $eligible
+WHERE id = $id AND connection_id = $connectionId;";
+            command.Parameters.AddWithValue("$summary", Normalize(summary, 1000));
+            command.Parameters.AddWithValue("$eligible", contributionEligible ? 1 : 0);
+            command.Parameters.AddWithValue("$id", id.ToString("D"));
+            command.Parameters.AddWithValue("$connectionId", connectionId.ToString("D"));
+            if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
+            {
+                throw new InvalidOperationException("The SQL execution audit record was not found.");
+            }
         }
 
         // Search for  according to the available model or service contract.

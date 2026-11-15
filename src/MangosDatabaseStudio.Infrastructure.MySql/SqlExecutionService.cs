@@ -9,7 +9,6 @@ using System.Collections.Generic;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Globalization;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using MangosDatabaseStudio.Application.Operations;
@@ -23,7 +22,6 @@ namespace MangosDatabaseStudio.Infrastructure.MySql
 {
     internal sealed class SqlExecutionService : ISqlExecutionService
     {
-        private static readonly Regex DestructivePattern = new(@"\b(DROP|TRUNCATE|DELETE\s+FROM|ALTER\s+TABLE|CREATE\s+USER|DROP\s+USER|GRANT|REVOKE)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.CultureInvariant);
         private readonly MySqlConnectionFactory _connectionFactory;
         private readonly MySqlOptions _options;
 
@@ -37,7 +35,7 @@ namespace MangosDatabaseStudio.Infrastructure.MySql
         // Detect high-risk SQL statements so callers can require explicit confirmation.
         public bool IsDestructive(string sql)
         {
-            return !string.IsNullOrWhiteSpace(sql) && DestructivePattern.IsMatch(RemoveComments(sql));
+            return SqlStatementSafety.Analyze(sql).RequiresDestructivePermission;
         }
 
         // Execute SQL on the selected connection and limit the number of rows returned to the UI.
@@ -118,13 +116,6 @@ namespace MangosDatabaseStudio.Infrastructure.MySql
                 Columns = columns,
                 Rows = rows
             };
-        }
-
-        // Remove comments using schema-aware database operations.
-        private static string RemoveComments(string sql)
-        {
-            string withoutBlock = Regex.Replace(sql, @"/\*.*?\*/", string.Empty, RegexOptions.Singleline);
-            return Regex.Replace(withoutBlock, "--.*?$", string.Empty, RegexOptions.Multiline);
         }
     }
 }

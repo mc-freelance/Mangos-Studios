@@ -15,15 +15,9 @@ using Microsoft.Data.Sqlite;
 
 namespace MangosDatabaseStudio.App.Services
 {
-    public sealed class SqliteConnectionProfileStore : IConnectionProfileStore
+    public sealed class SqliteConnectionProfileStore(ApplicationDatabase database) : IConnectionProfileStore
     {
-        private readonly ApplicationDatabase _database;
-
-        // Initialize the sqlite connection profile store dependencies and state.
-        public SqliteConnectionProfileStore(ApplicationDatabase database)
-        {
-            _database = database;
-        }
+        private readonly ApplicationDatabase _database = database;
 
         // Read saved database connections from protected local storage.
         public async Task<IReadOnlyList<ConnectionProfile>> GetAllAsync(CancellationToken cancellationToken)
@@ -61,9 +55,9 @@ namespace MangosDatabaseStudio.App.Services
             await using SqliteCommand command = connection.CreateCommand();
             command.CommandText = @"
 INSERT INTO connection_profiles(
-    id, name, host, port, username, password, default_database, ssl_mode, created_at_utc, updated_at_utc)
+    id, name, host, port, username, password, default_database, ssl_mode, ssl_ca, created_at_utc, updated_at_utc)
 VALUES (
-    $id, $name, $host, $port, $username, $password, $defaultDatabase, $sslMode, $createdAtUtc, $updatedAtUtc);";
+    $id, $name, $host, $port, $username, $password, $defaultDatabase, $sslMode, $sslCa, $createdAtUtc, $updatedAtUtc);";
             AddParameters(command, profile, includeCreatedAt: true);
 
             int affected = await command.ExecuteNonQueryAsync(cancellationToken);
@@ -94,6 +88,7 @@ SET name = $name,
     password = $password,
     default_database = $defaultDatabase,
     ssl_mode = $sslMode,
+    ssl_ca = $sslCa,
     updated_at_utc = $updatedAtUtc
 WHERE id = $id;";
             AddParameters(command, profile, includeCreatedAt: false);
@@ -122,7 +117,8 @@ WHERE id = $id;";
             command.Parameters.AddWithValue("$username", profile.Username ?? string.Empty);
             command.Parameters.AddWithValue("$password", profile.Password ?? string.Empty);
             command.Parameters.AddWithValue("$defaultDatabase", profile.DefaultDatabase ?? string.Empty);
-            command.Parameters.AddWithValue("$sslMode", profile.SslMode ?? "Preferred");
+            command.Parameters.AddWithValue("$sslMode", profile.SslMode ?? "VerifyFull");
+            command.Parameters.AddWithValue("$sslCa", profile.SslCa ?? string.Empty);
             if (includeCreatedAt)
             {
                 command.Parameters.AddWithValue("$createdAtUtc", profile.CreatedAtUtc.ToUniversalTime().ToString("O"));
@@ -151,8 +147,9 @@ WHERE id = $id;";
                     Password = reader.GetString(5),
                     DefaultDatabase = reader.GetString(6),
                     SslMode = reader.GetString(7),
-                    CreatedAtUtc = ParseUtc(reader.GetString(8)),
-                    UpdatedAtUtc = ParseUtc(reader.GetString(9))
+                    SslCa = reader.GetString(8),
+                    CreatedAtUtc = ParseUtc(reader.GetString(9)),
+                    UpdatedAtUtc = ParseUtc(reader.GetString(10))
                 });
             }
 
@@ -171,7 +168,7 @@ WHERE id = $id;";
         }
 
         private const string SelectSql = @"
-SELECT id, name, host, port, username, password, default_database, ssl_mode, created_at_utc, updated_at_utc
+SELECT id, name, host, port, username, password, default_database, ssl_mode, ssl_ca, created_at_utc, updated_at_utc
 FROM connection_profiles";
     }
 }

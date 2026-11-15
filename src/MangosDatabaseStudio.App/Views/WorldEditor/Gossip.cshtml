@@ -215,7 +215,7 @@
                         <span class="world-filter-hint">Page @directoryPage of @Math.Max(directoryTotalPages, 1)</span>
                         <label class="world-filter-select">
                             <span>Rows per page</span>
-                            <select name="pageSize" class="form-select" onchange="this.form.submit()">
+                            <select name="pageSize" class="form-select" data-auto-submit-on-change>
                                 @foreach (int size in pageSizes)
                                 {
                                     if (directoryPageSize == size)
@@ -469,18 +469,5 @@
 @section Scripts {
     <script src="~/js/world-lookup-picker.js" asp-append-version="true"></script>
     <script src="~/js/gossip-sources-viewer.js" asp-append-version="true"></script>
-    <script>
-(() => {
-        const form = document.querySelector('[data-gossip-add-npc-source-form]');
-        const picker = form?.querySelector('[data-world-lookup-picker]');
-        const menuId = form?.querySelector('[data-gossip-source-menu-id]');
-        picker?.addEventListener('worldlookupchange', event => {
-            const existingMenuId = Number(event.detail?.item?.menuId || 0);
-            if (menuId && existingMenuId > 0 && !String(menuId.value || '').trim())
-            {
-                menuId.value = String(existingMenuId);
-            }
-        });
-    })();
-</script>
+    <script src="~/js/gossip-source-modal.js" asp-append-version="true"></script>
 }

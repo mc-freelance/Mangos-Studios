@@ -218,45 +218,54 @@ namespace MangosDatabaseStudio.App.Controllers
                 "Preparing SQL import",
                 "The validated SQL file is being prepared for the MySQL/MariaDB command-line client.");
             SqlImportResult result;
+            StoredDatabaseChange audit = new StoredDatabaseChange
+            {
+                UserId = GetCurrentUserId(),
+                Username = User.Identity?.Name ?? string.Empty,
+                ConnectionId = profile.Id,
+                ConnectionName = profile.Name,
+                DatabaseName = model.Database,
+                Source = StoredChangeSources.SqlImport,
+                Operation = "IMPORT",
+                ObjectName = "SQL import",
+                Summary = "SQL import requested; execution outcome not yet confirmed.",
+                SqlText = string.Empty,
+                ContributionEligible = false
+            };
+
             try
             {
+                // Record the import before starting the external database client.
+                // A failed audit write must prevent execution, not merely issue a warning.
+                await _changeStorage.RecordAsync(audit, cancellationToken);
                 result = await _imports.ExecuteAsync(profile, model.Database, path, progress, cancellationToken);
                 _operationProgress.Complete(result.Succeeded ? "SQL import completed successfully." : "SQL import finished with a database-client error.");
+                try
+                {
+                    await _changeStorage.UpdateExecutionSummaryAsync(
+                        profile.Id,
+                        audit.Id,
+                        result.Succeeded
+                            ? "Executed SQL import into " + model.Database + "."
+                            : "SQL import finished with a database-client error; confirm database state before retrying.",
+                        false,
+                        cancellationToken);
+                }
+                catch (Exception)
+                {
+                    TempData["Warning"] = "The import was audited before execution, but its completion status could not be saved.";
+                }
             }
             catch (Exception exception)
             {
                 _operationProgress.Fail(exception.Message);
+                // The existing request audit is intentionally retained if SQL execution fails.
                 throw;
             }
             finally
             {
                 ActiveExecutions.TryRemove(model.Token, out _);
                 TryDelete(path);
-            }
-
-            if (result.Succeeded)
-            {
-                try
-                {
-                    await _changeStorage.RecordAsync(new StoredDatabaseChange
-                    {
-                        UserId = GetCurrentUserId(),
-                        Username = User.Identity?.Name ?? string.Empty,
-                        ConnectionId = profile.Id,
-                        ConnectionName = profile.Name,
-                        DatabaseName = model.Database,
-                        Source = StoredChangeSources.SqlImport,
-                        Operation = "IMPORT",
-                        ObjectName = "SQL import",
-                        Summary = "Executed SQL import into " + model.Database + ".",
-                        SqlText = string.Empty,
-                        ContributionEligible = false
-                    }, cancellationToken);
-                }
-                catch (Exception)
-                {
-                    TempData["Warning"] = "The SQL import completed, but its history could not be saved to Change Storage.";
-                }
             }
 
             return View("Result", new SqlImportResultViewModel

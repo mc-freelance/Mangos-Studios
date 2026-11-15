@@ -7,18 +7,34 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
+using MangosDatabaseStudio.Domain.Connections;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MangosDatabaseStudio.App.Services;
 using MangosDatabaseStudio.App.Desktop;
+using MangosDatabaseStudio.App.Models;
 using MangosDatabaseStudio.App.Services.FieldData;
+using MangosDatabaseStudio.Application.Sql;
+using MangosDatabaseStudio.Infrastructure.MySql;
 using Microsoft.Data.Sqlite;
 
 namespace MangosDatabaseStudio.FieldDataChecks
 {
     internal static class Program
     {
+        // Ensure repeated sign-in failures cause bounded, increasing cooldowns.
+        private static void CheckLoginAttemptPolicy()
+        {
+            Check(LoginAttemptPolicy.GetDelay(1) == TimeSpan.Zero, "First login failure should not impose a delay.");
+            Check(LoginAttemptPolicy.GetDelay(2) == TimeSpan.Zero, "Second login failure should not impose a delay.");
+            Check(LoginAttemptPolicy.GetDelay(3) == TimeSpan.FromSeconds(2), "Third login failure should impose a cooldown.");
+            Check(LoginAttemptPolicy.GetDelay(5) > LoginAttemptPolicy.GetDelay(4), "Cooldown must grow after repeated failures.");
+            Check(LoginAttemptPolicy.GetDelay(30) == TimeSpan.FromMinutes(5), "Login cooldown must have a safe cap.");
+            Check(LoginAttemptPolicy.NormalizeUsername(" ADMIN ") == "ADMIN", "Account keys should ignore case and whitespace.");
+        }
+
         // Fail the CI check on any missing built-in update or lost user addition.
         private static async Task<int> Main()
         {
@@ -26,6 +42,10 @@ namespace MangosDatabaseStudio.FieldDataChecks
 
             try
             {
+                CheckSqlStatementSecurity();
+                CheckTrustedNativeClientPaths();
+                CheckConnectionTlsSecurity();
+                CheckLoginAttemptPolicy();
                 CheckVersionPresentation();
                 CheckSourceDiscovery();
                 await CheckMapNamesSynchronizationAsync();
@@ -40,6 +60,250 @@ namespace MangosDatabaseStudio.FieldDataChecks
                 Console.Error.WriteLine(exception);
                 return 1;
             }
+        }
+
+        // Require explicit, absolute executable paths and enforce import/export roles.
+        private static void CheckTrustedNativeClientPaths()
+        {
+            foreach (string path in new[] { string.Empty, "mysql", "mysqldump", "./mysql" })
+            {
+                bool rejected = false;
+                try
+                {
+                    TrustedDatabaseClientExecutable.Resolve(path, isExport: false);
+                }
+                catch (InvalidOperationException)
+                {
+                    rejected = true;
+                }
+
+                Check(rejected, "Native database clients must never be resolved from PATH or relative paths.");
+            }
+
+            // The correct executable basename is required even for absolute paths.
+            bool wrongRoleRejected = false;
+            try
+            {
+                string wrongRole = Path.Combine(Path.GetTempPath(), "mysqldump");
+                TrustedDatabaseClientExecutable.Resolve(wrongRole, isExport: false);
+            }
+            catch (InvalidOperationException)
+            {
+                wrongRoleRejected = true;
+            }
+
+            Check(wrongRoleRejected, "An export executable must not be accepted as an import client.");
+
+            if (!OperatingSystem.IsWindows())
+            {
+                // A real executable in a shared temporary directory must be
+                // rejected even when its own mode is owner-only.
+                string unsafeDirectory = Path.Combine(
+                    Path.GetTempPath(), "mangos-native-client-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(unsafeDirectory);
+                try
+                {
+                    string unsafeClient = Path.Combine(unsafeDirectory, "mysql");
+                    File.WriteAllText(unsafeClient, "testing");
+                    File.SetUnixFileMode(unsafeClient, UnixFileMode.UserRead
+                        | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                    bool rejectedUntrustedParent = false;
+                    try
+                    {
+                        TrustedDatabaseClientExecutable.Resolve(unsafeClient, isExport: false);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        rejectedUntrustedParent = true;
+                    }
+
+                    Check(rejectedUntrustedParent, "A writable temporary ancestor must never be trusted.");
+                }
+                finally
+                {
+                    Directory.Delete(unsafeDirectory, recursive: true);
+                }
+            }
+        }
+
+        // Reject unrecognized transport modes and require a trusted CA for verified TLS.
+        private static void CheckConnectionTlsSecurity()
+        {
+            ConnectionProfile profile = new();
+            Check(profile.SslMode == "VerifyFull", "New connections must use hostname-verified TLS by default.");
+            Check(ConnectionTlsSecurity.RequiresRiskAcknowledgement("Preferred"),
+                "Legacy opportunistic TLS must be displayed as an insecure choice.");
+            Check(!ConnectionTlsSecurity.RequiresRiskAcknowledgement("VerifyFull"),
+                "Fully verified TLS should not need an insecure-mode acknowledgement.");
+            Check(ConnectionTlsSecurity.NormalizeMode("None") == "Disabled",
+                "Legacy None must normalize to Disabled.");
+            Check(ConnectionTlsSecurity.IsTlsDisabled("None") && ConnectionTlsSecurity.IsTlsDisabled("Disabled"),
+                "Disabled and None must both disable certificate controls.");
+
+            foreach (string invalidMode in new[] { "999", "Unexpected", string.Empty })
+            {
+                bool rejected = false;
+                try
+                {
+                    profile.SslMode = invalidMode;
+                    ConnectionTlsSecurity.ValidateProfile(profile);
+                }
+                catch (InvalidOperationException)
+                {
+                    rejected = true;
+                }
+
+                Check(rejected, "An unrecognized TLS mode was not rejected.");
+            }
+
+            profile.SslMode = "VerifyFull";
+            bool requiresCa = false;
+            try
+            {
+                ConnectionTlsSecurity.ValidateProfile(profile);
+            }
+            catch (InvalidOperationException)
+            {
+                requiresCa = true;
+            }
+
+            Check(requiresCa, "VerifyFull must fail closed without a CA file.");
+
+            // A previously configured or stale CA path must not block a no-TLS profile.
+            foreach (string noTlsMode in new[] { "Disabled", "None" })
+            {
+                profile.SslMode = noTlsMode;
+                profile.SslCa = "/a/missing/ca-file.pem";
+                ConnectionTlsSecurity.ValidateProfile(profile);
+                Check(ConnectionProfileViewModel.FromDomain(profile).ToDomain().SslCa == string.Empty,
+                    "No-TLS connections must not persist a CA path.");
+            }
+
+            profile.SslCa = string.Empty;
+            string caPath = Path.GetTempFileName();
+            try
+            {
+                profile.SslCa = caPath;
+                ConnectionTlsSecurity.ValidateProfile(profile);
+                profile.SslMode = "Preferred";
+                ConnectionTlsSecurity.ValidateProfile(profile);
+            }
+            finally
+            {
+                File.Delete(caPath);
+            }
+        }
+
+        // Reject comment-separated destructive verbs, executable comments, and ambiguous SQL.
+        private static void CheckSqlStatementSecurity()
+        {
+            string[] dangerous =
+            {
+                "DROP/**/TABLE creature;",
+                "DELETE/**/FROM creature WHERE guid = 1;",
+                "ALTER/**/TABLE creature ADD COLUMN dangerous INT;",
+                "TRUNCATE/**/TABLE creature;",
+                "CREATE/**/USER 'someuser'@'localhost';",
+                "GRANT/**/ALL ON world.* TO 'someuser'@'localhost';",
+                "SELECT 1; DROP TABLE creature;",
+                "SELECT 1 /*!50000 INTO OUTFILE '/tmp/test' */;",
+                "/*!50000 DROP TABLE creature */;",
+                "/*M!100100 DROP TABLE creature */;",
+                "WITH next AS (DELETE FROM creature) SELECT * FROM next;",
+                "CALL run_database_script();",
+                "PREPARE stmt FROM 'DROP TABLE creature';",
+                "SELECT 1 INTO OUTFILE '/tmp/output';",
+                "SELECT 1 /* never closed",
+                "SELECT 'never closed",
+                "SELECT 'ambiguous\\' FROM creature;",
+                "SET @value = 1;",
+                "SET GLOBAL max_connections = 100;",
+                "SELECT 1; SET @value = 1;"
+            };
+
+            foreach (string sql in dangerous)
+            {
+                SqlStatementSafety safety = SqlStatementSafety.Analyze(sql);
+                Check(safety.RequiresDestructivePermission, "Destructive or ambiguous SQL was allowed: " + sql);
+            }
+
+            string[] allowed =
+            {
+                "SELECT 1;",
+                "SELECT 'DROP/**/TABLE' AS example;",
+                "SELECT 'semi;colon' AS example;",
+                "SELECT `DROP` FROM creature;",
+                "SELECT 1 /* harmless */ FROM creature;",
+                "SELECT 1 -- harmless comment\nFROM creature;",
+                "SELECT 1 # harmless comment\nFROM creature;",
+                "SHOW TABLES;",
+                "DESCRIBE creature;",
+                "EXPLAIN SELECT 1;",
+                "UPDATE creature SET id = 1 WHERE guid = 2;",
+                "UPDATE creature SET id = 1 WHERE guid = 2",
+                "UPDATE creature /* harmless */ SET id = 1 WHERE guid = 2;",
+                "UPDATE/**/creature/**/SET id = 1 WHERE guid = 2;",
+                "UPDATE `creature` SET `id` = 1 WHERE `guid` = 2;",
+                "INSERT INTO creature (guid) VALUES (10);",
+                "REPLACE INTO creature (guid) VALUES (10);"
+            };
+
+            foreach (string sql in allowed)
+            {
+                SqlStatementSafety safety = SqlStatementSafety.Analyze(sql);
+                Check(!safety.RequiresDestructivePermission, "Ordinary SQL was incorrectly classified: " + sql);
+            }
+
+            Check(!SqlStatementSafety.Analyze("SELECT 1;").ContainsMutation,
+                "Read-only SQL was incorrectly recorded as a mutation.");
+            SqlStatementSafety ordinaryUpdate = SqlStatementSafety.Analyze(
+                "UPDATE creature SET id = 1 WHERE guid = 2;");
+            Check(ordinaryUpdate.ContainsMutation && ordinaryUpdate.MutationOperation == "UPDATE",
+                "Ordinary UPDATE statements must still be recorded in Change Storage.");
+            Check(SqlStatementSafety.Analyze("SET @value = 1;").RequiresDestructivePermission,
+                "Standalone SET statements must continue to require elevated permissions.");
+
+            // Ensure chunk boundaries do not change UPDATE clause classification.
+            string updateStatement = "UPDATE creature SET id = 1 WHERE guid = 2;";
+            for (int size = 1; size <= updateStatement.Length; size++)
+            {
+                SqlStatementScanner updateScanner = SqlStatementSafety.CreateScanner();
+                for (int offset = 0; offset < updateStatement.Length; offset += size)
+                {
+                    updateScanner.Append(updateStatement.AsSpan(offset,
+                        Math.Min(size, updateStatement.Length - offset)));
+                }
+
+                SqlStatementSafety streamedUpdate = updateScanner.Complete();
+                Check(!streamedUpdate.RequiresDestructivePermission && streamedUpdate.ContainsMutation &&
+                    streamedUpdate.MutationOperation == "UPDATE",
+                    "Streaming SQL scanner incorrectly classified an UPDATE at chunk size " + size + ".");
+            }
+
+            Check(SqlStatementSafety.Analyze("DELETE/**/FROM creature;").ContainsMutation,
+                "Comment-separated mutation escaped Change Storage detection.");
+
+            // Simulate a stream cutting a dangerous token or comment at every possible boundary.
+            string sample = "SELECT ';' AS harmless; DROP/**/TABLE creature;";
+            for (int size = 1; size <= sample.Length; size++)
+            {
+                SqlStatementScanner scanner = SqlStatementSafety.CreateScanner();
+                for (int offset = 0; offset < sample.Length; offset += size)
+                {
+                    scanner.Append(sample.AsSpan(offset, Math.Min(size, sample.Length - offset)));
+                }
+
+                SqlStatementSafety scanned = scanner.Complete();
+                Check(scanned.RequiresDestructivePermission && scanned.StatementCount == 2,
+                    "Streaming SQL scanner missed a destructive statement at chunk size " + size + ".");
+            }
+
+            SqlStatementScanner importScanner = SqlStatementSafety.CreateScanner();
+            importScanner.Append("INSERT INTO creature (guid) VALUES (10);\n".AsSpan());
+            importScanner.Append("DROP/".AsSpan());
+            importScanner.Append("**/TABLE creature;".AsSpan());
+            Check(importScanner.Complete().RequiresDestructivePermission,
+                "SQL import safety scan missed a comment-separated DROP TABLE.");
         }
 
         // Confirm the version footer accepts embedded release tags and short revisions.

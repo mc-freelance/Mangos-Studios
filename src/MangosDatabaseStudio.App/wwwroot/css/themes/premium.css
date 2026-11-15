@@ -3941,6 +3941,83 @@ html[data-theme="dark"] .connection-editor-section {
     }
 }
 
+/* Keep TLS options compact, with distinct warnings and no empty CA row. */
+.connection-profile-editor [data-tls-ca-group][hidden],
+.connection-profile-editor [data-tls-risk-group][hidden] {
+    display: none !important;
+}
+
+.connection-tls-risk {
+    display: grid;
+    gap: 9px;
+    margin-top: 2px;
+}
+
+.connection-tls-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 10px 12px;
+    border: 1px solid #ecd6ae;
+    border-radius: 9px;
+    background: #fff8eb;
+    color: #86520f;
+    font-size: .76rem;
+    line-height: 1.45;
+}
+
+.connection-tls-alert > i {
+    flex: 0 0 auto;
+    margin-top: 1px;
+}
+
+.connection-tls-consent {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--studio-muted);
+    font-size: .74rem;
+    line-height: 1.45;
+    cursor: pointer;
+}
+
+.connection-tls-consent .form-check-input {
+    flex: 0 0 auto;
+    margin: 0;
+}
+
+.connection-security-note {
+    display: inline-flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    gap: 6px;
+    max-width: min(64%, 240px);
+    color: #a36610;
+    font-size: .74rem !important;
+    line-height: 1.35;
+    text-align: right;
+}
+
+.connection-security-note > i {
+    flex: 0 0 auto;
+}
+
+html[data-theme="dark"] .connection-tls-alert {
+    background: rgba(187, 116, 25, .12);
+    border-color: rgba(245, 173, 76, .3);
+    color: #f2be77;
+}
+
+html[data-theme="dark"] .connection-security-note {
+    color: #f2be77;
+}
+
+@media (max-width: 480px) {
+    .connection-security-note {
+        max-width: 100%;
+    }
+}
+
 /* ======================================================================
    Sidebar information architecture
    Keep world-specific work together and move personal account actions into

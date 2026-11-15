@@ -17,7 +17,8 @@ namespace MangosDatabaseStudio.Domain.Connections
         public string Username { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
         public string DefaultDatabase { get; set; } = "mangos_world";
-        public string SslMode { get; set; } = "Preferred";
+        public string SslMode { get; set; } = "VerifyFull";
+        public string SslCa { get; set; } = string.Empty;
         public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
     }

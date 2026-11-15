@@ -205,7 +205,7 @@
                         <span class="world-filter-hint">Page @directoryPage of @Math.Max(directoryTotalPages, 1)</span>
                         <label class="world-filter-select">
                             <span>Rows per page</span>
-                            <select name="pageSize" class="form-select" onchange="this.form.submit()">
+                            <select name="pageSize" class="form-select" data-auto-submit-on-change>
                                 @foreach (int size in pageSizes)
                                 {
                                     if (directoryPageSize == size)
@@ -554,7 +554,7 @@
                                     <input type="hidden" name="database" value="@Model.Database" /><input type="hidden" name="search" value="@Model.Search" /><input type="hidden" name="show" value="true" /><input type="hidden" name="entry" value="@detail.Menu.Entry" /><input type="hidden" name="page" value="@directoryPage" /><input type="hidden" name="pageSize" value="@directoryPageSize" /><input type="hidden" name="textPage" value="1" /><input type="hidden" name="optionPage" value="@detail.Options.Page" /><input type="hidden" name="optionPageSize" value="@detail.Options.PageSize" /><input type="hidden" name="returnUrl" value="@returnUrl" />
                                     <label class="world-filter-select">
                                         <span>Rows per page</span>
-                                        <select name="textPageSize" class="form-select" onchange="this.form.submit()">
+                                        <select name="textPageSize" class="form-select" data-auto-submit-on-change>
                                             @foreach (int size in pageSizes)
                                             {
                                                 if (detail.TextRows.PageSize == size)
@@ -795,7 +795,7 @@
                                     <input type="hidden" name="database" value="@Model.Database" /><input type="hidden" name="search" value="@Model.Search" /><input type="hidden" name="show" value="true" /><input type="hidden" name="entry" value="@detail.Menu.Entry" /><input type="hidden" name="page" value="@directoryPage" /><input type="hidden" name="pageSize" value="@directoryPageSize" /><input type="hidden" name="textPage" value="@detail.TextRows.Page" /><input type="hidden" name="textPageSize" value="@detail.TextRows.PageSize" /><input type="hidden" name="optionPage" value="1" /><input type="hidden" name="returnUrl" value="@returnUrl" />
                                     <label class="world-filter-select">
                                         <span>Rows per page</span>
-                                        <select name="optionPageSize" class="form-select" onchange="this.form.submit()">
+                                        <select name="optionPageSize" class="form-select" data-auto-submit-on-change>
                                             @foreach (int size in pageSizes)
                                             {
                                                 if (detail.Options.PageSize == size)

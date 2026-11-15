@@ -24,7 +24,7 @@ namespace MangosDatabaseStudio.App.Services
 {
     public sealed class ApplicationDatabase
     {
-        private const int CurrentSchemaVersion = 6;
+        private const int CurrentSchemaVersion = 8;
         private const string MigrationMetadataKey = "legacy_json_migrated";
         private static readonly object NativeInitializationGate = new();
         private static bool _nativeInitialized;
@@ -330,6 +330,24 @@ CREATE TABLE IF NOT EXISTS application_users (
     updated_at_utc TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS authentication_throttle (
+    username TEXT NOT NULL PRIMARY KEY COLLATE NOCASE,
+    failure_count INTEGER NOT NULL,
+    last_failure_utc TEXT NOT NULL,
+    blocked_until_utc TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS authentication_audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    user_id TEXT NULL,
+    outcome TEXT NOT NULL CHECK(outcome IN ('success', 'failure')),
+    occurred_at_utc TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_authentication_audit_created
+    ON authentication_audit(occurred_at_utc DESC);
+
 CREATE TABLE IF NOT EXISTS connection_profiles (
     id TEXT NOT NULL PRIMARY KEY,
     name TEXT NOT NULL,
@@ -339,6 +357,7 @@ CREATE TABLE IF NOT EXISTS connection_profiles (
     password TEXT NOT NULL,
     default_database TEXT NOT NULL,
     ssl_mode TEXT NOT NULL,
+    ssl_ca TEXT NOT NULL DEFAULT '',
     created_at_utc TEXT NOT NULL,
     updated_at_utc TEXT NOT NULL
 );
@@ -450,10 +469,24 @@ ON CONFLICT(name) DO UPDATE SET value = excluded.value;";
             command.Parameters.AddWithValue("$schemaVersion", CurrentSchemaVersion.ToString(System.Globalization.CultureInfo.InvariantCulture));
             await command.ExecuteNonQueryAsync(cancellationToken);
 
+            // Add certificate authority paths without overwriting existing TLS choices.
+            await EnsureColumnAsync(
+                connection,
+                "connection_profiles",
+                "ssl_ca",
+                "TEXT NOT NULL DEFAULT ''",
+                cancellationToken);
             await EnsureColumnAsync(
                 connection,
                 "database_changes",
                 "revert_sql_text",
+                "TEXT NOT NULL DEFAULT ''",
+                cancellationToken);
+            // Add certificate authority paths without overwriting existing TLS choices.
+            await EnsureColumnAsync(
+                connection,
+                "connection_profiles",
+                "ssl_ca",
                 "TEXT NOT NULL DEFAULT ''",
                 cancellationToken);
             await EnsureColumnAsync(
@@ -762,9 +795,9 @@ VALUES (
             command.Transaction = transaction;
             command.CommandText = @"
 INSERT INTO connection_profiles(
-    id, name, host, port, username, password, default_database, ssl_mode, created_at_utc, updated_at_utc)
+    id, name, host, port, username, password, default_database, ssl_mode, ssl_ca, created_at_utc, updated_at_utc)
 VALUES (
-    $id, $name, $host, $port, $username, $password, $defaultDatabase, $sslMode, $createdAtUtc, $updatedAtUtc);";
+    $id, $name, $host, $port, $username, $password, $defaultDatabase, $sslMode, $sslCa, $createdAtUtc, $updatedAtUtc);";
             command.Parameters.AddWithValue("$id", (profile.Id == Guid.Empty ? Guid.NewGuid() : profile.Id).ToString("D"));
             command.Parameters.AddWithValue("$name", profile.Name ?? string.Empty);
             command.Parameters.AddWithValue("$host", profile.Host ?? string.Empty);
@@ -773,6 +806,7 @@ VALUES (
             command.Parameters.AddWithValue("$password", password);
             command.Parameters.AddWithValue("$defaultDatabase", profile.DefaultDatabase ?? string.Empty);
             command.Parameters.AddWithValue("$sslMode", profile.SslMode ?? "Preferred");
+            command.Parameters.AddWithValue("$sslCa", profile.SslCa ?? string.Empty);
             command.Parameters.AddWithValue("$createdAtUtc", createdAt.ToUniversalTime().ToString("O"));
             command.Parameters.AddWithValue("$updatedAtUtc", updatedAt.ToUniversalTime().ToString("O"));
             await command.ExecuteNonQueryAsync(cancellationToken);
@@ -873,6 +907,7 @@ VALUES (
             public string ProtectedPassword { get; set; } = string.Empty;
             public string DefaultDatabase { get; set; } = string.Empty;
             public string SslMode { get; set; } = "Preferred";
+            public string SslCa { get; set; } = string.Empty;
             public DateTime CreatedAtUtc
             {
                 get; set;

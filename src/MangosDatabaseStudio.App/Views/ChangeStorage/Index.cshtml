@@ -290,7 +290,7 @@
                 <input type="hidden" name="source" value="@Model.Source" />
                 <input type="hidden" name="search" value="@Model.Search" />
                 <span>Rows per page</span>
-                <select name="pageSize" class="form-select form-select-sm" onchange="this.form.submit()">
+                <select name="pageSize" class="form-select form-select-sm" data-auto-submit-on-change>
                     @foreach (int size in new[] { 10, 20, 50, 100 })
                     {
                         <option value="@size" selected="@(size == Model.Page.PageSize ? "selected" : null)">@size</option>

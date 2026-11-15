@@ -194,7 +194,7 @@
                         <span class="world-filter-hint">Page @Model.Quests.Page of @Math.Max(Model.Quests.TotalPages, 1)</span>
                         <label class="world-filter-select">
                             <span>Rows per page</span>
-                            <select name="pageSize" class="form-select" onchange="this.form.submit()">
+                            <select name="pageSize" class="form-select" data-auto-submit-on-change>
                                 @foreach (int size in pageSizes)
                                 {
                                     if (Model.Quests.PageSize == size) { <option value="@size" selected>@size</option> }
@@ -723,7 +723,7 @@
                                     <input type="hidden" name="relationPage" value="1" />
                                     <label class="world-filter-select">
                                         <span>Rows per page</span>
-                                        <select name="relationPageSize" class="form-select" onchange="this.form.submit()">
+                                        <select name="relationPageSize" class="form-select" data-auto-submit-on-change>
                                             @foreach (int size in pageSizes)
                                             {
                                                 if (detail.Relations.PageSize == size) { <option value="@size" selected>@size</option> }
@@ -1064,39 +1064,5 @@
 
 @section Scripts {
 <script src="~/js/world-lookup-picker.js" asp-append-version="true"></script>
-<script>
-(() => {
-    document.querySelectorAll('[data-quest-edit-relation]').forEach(button => {
-        button.addEventListener('click', () => {
-            const modal = document.getElementById('questEditRelationModal');
-            if (!modal)
-            {
-                return;
-            }
-            const kind = button.dataset.kind || '';
-            const entry = button.dataset.entry || '';
-            const name = button.dataset.name || 'Quest relationship';
-            modal.querySelector('[data-quest-edit-original-kind]').value = kind;
-            modal.querySelector('[data-quest-edit-original-entry]').value = entry;
-            modal.querySelector('[data-quest-edit-kind]').value = kind;
-            modal.querySelector('[data-quest-edit-entity-entry]').value = entry;
-            modal.querySelector('[data-quest-edit-name]').textContent = name;
-            modal.querySelector('[data-quest-edit-entry]').textContent = 'Entry ' + entry;
-        });
-    });
-
-    document.querySelectorAll('[data-quest-remove-relation]').forEach(button => {
-        button.addEventListener('click', () => {
-            const modal = document.getElementById('questRemoveRelationModal');
-            if (!modal)
-            {
-                return;
-            }
-            modal.querySelector('[data-quest-remove-kind]').value = button.dataset.kind || '';
-            modal.querySelector('[data-quest-remove-entry]').value = button.dataset.entry || '';
-            modal.querySelector('[data-quest-remove-name]').textContent = button.dataset.name || 'Selected source';
-        });
-    });
-})();
-</script>
+<script src="~/js/quest-relation-modal.js" asp-append-version="true"></script>
 }

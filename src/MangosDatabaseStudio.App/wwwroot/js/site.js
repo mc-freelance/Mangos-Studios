@@ -2,6 +2,18 @@
 (() => {
     "use strict";
 
+    // Submit viewer filter forms using a CSP-compatible event handler instead of inline HTML scripts.
+    document.addEventListener("change", event => {
+        const control = event.target;
+        if (!(control instanceof HTMLSelectElement) || !control.matches("[data-auto-submit-on-change]"))
+        {
+            return;
+        }
+
+        // Retain the previous form.submit() semantics, including skipping validation on GET filters.
+        control.form?.submit();
+    });
+
     const sidebarToggle = document.querySelector("[data-sidebar-toggle]");
     sidebarToggle?.addEventListener("click", () => document.body.classList.toggle("sidebar-open"));
 

@@ -15,7 +15,7 @@ namespace MangosDatabaseStudio.App.Desktop
     <meta name=""viewport"" content=""width=device-width, initial-scale=1"">
     <meta http-equiv=""Cache-Control"" content=""no-store"">
     <title>MaNGOS Database Studio — Starting</title>
-    <style>
+    <style nonce=""__MDS_STARTUP_NONCE__"">
         :root {
             color-scheme: dark;
             font-family: Inter, ""Segoe UI"", Arial, sans-serif;
@@ -305,7 +305,7 @@ namespace MangosDatabaseStudio.App.Desktop
         <footer class=""foot"">Application Designed and Written by Meltie2013</footer>
     </main>
 
-    <script>
+    <script nonce=""__MDS_STARTUP_NONCE__"">
         (() => {
             const shell = document.getElementById('shell');
             const status = document.getElementById('status');

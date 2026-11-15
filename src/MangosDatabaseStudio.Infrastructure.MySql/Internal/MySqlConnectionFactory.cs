@@ -20,7 +20,7 @@ namespace MangosDatabaseStudio.Infrastructure.MySql.Internal
             _options = options;
         }
 
-        // Build a field definition from its seed metadata and expansion variants.
+        // Construct a database connection with an explicitly validated TLS policy.
         public MySqlConnection Create(ConnectionProfile profile, string? database = null)
         {
             MySqlConnectionStringBuilder builder = new()
@@ -39,10 +39,12 @@ namespace MangosDatabaseStudio.Infrastructure.MySql.Internal
                 AllowZeroDateTime = true
             };
 
-            if (Enum.TryParse(profile.SslMode, true, out MySqlSslMode sslMode))
-            {
-                builder.SslMode = sslMode;
-            }
+            // Never fall back to the connector's permissive TLS default.
+            ConnectionTlsSecurity.ValidateProfile(profile);
+            builder.SslMode = Enum.Parse<MySqlSslMode>(ConnectionTlsSecurity.NormalizeMode(profile.SslMode));
+            builder.SslCa = ConnectionTlsSecurity.IsTlsDisabled(profile.SslMode)
+                ? string.Empty
+                : profile.SslCa?.Trim() ?? string.Empty;
 
             return new MySqlConnection(builder.ConnectionString);
         }

@@ -4,6 +4,7 @@
 
 // ASP.NET Core request handling; permissions and validation must remain enforced server-side.
 
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MangosDatabaseStudio.App.Models;
@@ -20,12 +21,14 @@ namespace MangosDatabaseStudio.App.Controllers
     {
         private readonly IApplicationUserStore _users;
         private readonly IRolePermissionStore _rolePermissions;
+        private readonly LoginAttemptProtector _loginAttempts;
 
         // Initialize the account controller dependencies and state.
-        public AccountController(IApplicationUserStore users, IRolePermissionStore rolePermissions)
+        public AccountController(IApplicationUserStore users, IRolePermissionStore rolePermissions, LoginAttemptProtector loginAttempts)
         {
             _users = users;
             _rolePermissions = rolePermissions;
+            _loginAttempts = loginAttempts;
         }
 
         [HttpGet]
@@ -47,6 +50,7 @@ namespace MangosDatabaseStudio.App.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("local-login")]
         // Handle the login page or action with the surrounding authorization checks.
         public async Task<IActionResult> Login(LoginViewModel model, CancellationToken cancellationToken)
         {
@@ -55,12 +59,25 @@ namespace MangosDatabaseStudio.App.Controllers
                 return View(model);
             }
 
-            ApplicationUser? user = await _users.ValidateAsync(model.Username, model.Password, cancellationToken);
-            if (user == null)
+            // Authentication and persistent throttling execute under one serialized guard.
+            LoginAttemptResult attempt = await _loginAttempts.AuthenticateAsync(model.Username, model.Password, cancellationToken);
+            if (attempt.User is null)
             {
-                ModelState.AddModelError(string.Empty, "The username or password is incorrect.");
+                if (attempt.RetryAfter > TimeSpan.Zero)
+                {
+                    Response.StatusCode = 429;
+                    Response.Headers.RetryAfter = Math.Max(1, (int)Math.Ceiling(attempt.RetryAfter.TotalSeconds)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    ModelState.AddModelError(string.Empty, "Too many sign-in attempts. Please try again shortly.");
+                }
+                else
+                {
+                    ModelState.AddModelError(string.Empty, "The username or password is incorrect.");
+                }
+
                 return View(model);
             }
+
+            ApplicationUser user = attempt.User;
 
             System.Collections.Generic.IReadOnlyCollection<string> permissions = await _rolePermissions.GetPermissionsAsync(user.Role, cancellationToken);
             await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, ApplicationPermissionClaims.CreatePrincipal(user, permissions), new AuthenticationProperties

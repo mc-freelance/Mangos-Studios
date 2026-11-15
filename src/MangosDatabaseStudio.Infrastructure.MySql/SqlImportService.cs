@@ -11,7 +11,6 @@ using System.Globalization;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using MangosDatabaseStudio.Application.Operations;
@@ -24,7 +23,6 @@ namespace MangosDatabaseStudio.Infrastructure.MySql
 {
     internal sealed class SqlImportService : ISqlImportService
     {
-        private static readonly Regex DangerousPattern = new(@"\b(DROP\s+(DATABASE|TABLE)|TRUNCATE\s+TABLE|CREATE\s+USER|DROP\s+USER|GRANT|REVOKE)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.CultureInvariant);
         private readonly MySqlOptions _options;
 
         // Initialize the sql import service dependencies and state.
@@ -92,15 +90,14 @@ namespace MangosDatabaseStudio.Infrastructure.MySql
                 "Checking statements for destructive or privilege-related operations."));
 
             int statements = 0;
-            bool destructive = false;
             List<string> warnings = new();
+            SqlStatementScanner safetyScanner = SqlStatementSafety.CreateScanner();
             using (StreamReader reader = new(sqlFilePath, Encoding.UTF8, true, 64 * 1024))
             {
                 char[] buffer = new char[64 * 1024];
                 int read;
                 long charactersScanned = 0;
                 long nextScanReport = 1024 * 1024;
-                StringBuilder scanWindow = new();
                 while ((read = await reader.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken)) > 0)
                 {
                     charactersScanned += read;
@@ -112,16 +109,8 @@ namespace MangosDatabaseStudio.Infrastructure.MySql
                         }
                     }
 
-                    scanWindow.Append(buffer, 0, read);
-                    if (scanWindow.Length > 256 * 1024)
-                    {
-                        scanWindow.Remove(0, scanWindow.Length - (128 * 1024));
-                    }
-
-                    if (!destructive && DangerousPattern.IsMatch(scanWindow.ToString()))
-                    {
-                        destructive = true;
-                    }
+                    // Scan each buffer using the shared lexer, retaining only parser state.
+                    safetyScanner.Append(buffer.AsSpan(0, read));
 
                     if (charactersScanned >= nextScanReport)
                     {
@@ -133,6 +122,10 @@ namespace MangosDatabaseStudio.Infrastructure.MySql
                     }
                 }
             }
+
+            SqlStatementSafety safety = safetyScanner.Complete();
+            bool destructive = safety.RequiresDestructivePermission;
+            statements = safety.StatementCount;
 
             progress?.Report(new OperationProgressUpdate(
                 "SQL analysis complete",
@@ -173,11 +166,12 @@ namespace MangosDatabaseStudio.Infrastructure.MySql
                 "Preparing database client",
                 "Creating the temporary client configuration for " + database + "."));
 
-            using MySqlClientDefaultsFile defaultsFile = await MySqlClientDefaultsFile.CreateAsync(profile, cancellationToken);
+            string clientExecutable = TrustedDatabaseClientExecutable.Resolve(_options.ImportClientPath, isExport: false);
+            using MySqlClientDefaultsFile defaultsFile = await MySqlClientDefaultsFile.CreateAsync(profile, clientExecutable, cancellationToken);
 
             ProcessStartInfo startInfo = new()
             {
-                FileName = _options.ImportClientPath,
+                FileName = clientExecutable,
                 UseShellExecute = false,
                 RedirectStandardInput = true,
                 RedirectStandardOutput = true,

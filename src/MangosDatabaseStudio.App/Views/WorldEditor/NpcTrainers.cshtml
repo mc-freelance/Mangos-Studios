@@ -204,7 +204,7 @@
                         <span class="world-filter-hint">Page @Model.Trainers.Page of @Math.Max(Model.Trainers.TotalPages, 1)</span>
                         <label class="world-filter-select">
                             <span>Rows per page</span>
-                            <select name="pageSize" class="form-select" onchange="this.form.submit()">
+                            <select name="pageSize" class="form-select" data-auto-submit-on-change>
                                 @foreach (int pageSize in pageSizes)
                                 {
                                     if (Model.Trainers.PageSize == pageSize)
@@ -625,7 +625,7 @@
                                     <input type="hidden" name="spellPage" value="1" />
                                     <label class="world-filter-select">
                                         <span>Rows per page</span>
-                                        <select name="spellPageSize" class="form-select" onchange="this.form.submit()">
+                                        <select name="spellPageSize" class="form-select" data-auto-submit-on-change>
                                             @foreach (int pageSize in pageSizes)
                                             {
                                                 if (Model.SelectedTrainer.Spells.PageSize == pageSize)

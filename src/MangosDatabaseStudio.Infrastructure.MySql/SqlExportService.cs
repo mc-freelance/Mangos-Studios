@@ -60,8 +60,9 @@ namespace MangosDatabaseStudio.Infrastructure.MySql
                 progress?.Report(new OperationProgressUpdate(
                     "Preparing SQL export",
                     "Preparing the database client and temporary export files for " + request.Database + "."));
-                using MySqlClientDefaultsFile defaultsFile = await MySqlClientDefaultsFile.CreateAsync(profile, cancellationToken);
-                await RunDumpClientAsync(defaultsFile.Path, bodyPath, request, progress, cancellationToken);
+                string clientExecutable = TrustedDatabaseClientExecutable.Resolve(_options.ExportClientPath, isExport: true);
+                using MySqlClientDefaultsFile defaultsFile = await MySqlClientDefaultsFile.CreateAsync(profile, clientExecutable, cancellationToken);
+                await RunDumpClientAsync(clientExecutable, defaultsFile.Path, bodyPath, request, progress, cancellationToken);
                 await WriteFinalFileAsync(bodyPath, finalPath, request, generatedAtUtc, progress, cancellationToken);
                 MySqlClientDefaultsFile.TryRestrictFilePermissions(finalPath);
                 stopwatch.Stop();
@@ -97,6 +98,7 @@ namespace MangosDatabaseStudio.Infrastructure.MySql
 
         // Run dump client using schema-aware database operations.
         private async Task RunDumpClientAsync(
+            string clientExecutable,
             string defaultsPath,
             string bodyPath,
             SqlExportRequest request,
@@ -108,7 +110,7 @@ namespace MangosDatabaseStudio.Infrastructure.MySql
                 "The database export client is reading " + request.Tables.Count.ToString("N0", CultureInfo.InvariantCulture) + " selected table(s)."));
             ProcessStartInfo startInfo = new()
             {
-                FileName = _options.ExportClientPath,
+                FileName = clientExecutable,
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,

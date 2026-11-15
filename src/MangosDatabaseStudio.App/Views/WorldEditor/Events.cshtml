@@ -188,7 +188,7 @@
                         <span class="world-filter-hint">Page @Model.Events.Page of @Math.Max(Model.Events.TotalPages, 1)</span>
                         <label class="world-filter-select">
                             <span>Rows per page</span>
-                            <select name="pageSize" class="form-select" onchange="this.form.submit()">
+                            <select name="pageSize" class="form-select" data-auto-submit-on-change>
                                 @foreach (int size in pageSizes)
                                 {
                                     if (Model.Events.PageSize == size)
@@ -545,7 +545,7 @@
                                     <input type="hidden" name="database" value="@Model.Database" /><input type="hidden" name="search" value="@Model.Search" /><input type="hidden" name="show" value="true" /><input type="hidden" name="page" value="@Model.Events.Page" /><input type="hidden" name="pageSize" value="@Model.Events.PageSize" /><input type="hidden" name="entry" value="@gameEvent.Entry" /><input type="hidden" name="memberPage" value="1" />
                                     <label class="world-filter-select">
                                         <span>Rows per page</span>
-                                        <select name="memberPageSize" class="form-select" onchange="this.form.submit()">
+                                        <select name="memberPageSize" class="form-select" data-auto-submit-on-change>
                                             @foreach (int size in pageSizes)
                                             {
                                                 if (selected.Members.PageSize == size)
@@ -878,121 +878,5 @@
 }
 
 @section Scripts {
-<script>
-(() => {
-    const root = document.querySelector('[data-event-viewer]');
-    if (!root)
-    {
-        return;
-    }
-
-    const sourceSelect = document.querySelector('[data-event-source-select]');
-    const guidLabel = document.querySelector('[data-event-guid-label]');
-    const behaviorSelect = document.querySelector('[data-event-behavior-select]');
-    const negativeOption = document.querySelector('[data-event-negative-option]');
-    const syncAddSource = () => {
-        if (!sourceSelect)
-        {
-            return;
-        }
-        const option = sourceSelect.selectedOptions[0];
-        if (!option)
-        {
-            return;
-        }
-        if (guidLabel)
-        {
-            guidLabel.textContent = option.dataset.memberLabel || 'Spawn GUID';
-        }
-        const supportsNegative = option.dataset.supportsNegative === 'true';
-        if (negativeOption)
-        {
-            negativeOption.disabled = !supportsNegative;
-        }
-        if (!supportsNegative && behaviorSelect && behaviorSelect.value === '-1')
-        {
-            behaviorSelect.value = '1';
-        }
-    };
-    sourceSelect?.addEventListener('change', syncAddSource);
-    syncAddSource();
-
-    const editElement = document.getElementById('eventEditMemberModal');
-    const editModal = editElement && window.bootstrap ? bootstrap.Modal.getOrCreateInstance(editElement) : null;
-    document.querySelectorAll('[data-event-edit-member-open]').forEach(button => {
-        button.addEventListener('click', () => {
-            const source = document.querySelector('[data-event-edit-source]');
-            const originalGuid = document.querySelector('[data-event-edit-original-guid]');
-            const originalEvent = document.querySelector('[data-event-edit-original-event]');
-            const guid = document.querySelector('[data-event-edit-guid]');
-            const behavior = document.querySelector('[data-event-edit-behavior]');
-            const negativeEditOption = document.querySelector('[data-event-edit-negative-option]');
-            const label = document.querySelector('[data-event-edit-source-label]');
-            const code = document.querySelector('[data-event-edit-source-code]');
-            if (source)
-            {
-                source.value = button.dataset.source || '';
-            }
-            if (originalGuid)
-            {
-                originalGuid.value = button.dataset.guid || '';
-            }
-            if (originalEvent)
-            {
-                originalEvent.value = button.dataset.eventValue || '';
-            }
-            if (guid)
-            {
-                guid.value = button.dataset.guid || '';
-            }
-            const supportsNegative = button.dataset.supportsNegative === 'true';
-            if (negativeEditOption)
-            {
-                negativeEditOption.disabled = !supportsNegative;
-            }
-            if (behavior)
-            {
-                behavior.value = supportsNegative && Number(button.dataset.eventValue || '1') < 0 ? '-1' : '1';
-            }
-            if (label)
-            {
-                label.textContent = button.dataset.sourceLabel || 'Event link';
-            }
-            if (code)
-            {
-                code.textContent = button.dataset.source || '';
-            }
-            editModal?.show();
-        });
-    });
-
-    const removeElement = document.getElementById('eventRemoveMemberModal');
-    const removeModal = removeElement && window.bootstrap ? bootstrap.Modal.getOrCreateInstance(removeElement) : null;
-    document.querySelectorAll('[data-event-remove-open]').forEach(button => {
-        button.addEventListener('click', () => {
-            const source = document.querySelector('[data-event-remove-source]');
-            const guid = document.querySelector('[data-event-remove-guid]');
-            const eventValue = document.querySelector('[data-event-remove-event]');
-            const name = document.querySelector('[data-event-remove-name]');
-            if (source)
-            {
-                source.value = button.dataset.source || '';
-            }
-            if (guid)
-            {
-                guid.value = button.dataset.guid || '';
-            }
-            if (eventValue)
-            {
-                eventValue.value = button.dataset.eventValue || '';
-            }
-            if (name)
-            {
-                name.textContent = button.dataset.memberName || 'Selected spawn';
-            }
-            removeModal?.show();
-        });
-    });
-})();
-</script>
+<script src="~/js/event-directory-controls.js" asp-append-version="true"></script>
 }

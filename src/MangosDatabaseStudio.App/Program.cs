@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading.RateLimiting;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
@@ -28,6 +29,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -77,7 +79,6 @@ namespace MangosDatabaseStudio.App
                 : DesktopDeviceIdentity.Disabled();
 
             ConfigureDesktopEnvironment(deviceIdentity);
-            ConfigureDatabaseClientPaths();
 
             int privatePort = SelectPrivatePort(options.PreferredPort);
             DesktopSessionGate sessionGate = new(privatePort);
@@ -111,6 +112,23 @@ namespace MangosDatabaseStudio.App
             {
                 routeOptions.LowercaseUrls = true;
                 routeOptions.LowercaseQueryStrings = false;
+            });
+            // Limit the total number of sign-in attempts, including unknown usernames.
+            builder.Services.AddRateLimiter(options =>
+            {
+                options.AddFixedWindowLimiter("local-login", limiter =>
+                {
+                    limiter.PermitLimit = 30;
+                    limiter.Window = TimeSpan.FromMinutes(1);
+                    limiter.QueueLimit = 0;
+                });
+                options.OnRejected = async (context, _) =>
+                {
+                    context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                    context.HttpContext.Response.Headers.RetryAfter = "60";
+                    context.HttpContext.Response.ContentType = "text/plain; charset=utf-8";
+                    await context.HttpContext.Response.WriteAsync("Too many sign-in attempts. Please try again shortly.");
+                };
             });
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddDistributedMemoryCache();
@@ -181,6 +199,8 @@ namespace MangosDatabaseStudio.App
             builder.Services.AddSingleton<OperationProgressStore>();
             builder.Services.AddScoped<OperationProgressReporter>();
             builder.Services.AddSingleton<ApplicationDatabase>();
+            builder.Services.AddSingleton(TimeProvider.System);
+            builder.Services.AddSingleton<LoginAttemptProtector>();
             builder.Services.AddSingleton<IMangosFieldDataCatalog, SqliteMangosFieldDataCatalog>();
             builder.Services.AddSingleton<IFieldDataDefinitionStore, SqliteFieldDataDefinitionStore>();
             builder.Services.AddSingleton<IApplicationUserStore, SqliteApplicationUserStore>();
@@ -245,6 +265,9 @@ namespace MangosDatabaseStudio.App
             DesktopSessionGate sessionGate,
             DesktopStartupState startupState)
         {
+            // Install browser protections before authentication so even error responses receive them.
+            app.Use(DesktopSecurityHeaders.InvokeAsync);
+
             app.Use(async (context, next) =>
             {
                 if (context.Request.Path.Equals(new PathString(DesktopSessionGate.BootstrapPath)))
@@ -294,6 +317,7 @@ namespace MangosDatabaseStudio.App
 
             app.UseStaticFiles();
             app.UseRouting();
+            app.UseRateLimiter();
             app.UseSession();
             app.UseAuthentication();
             app.UseAuthorization();
@@ -306,7 +330,11 @@ namespace MangosDatabaseStudio.App
             {
                 context.Response.Headers["Cache-Control"] = "no-store";
                 context.Response.ContentType = "text/html; charset=utf-8";
-                await context.Response.WriteAsync(DesktopStartupPage.Html, context.RequestAborted).ConfigureAwait(false);
+                string startupHtml = DesktopStartupPage.Html.Replace(
+                    "__MDS_STARTUP_NONCE__",
+                    DesktopSecurityHeaders.GetNonce(context),
+                    StringComparison.Ordinal);
+                await context.Response.WriteAsync(startupHtml, context.RequestAborted).ConfigureAwait(false);
             });
 
             app.MapGet(DesktopSessionGate.StatusPath, async context =>
@@ -452,57 +480,6 @@ namespace MangosDatabaseStudio.App
             SetEnvironmentValue("MDS_DEVICE_MODEL", deviceIdentity.Model);
             SetEnvironmentValue("MDS_DEVICE_STATUS", deviceIdentity.StatusMessage);
             Environment.SetEnvironmentVariable("MDS_DEVICE_COLLECTED_AT_UTC", deviceIdentity.CollectedAtUtc.ToString("O"));
-        }
-
-        internal static readonly string[] string_array_executable = new[] { "mysql.exe", "mariadb.exe" };
-        internal static readonly string[] string_array_naming = new[] { "mysql", "mariadb" };
-
-        // Configure database client paths according to the available model or service contract.
-        private static void ConfigureDatabaseClientPaths()
-        {
-            if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("MySql__ImportClientPath")))
-            {
-                string? importClient = FindExecutable(OperatingSystem.IsWindows()
-                    ? string_array_executable : string_array_naming);
-                SetEnvironmentValue("MySql__ImportClientPath", importClient);
-            }
-
-            if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("MySql__ExportClientPath")))
-            {
-                string? exportClient = FindExecutable(OperatingSystem.IsWindows()
-                    ? string_array_executable : string_array_naming);
-                SetEnvironmentValue("MySql__ExportClientPath", exportClient);
-            }
-        }
-
-        // Locate executable according to the available model or service contract.
-        private static string? FindExecutable(string[] candidates)
-        {
-            string? pathValue = Environment.GetEnvironmentVariable("PATH");
-            if (string.IsNullOrWhiteSpace(pathValue))
-            {
-                return null;
-            }
-
-            foreach (string directory in pathValue.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
-            {
-                foreach (string candidate in candidates)
-                {
-                    try
-                    {
-                        string fullPath = Path.Combine(directory.Trim(), candidate);
-                        if (File.Exists(fullPath))
-                        {
-                            return fullPath;
-                        }
-                    }
-                    catch (Exception) when (directory.Length > 0)
-                    {
-                    }
-                }
-            }
-
-            return null;
         }
 
         // Set environment value according to the available model or service contract.
